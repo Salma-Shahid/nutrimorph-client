@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "NutriMorph",
+    "slug": "nutrimorph",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nutrimorph.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.nutrimorph.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow NutriMorph to access your camera to scan meals and analyze food photos for AI nutrition tracking."
+        }
+      ],
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d58feced-f2de-481d-a434-721e62ede0d0"
+      }
+    }
+  }
+}
