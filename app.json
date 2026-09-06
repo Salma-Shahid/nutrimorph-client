@@ -11,19 +11,18 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nutrimorph.app"
     },
     "android": {
+      "usesCleartextTraffic": true,
+      "package": "com.nutrimorph.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.nutrimorph.app",
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
