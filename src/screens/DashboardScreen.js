@@ -7,40 +7,26 @@ import {
   ActivityIndicator,
   RefreshControl,
   useColorScheme,
-  TouchableOpacity, // 👈 Added
+  TouchableOpacity,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { Ionicons } from "@expo/vector-icons"; // 👈 Added for Floating Icon
+import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
 import { Colors } from "../theme/colors";
 import { useAuthStore } from "../store/useAuthStore";
 
-const AnyScreen = () => {
-  const { theme } = useAuthStore(); // ✅ Access theme globally
-  const isDark = theme === "dark";
-
-  return (
-    <View style={{ flex: 1, backgroundColor: isDark ? "#0f172a" : "#f8fafc" }}>
-      <Text style={{ color: isDark ? "#ffffff" : "#0f172a" }}>
-        Screen Content
-      </Text>
-    </View>
-  );
-};
-
 // Daily Target Goals
 const TARGETS = {
-  calories: 2000, // kcal
-  protein: 140, // grams
-  carbs: 220, // grams
-  fats: 65, // grams
+  calories: 2000,
+  protein: 140,
+  carbs: 220,
+  fats: 65,
 };
 
-// Backend URL
-const BASE_URL = "http://192.168.18.113:5000/api";
+// 🚀 Live Vercel API Base URL
+const BASE_URL = `${process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app"}/api`;
 
 export default function DashboardScreen({ navigation }) {
-  // 👈 Received navigation prop
   const theme = useColorScheme() || "dark";
   const isDark = theme === "dark";
 
@@ -110,7 +96,7 @@ export default function DashboardScreen({ navigation }) {
     <View style={[styles.rootContainer, { backgroundColor: bgColor }]}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={{ paddingBottom: 90 }} // Extra space for FAB button
+        contentContainerStyle={{ paddingBottom: 90 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -246,7 +232,6 @@ export default function DashboardScreen({ navigation }) {
   );
 }
 
-// Custom Progress Bar Component
 const ProgressBarItem = ({
   label,
   current,
@@ -362,7 +347,7 @@ const styles = StyleSheet.create({
     height: 120,
     width: 14,
     borderRadius: 7,
-    justifyContent: "flex-end",
+    justify: "flex-end",
     overflow: "hidden",
   },
   barFill: {
@@ -373,7 +358,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 6,
   },
-  // Floating Action Button Styles
   floatingBotBtn: {
     position: "absolute",
     bottom: 30,

@@ -20,6 +20,7 @@ import { calculateBMI } from "../utils/bmi";
 import WaterTracker from "../components/WaterTracker";
 import CalorieChart from "../components/CalorieChart";
 
+
 export default function HomeScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -38,7 +39,7 @@ export default function HomeScreen({ navigation }) {
     setSelectedDate,
   } = useMealStore();
 
-  // Safe Local Date Formatting Utility
+  // Date Formatter Utility (YYYY-MM-DD)
   const formatDate = (date) => {
     const yyyy = date.getFullYear();
     const mm = String(date.getMonth() + 1).padStart(2, "0");
@@ -47,42 +48,45 @@ export default function HomeScreen({ navigation }) {
   };
 
   // Consolidated Data Fetcher
-  const loadData = useCallback(async () => {
-    try {
-      const formattedDate = formatDate(currentDate);
-      setSelectedDate(formattedDate);
+  const loadData = useCallback(
+    async (targetDate = currentDate) => {
+      try {
+        const formattedDate = formatDate(targetDate);
+        if (setSelectedDate) setSelectedDate(formattedDate);
 
-      await Promise.all([
-        fetchDailySummary && fetchDailySummary(formattedDate),
-        fetchWeeklySummary && fetchWeeklySummary(),
-      ]);
+        await Promise.all([
+          fetchDailySummary && fetchDailySummary(formattedDate),
+          fetchWeeklySummary && fetchWeeklySummary(),
+        ]);
 
-      if (typeof fetchWaterIntake === "function") {
-        await fetchWaterIntake(formattedDate);
+        if (typeof fetchWaterIntake === "function") {
+          await fetchWaterIntake(formattedDate);
+        }
+      } catch (error) {
+        console.error("Error refreshing dashboard data:", error);
       }
-    } catch (error) {
-      console.error("Error refreshing dashboard data:", error);
-    }
-  }, [
-    currentDate,
-    fetchDailySummary,
-    fetchWeeklySummary,
-    fetchWaterIntake,
-    setSelectedDate,
-  ]);
+    },
+    [
+      currentDate,
+      fetchDailySummary,
+      fetchWeeklySummary,
+      fetchWaterIntake,
+      setSelectedDate,
+    ],
+  );
 
-  // Pull-To-Refresh Handler
+  // Refresh Control Handler
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await loadData(currentDate);
     setRefreshing(false);
   };
 
   // Screen Focus Data Fetching
   useFocusEffect(
     useCallback(() => {
-      loadData();
-    }, [loadData]),
+      loadData(currentDate);
+    }, [loadData, currentDate]),
   );
 
   // Date Navigation Handlers
@@ -90,6 +94,7 @@ export default function HomeScreen({ navigation }) {
     const prev = new Date(currentDate);
     prev.setDate(prev.getDate() - 1);
     setCurrentDate(prev);
+    loadData(prev);
   };
 
   const handleNextDay = () => {
@@ -97,11 +102,12 @@ export default function HomeScreen({ navigation }) {
     next.setDate(next.getDate() + 1);
     if (next > new Date()) return;
     setCurrentDate(next);
+    loadData(next);
   };
 
   const isToday = formatDate(currentDate) === formatDate(new Date());
 
-  // Modal and Edit State
+  // Edit Modal & Form State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedMealId, setSelectedMealId] = useState(null);
   const [editName, setEditName] = useState("");
@@ -111,7 +117,7 @@ export default function HomeScreen({ navigation }) {
   const [editFats, setEditFats] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Edit Meal Handlers
+  // Modal Action Handlers
   const handleOpenEdit = (item) => {
     setSelectedMealId(item._id || item.id);
     setEditName(item.name || "");
@@ -123,18 +129,18 @@ export default function HomeScreen({ navigation }) {
   };
 
   const handleSaveEdit = async () => {
-    if (!editName || !editCalories) {
+    if (!editName.trim() || !editCalories) {
       Alert.alert("Validation Error", "Name and Calories are required fields.");
       return;
     }
 
     setLoading(true);
     const updatedValues = {
-      name: editName,
-      calories: Number(editCalories),
-      protein: Number(editProtein),
-      carbs: Number(editCarbs),
-      fats: Number(editFats),
+      name: editName.trim(),
+      calories: Number(editCalories) || 0,
+      protein: Number(editProtein) || 0,
+      carbs: Number(editCarbs) || 0,
+      fats: Number(editFats) || 0,
     };
 
     const res = await updateMeal(selectedMealId, updatedValues);
@@ -142,7 +148,7 @@ export default function HomeScreen({ navigation }) {
 
     if (res?.success) {
       setIsEditModalOpen(false);
-      await loadData();
+      await loadData(currentDate);
       Alert.alert("Success", "Meal updated successfully!");
     } else {
       Alert.alert("Error", res?.message || "Failed to update meal.");
@@ -169,12 +175,12 @@ export default function HomeScreen({ navigation }) {
             try {
               const res = await deleteMeal(mealId);
               if (res?.success) {
-                await loadData();
+                await loadData(currentDate);
               } else {
                 Alert.alert("Error", res?.message || "Failed to delete meal.");
               }
             } catch (err) {
-              Alert.alert("Error", err.message || "Failed to delete meal.");
+              Alert.alert("Error", err?.message || "Failed to delete meal.");
             }
           },
         },
@@ -182,7 +188,7 @@ export default function HomeScreen({ navigation }) {
     );
   };
 
-  // Macro Calculations
+  // Calorie & Macro Calculations
   const bmiData = calculateBMI(user?.weight, user?.height);
   const dailyCalories = user?.dailyCalories || 2000;
   const consumedCalories = todaySummary?.calories || 0;
@@ -196,14 +202,13 @@ export default function HomeScreen({ navigation }) {
     <SafeAreaView style={styles.safeContainer}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 80 }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 90 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
             colors={["#10B981"]}
             tintColor="#10B981"
-            enabled={true}
           />
         }
       >
@@ -217,19 +222,23 @@ export default function HomeScreen({ navigation }) {
             <TouchableOpacity
               style={styles.iconBtn}
               onPress={() => navigation.navigate("ProfileScreen")}
-              activeOpacity={0.6}
+              activeOpacity={0.7}
             >
               <Text style={{ fontSize: 20 }}>⚙️</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              onPress={logout}
+              activeOpacity={0.7}
+            >
               <Text style={styles.logoutText}>Logout</Text>
             </TouchableOpacity>
           </View>
         </View>
 
+        {/* Dashboard Title & BMI */}
         <View style={styles.goalHeaderRow}>
           <Text style={styles.sectionTitle}>Dashboard Summary</Text>
-
           {bmiData && (
             <View
               style={[
@@ -249,7 +258,11 @@ export default function HomeScreen({ navigation }) {
 
         {/* Date Selector Strip */}
         <View style={styles.dateSelector}>
-          <TouchableOpacity onPress={handlePrevDay} style={styles.dateArrowBtn}>
+          <TouchableOpacity
+            onPress={handlePrevDay}
+            style={styles.dateArrowBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Text style={styles.dateArrowText}>◀</Text>
           </TouchableOpacity>
 
@@ -266,12 +279,13 @@ export default function HomeScreen({ navigation }) {
             onPress={handleNextDay}
             disabled={isToday}
             style={[styles.dateArrowBtn, isToday && { opacity: 0.3 }]}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Text style={styles.dateArrowText}>▶</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Calorie Card */}
+        {/* Calorie Goal Card */}
         <View style={styles.calorieCard}>
           <Text style={styles.cardTitle}>Daily Calorie Goal 🎯</Text>
           <View style={styles.calorieRow}>
@@ -325,6 +339,7 @@ export default function HomeScreen({ navigation }) {
           <TouchableOpacity
             style={styles.actionCard}
             onPress={() => navigation.navigate("MealScannerScreen")}
+            activeOpacity={0.8}
           >
             <Text style={styles.actionIcon}>📸</Text>
             <Text style={styles.actionTitle}>Scan Meal</Text>
@@ -334,6 +349,7 @@ export default function HomeScreen({ navigation }) {
           <TouchableOpacity
             style={styles.actionCard}
             onPress={() => navigation.navigate("LogFoodScreen")}
+            activeOpacity={0.8}
           >
             <Text style={styles.actionIcon}>📝</Text>
             <Text style={styles.actionTitle}>Log Food</Text>
@@ -341,20 +357,18 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Water Intake Tracker */}
+        {/* Water Tracker & Weekly Calorie Chart */}
         <WaterTracker date={formatDate(currentDate)} />
-
-        {/* Calorie Trend Chart */}
         <CalorieChart
           targetCalories={dailyCalories}
           historyData={weeklyHistory}
         />
 
-        {/* Meals List */}
+        {/* Logged Meals List */}
         <Text style={styles.sectionTitle}>Meals 🍽️</Text>
         {todayMeals && todayMeals.length > 0 ? (
-          todayMeals.map((item) => (
-            <View key={item._id || item.id} style={styles.mealCard}>
+          todayMeals.map((item, index) => (
+            <View key={item._id || item.id || index} style={styles.mealCard}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.mealName}>{item.name}</Text>
                 <Text style={styles.mealDetails}>
@@ -386,17 +400,22 @@ export default function HomeScreen({ navigation }) {
         )}
       </ScrollView>
 
-      {/* 🤖 FLOATING AI CHATBOT BUTTON (Positioned correctly at root level) */}
+      {/* 🤖 FLOATING AI CHATBOT BUTTON */}
       <TouchableOpacity
         style={styles.floatingBotBtn}
         onPress={() => navigation.navigate("ChatBotScreen")}
-        activeOpacity={0.8}
+        activeOpacity={0.85}
       >
         <Ionicons name="chatbubble-ellipses" size={28} color="#ffffff" />
       </TouchableOpacity>
 
       {/* Edit Meal Modal */}
-      <Modal visible={isEditModalOpen} transparent animationType="slide">
+      <Modal
+        visible={isEditModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsEditModalOpen(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit Meal ✏️</Text>
@@ -406,6 +425,7 @@ export default function HomeScreen({ navigation }) {
               style={styles.input}
               value={editName}
               onChangeText={setEditName}
+              placeholder="e.g. Chicken Rice"
               placeholderTextColor="#666"
             />
 
@@ -415,6 +435,7 @@ export default function HomeScreen({ navigation }) {
               value={editCalories}
               onChangeText={setEditCalories}
               keyboardType="numeric"
+              placeholder="0"
               placeholderTextColor="#666"
             />
 
@@ -426,6 +447,8 @@ export default function HomeScreen({ navigation }) {
                   value={editProtein}
                   onChangeText={setEditProtein}
                   keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor="#666"
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -435,6 +458,8 @@ export default function HomeScreen({ navigation }) {
                   value={editCarbs}
                   onChangeText={setEditCarbs}
                   keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor="#666"
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -444,6 +469,8 @@ export default function HomeScreen({ navigation }) {
                   value={editFats}
                   onChangeText={setEditFats}
                   keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor="#666"
                 />
               </View>
             </View>
@@ -452,6 +479,7 @@ export default function HomeScreen({ navigation }) {
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: "#333" }]}
                 onPress={() => setIsEditModalOpen(false)}
+                disabled={loading}
               >
                 <Text style={{ color: "#fff" }}>Cancel</Text>
               </TouchableOpacity>
@@ -510,14 +538,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
-    paddingHorizontal: 20,
+    marginBottom: 6,
   },
   bmiBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
+    marginRight: 20,
   },
   bmiBadgeText: {
     fontSize: 12,
@@ -537,7 +565,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#2a2a2a",
   },
-  dateArrowBtn: { padding: 6 },
+  dateArrowBtn: { padding: 4 },
   dateArrowText: { color: "#4CAF50", fontSize: 16, fontWeight: "bold" },
   dateText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
 
@@ -546,7 +574,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginHorizontal: 20,
-    marginBottom: 24,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: "#2a2a2a",
   },
@@ -560,11 +588,12 @@ const styles = StyleSheet.create({
   statNumber: { color: "#fff", fontSize: 22, fontWeight: "bold" },
   statLabel: { color: "#888", fontSize: 12, marginTop: 4 },
   calorieDivider: { width: 1, height: 30, backgroundColor: "#333" },
+
   sectionTitle: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
-    marginBottom: 14,
+    marginBottom: 12,
     marginTop: 10,
     paddingHorizontal: 20,
   },
@@ -587,6 +616,7 @@ const styles = StyleSheet.create({
   macroEmoji: { fontSize: 22, marginBottom: 6 },
   macroVal: { color: "#fff", fontSize: 16, fontWeight: "bold" },
   macroLabel: { color: "#888", fontSize: 12, marginTop: 2 },
+
   actionsGrid: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -604,6 +634,7 @@ const styles = StyleSheet.create({
   actionIcon: { fontSize: 26, marginBottom: 8 },
   actionTitle: { color: "#fff", fontSize: 16, fontWeight: "bold" },
   actionSub: { color: "#4CAF50", fontSize: 12, marginTop: 2 },
+
   mealCard: {
     backgroundColor: "#1e1e1e",
     borderRadius: 12,
@@ -619,6 +650,7 @@ const styles = StyleSheet.create({
   mealDetails: { color: "#aaa", fontSize: 12, marginTop: 4 },
   mealActionBtns: { flexDirection: "row", gap: 10 },
   actionIconBtn: { padding: 4 },
+
   emptyCard: {
     backgroundColor: "#1e1e1e",
     padding: 16,
@@ -633,7 +665,7 @@ const styles = StyleSheet.create({
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0,0,0,0.75)",
     justifyContent: "center",
     padding: 20,
   },

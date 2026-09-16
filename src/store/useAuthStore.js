@@ -2,11 +2,10 @@ import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 
-// ⚠️ Ensure karein ke backend IP aur port exact yahi ho
-// const API_URL = "http://192.168.18.113:5000/api/auth";
-
-// ✅ Naya Secure Localtunnel HTTPS URL
-const API_URL = "https://cool-icons-smoke.loca.lt/api/auth";
+// Live Vercel Production URL
+const BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app";
+const API_URL = `${BASE_URL}/api/auth`;
 
 export const useAuthStore = create((set, get) => ({
   user: null,
@@ -14,7 +13,7 @@ export const useAuthStore = create((set, get) => ({
   isLoading: false,
   theme: "dark",
 
-  // ✅ App start hone par storage se User, Token aur Theme load karne ke liye
+  // Load user, token, and theme from AsyncStorage on app initialization
   loadStorage: async () => {
     try {
       const storedToken = await AsyncStorage.getItem("token");
@@ -33,15 +32,11 @@ export const useAuthStore = create((set, get) => ({
 
   setUser: (userData) => set({ user: userData }),
 
-  // 🔒 Localtunnel Bypass Header ke sath Login function
+  // Login function
   login: async (email, password) => {
     set({ isLoading: true });
     try {
-      const res = await axios.post(
-        `${API_URL}/login`,
-        { email, password },
-        { headers: { "Bypass-Tunnel-Reminder": "true" } },
-      );
+      const res = await axios.post(`${API_URL}/login`, { email, password });
       const userData = res.data;
 
       await AsyncStorage.setItem("token", userData.token || "");
@@ -63,7 +58,6 @@ export const useAuthStore = create((set, get) => ({
     try {
       const token = get().token || (await AsyncStorage.getItem("token"));
 
-      // Hit: http://192.168.18.113:5000/api/auth/profile
       const res = await axios.put(`${API_URL}/profile`, profileData, {
         headers: { Authorization: `Bearer ${token}` },
       });

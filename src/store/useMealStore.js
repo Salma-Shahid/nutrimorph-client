@@ -3,12 +3,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { useAuthStore } from "./useAuthStore";
 
-// Base URL & Endpoint Configurations
-const BASE_URL = "http://192.168.18.113:5000";
+// Live Vercel Production Base URL & Endpoint Configurations
+const BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app";
 const API_URL = `${BASE_URL}/api/meals`;
 const WATER_API_URL = `${BASE_URL}/api/water`;
 
-// Token Helper
+// Helper function to fetch JWT authorization token
 const getToken = async () => {
   const authStateToken = useAuthStore.getState().token;
   if (authStateToken) return authStateToken;
@@ -94,7 +95,7 @@ export const useMealStore = create((set, get) => ({
       if (error.response?.status === 404) {
         set({ waterIntake: 0 });
       } else {
-        console.log("Water fetch error:", error.message);
+        console.error("Water fetch error:", error.message);
       }
     }
   },
@@ -206,14 +207,14 @@ export const useMealStore = create((set, get) => ({
     }
   },
 
-  // 7. AI Scan Image Meal
+  // 7. AI Scan Image Meal (using gemini-3.5-flash-lite on backend)
   scanMealImage: async (imageBase64) => {
     set({ isLoading: true });
     try {
       const token = await getToken();
       const res = await axios.post(
         `${API_URL}/scan-ai`,
-        { imageBase64 },
+        { imageBase64, model: "gemini-3.5-flash-lite" },
         { headers: { Authorization: `Bearer ${token}` } },
       );
       set({ isLoading: false });
@@ -222,20 +223,23 @@ export const useMealStore = create((set, get) => ({
       }
     } catch (err) {
       set({ isLoading: false });
+      const statusCode = err.response?.status;
       return {
         success: false,
+        status: statusCode,
+        isProRequired: statusCode === 403,
         message: err.response?.data?.message || "AI scanning failed",
       };
     }
   },
 
-  // 8. AI Analyze Text Meal (Fixed Endpoint & Token Helper)
+  // 8. AI Analyze Text Meal (using gemini-3.5-flash-lite on backend)
   analyzeTextMeal: async (text) => {
     try {
       const token = await getToken();
       const res = await axios.post(
         `${API_URL}/parse-text`,
-        { text },
+        { text, model: "gemini-3.5-flash-lite" },
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (res.data?.success) {
@@ -243,9 +247,12 @@ export const useMealStore = create((set, get) => ({
       }
       return { success: false, message: res.data?.message || "Parsing failed" };
     } catch (err) {
+      const statusCode = err.response?.status;
       return {
         success: false,
-        message: err.response?.data?.message || "AI Analysis failed",
+        status: statusCode,
+        isProRequired: statusCode === 403,
+        message: err.response?.data?.message || "AI analysis failed",
       };
     }
   },

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
+import Purchases from "react-native-purchases"; // 👈 RevenueCat import
 import { useMealStore } from "../store/useMealStore";
 import { useAuthStore } from "../store/useAuthStore";
 
@@ -32,9 +33,24 @@ const MealScannerScreen = ({ navigation }) => {
     secondaryBtnText: isDark ? "#FFFFFF" : "#0F172A",
   };
 
-  const handleScanTrigger = (useCamera = false) => {
+  const handleScanTrigger = async (useCamera = false) => {
+    // 🟢 1. Local state ya Development mode check
+    let isPro = user?.subscriptionTier === "pro" || __DEV__;
+
+    // 🟢 2. Agar local state update nahi hui, to RevenueCat se live entitlement check karein
+    if (!isPro) {
+      try {
+        const customerInfo = await Purchases.getCustomerInfo();
+        if (customerInfo?.entitlements?.active["nutrimorph_pro"]?.isActive) {
+          isPro = true;
+        }
+      } catch (e) {
+        console.log("RevenueCat entitlement check error:", e);
+      }
+    }
+
     // 🔒 Pro Feature Guard Check
-    if (user?.subscriptionTier !== "pro") {
+    if (!isPro) {
       Alert.alert(
         "⭐ Pro Feature Required",
         "Instant Camera Meal Scanner is available exclusively for Pro plan subscribers.",
@@ -55,7 +71,7 @@ const MealScannerScreen = ({ navigation }) => {
   const pickImage = async (useCamera = false) => {
     let result;
     const options = {
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       quality: 0.7,
       base64: true,
@@ -71,7 +87,7 @@ const MealScannerScreen = ({ navigation }) => {
       result = await ImagePicker.launchImageLibraryAsync(options);
     }
 
-    if(!result.canceled && result.assets[0].base64) {
+    if (!result.canceled && result.assets[0].base64) {
       setImageUri(result.assets[0].uri);
       processImage(result.assets[0].base64);
     }

@@ -1,5 +1,5 @@
-import React, { useEffect } from "react"; // 👈 useEffect import karein
-import { StatusBar, StyleSheet, ActivityIndicator, View } from "react-native";
+import React, { useEffect } from "react";
+import { StatusBar, StyleSheet } from "react-native";
 import {
   NavigationContainer,
   DarkTheme,
@@ -7,6 +7,7 @@ import {
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import Purchases from "react-native-purchases";
 import { useAuthStore } from "./src/store/useAuthStore";
 
 import LogFoodScreen from "./src/screens/LogFoodScreen";
@@ -22,15 +23,22 @@ import SubscriptionScreen from "./src/screens/SubscriptionScreen";
 const Stack = createNativeStackNavigator();
 
 export default function App() {
-  const { user, theme, loadStorage } = useAuthStore(); // 👈 loadStorage yahan nikalein
+  const { user, theme, loadStorage } = useAuthStore();
   const isDark = theme === "dark";
 
-  // 🔄 App khulte hi Storage se Session aur Theme load karein
   useEffect(() => {
     const initApp = async () => {
       try {
         if (typeof loadStorage === "function") {
           await loadStorage();
+        }
+
+        // App level par ek dafa initialize check
+        const isConfigured = await Purchases.isConfigured();
+        const apiKey = process.env.EXPO_PUBLIC_REVENUECAT_KEY;
+
+        if (!isConfigured && apiKey) {
+          Purchases.configure({ apiKey });
         }
       } catch (err) {
         console.error("Boot Load Error:", err);
