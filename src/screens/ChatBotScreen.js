@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -16,7 +17,6 @@ import axios from "axios";
 import { renderMessage } from "./ChatMessageItem";
 import { useAuthStore } from "../store/useAuthStore";
 
-// Live Vercel API Base URL
 const BASE_URL = `${process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app"}/api`;
 
 const ChatBotScreen = () => {
@@ -29,7 +29,6 @@ const ChatBotScreen = () => {
   const flatListRef = useRef(null);
   const currentUserId = user?._id || user?.id;
 
-  // Token retrieval helper function
   const getToken = async () => {
     const token = useAuthStore.getState().token;
     if (token) return token;
@@ -39,6 +38,12 @@ const ChatBotScreen = () => {
   useEffect(() => {
     fetchHistory();
   }, []);
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  };
 
   const fetchHistory = async () => {
     try {
@@ -54,6 +59,7 @@ const ChatBotScreen = () => {
 
       if (res.data?.success && res.data?.history) {
         setMessages(res.data.history);
+        scrollToBottom();
       }
     } catch (error) {
       console.error(
@@ -66,15 +72,15 @@ const ChatBotScreen = () => {
   };
 
   const handleSend = async () => {
-    if (!inputText.trim() || loading) return;
+    const textToSend = inputText.trim();
+    if (!textToSend || loading) return;
 
     const token = await getToken();
     if (!token) {
-      console.error("Authorization token missing. Please log in again.");
+      Alert.alert("Error", "Session expired. Dobara login karein.");
       return;
     }
 
-    const textToSend = inputText.trim();
     const payload = {
       userId: currentUserId,
       message: textToSend,
@@ -85,6 +91,7 @@ const ChatBotScreen = () => {
     setMessages((prev) => [...prev, userMsg]);
     setInputText("");
     setLoading(true);
+    scrollToBottom();
 
     try {
       const res = await axios.post(`${BASE_URL}/chat`, payload, {
@@ -97,9 +104,13 @@ const ChatBotScreen = () => {
       if (res.data?.success) {
         const botMsg = { sender: "bot", text: res.data.reply };
         setMessages((prev) => [...prev, botMsg]);
+        scrollToBottom();
+      } else {
+        Alert.alert("Error", res.data?.message || "Server error.");
       }
     } catch (error) {
       console.error("Send Error:", error.response?.data || error.message);
+      Alert.alert("Error", "Backend server connection mein masla aaya.");
     } finally {
       setLoading(false);
     }
@@ -109,7 +120,7 @@ const ChatBotScreen = () => {
     <SafeAreaView style={screenStyles.safeArea} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
         style={screenStyles.container}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         {/* Header */}
         <View style={screenStyles.header}>
@@ -129,12 +140,7 @@ const ChatBotScreen = () => {
             keyExtractor={(_, index) => index.toString()}
             renderItem={({ item }) => renderMessage(item)}
             contentContainerStyle={screenStyles.listPadding}
-            onContentSizeChange={() =>
-              flatListRef.current?.scrollToEnd({ animated: true })
-            }
-            onLayout={() =>
-              flatListRef.current?.scrollToEnd({ animated: true })
-            }
+            onContentSizeChange={scrollToBottom}
           />
         )}
 
@@ -154,11 +160,16 @@ const ChatBotScreen = () => {
             placeholderTextColor="#94A3B8"
             value={inputText}
             onChangeText={setInputText}
+            onSubmitEditing={handleSend}
+            returnKeyType="send"
           />
           <TouchableOpacity
-            style={[screenStyles.sendButton, loading && { opacity: 0.6 }]}
+            style={[
+              screenStyles.sendButton,
+              (!inputText.trim() || loading) && { opacity: 0.5 },
+            ]}
             onPress={handleSend}
-            disabled={loading}
+            disabled={!inputText.trim() || loading}
           >
             <Text style={screenStyles.sendText}>Send</Text>
           </TouchableOpacity>

@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
 import { useAuthStore } from "../store/useAuthStore";
 
@@ -18,78 +21,94 @@ export default function SignupScreen({ navigation }) {
   const { register, isLoading, error } = useAuthStore();
 
   const handleSignup = async () => {
-    if (!name || !email || !password) {
-      Alert.alert("Error", "Tamam fields fill karein.");
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedName || !trimmedEmail || !password) {
+      Alert.alert("Validation Error", "Tamam fields fill karein.");
       return;
     }
 
-    const result = await register(name, email, password);
-    if (!result.success) {
-      Alert.alert("Signup Failed", result.message);
+    const result = await register(trimmedName, trimmedEmail, password);
+    if (!result?.success) {
+      Alert.alert(
+        "Signup Failed",
+        result?.message || "Kuch masla hua hai. Dobara koshish karein.",
+      );
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>NutriMorph</Text>
-      <Text style={styles.subtitle}>Create Your Account</Text>
-
-      {error && <Text style={styles.errorText}>{error}</Text>}
-
-      <TextInput
-        style={styles.input}
-        placeholder="Full Name"
-        placeholderTextColor="#888"
-        value={name}
-        onChangeText={setName}
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="Email Address"
-        placeholderTextColor="#888"
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoCapitalize="none"
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        placeholderTextColor="#888"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-
-      <TouchableOpacity
-        style={styles.button}
-        onPress={handleSignup}
-        disabled={isLoading}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
       >
-        {isLoading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Signup</Text>
-        )}
-      </TouchableOpacity>
+        <Text style={styles.title}>NutriMorph</Text>
+        <Text style={styles.subtitle}>Create Your Account</Text>
 
-      <TouchableOpacity onPress={() => navigation.navigate("Login")}>
-        <Text style={styles.linkText}>
-          Pehle se account hai?{" "}
-          <Text style={styles.linkBold}>Login karein</Text>
-        </Text>
-      </TouchableOpacity>
-    </View>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <TextInput
+          style={styles.input}
+          placeholder="Full Name"
+          placeholderTextColor="#888"
+          value={name}
+          onChangeText={setName}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Email Address"
+          placeholderTextColor="#888"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          placeholderTextColor="#888"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+
+        <TouchableOpacity
+          style={[styles.button, isLoading && { opacity: 0.7 }]}
+          onPress={handleSignup}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Signup</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => navigation.navigate("Login")}>
+          <Text style={styles.linkText}>
+            Pehle se account hai?{" "}
+            <Text style={styles.linkBold}>Login karein</Text>
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 24,
+    paddingVertical: 32,
     backgroundColor: "#121212",
   },
   title: {

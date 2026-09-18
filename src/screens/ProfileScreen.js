@@ -1,112 +1,135 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  View,
+  StyleSheet,
   Text,
+  View,
   TextInput,
   TouchableOpacity,
   ScrollView,
-  StyleSheet,
-  Image,
+  ActivityIndicator,
   Alert,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 
-const ProfileScreen = ({ navigation }) => {
-  const { user, updateProfile, theme, toggleTheme } = useAuthStore();
+export default function ProfileScreen({ navigation }) {
+  const { user, theme, updateProfile, updateUserGlobally, logout, isLoading } =
+    useAuthStore();
   const colors = getThemeColors(theme);
 
-  const [fullName, setFullName] = useState(user?.name || "");
-  const [email, setEmail] = useState(user?.email || "");
-  const [profileImage, setProfileImage] = useState(user?.profileImage || null);
-  const [height, setHeight] = useState(user?.height?.toString() || "");
-  const [weight, setWeight] = useState(user?.weight?.toString() || "");
-  const [calories, setCalories] = useState(
-    user?.calorieTarget?.toString() || "2400",
+  const [name, setName] = useState(user?.name || "");
+  const [email] = useState(user?.email || "");
+  const [height, setHeight] = useState(user?.height ? String(user.height) : "");
+  const [weight, setWeight] = useState(user?.weight ? String(user.weight) : "");
+  const [dailyCalorieGoal, setDailyCalorieGoal] = useState(
+    user?.dailyCalorieGoal ? String(user.dailyCalorieGoal) : "2000",
   );
-  const [loading, setLoading] = useState(false);
+  const [profileImage, setProfileImage] = useState(
+    user?.avatar || user?.profileImage || null,
+  );
 
-  // Pick profile photo from device gallery
+  // Sync state if user object updates globally
+  useEffect(() => {
+    if (user) {
+      setName(user.name || "");
+      setHeight(user.height ? String(user.height) : "");
+      setWeight(user.weight ? String(user.weight) : "");
+      setDailyCalorieGoal(
+        user.dailyCalorieGoal ? String(user.dailyCalorieGoal) : "2000",
+      );
+      setProfileImage(user.avatar || user.profileImage || null);
+    }
+  }, [user]);
+
+  const isPro = user?.subscriptionTier === "pro" || user?.isPro === true;
+
+  // Image Picker Logic
   const handlePickImage = async () => {
-    const permissionResult =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
       Alert.alert(
-        "Permission Required",
-        "Gallery access is required to change profile picture.",
+        "Permission Denied",
+        "Sorry, we need camera roll permissions to change profile photo!",
       );
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
+    let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.7,
+      base64: true,
     });
 
-    if (!result.canceled) {
-      setProfileImage(result.assets[0].uri);
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const selectedImageUri = result.assets[0].uri;
+      const base64Img = result.assets[0].base64
+        ? `data:image/jpeg;base64,${result.assets[0].base64}`
+        : selectedImageUri;
+
+      setProfileImage(selectedImageUri);
+
+      // Instantly save image locally and globally
+      await updateUserGlobally({
+        avatar: base64Img,
+        profileImage: selectedImageUri,
+      });
     }
   };
 
-  // Submit updated profile using useAuthStore updateProfile method
-  const handleSaveProfile = async () => {
-    setLoading(true);
-    try {
-      const payload = {
-        name: fullName,
-        email: email,
-        profileImage: profileImage,
-        height: Number(height),
-        weight: Number(weight),
-        calorieTarget: Number(calories),
-      };
-
-      const res = await updateProfile(payload);
-
-      if (res?.success) {
-        Alert.alert("Success", "Profile and Dashboard updated successfully!");
-      } else {
-        Alert.alert(
-          "Error",
-          res?.message || "Failed to update profile details.",
-        );
-      }
-    } catch (error) {
-      console.error("Profile update error:", error?.message || error);
-      Alert.alert("Error", "An unexpected error occurred.");
-    } finally {
-      setLoading(false);
+  const handleSaveChanges = async () => {
+    if (!name.trim()) {
+      Alert.alert("Validation Error", "Name is required.");
+      return;
     }
+
+    const payload = {
+      name: name.trim(),
+      height: height ? Number(height) : undefined,
+      weight: weight ? Number(weight) : undefined,
+      dailyCalorieGoal: dailyCalorieGoal ? Number(dailyCalorieGoal) : 2000,
+      avatar: profileImage,
+    };
+
+    const result = await updateProfile(payload);
+    if (result.success) {
+      Alert.alert("Success 🎉", "Profile updated successfully!");
+    } else {
+      Alert.alert("Error", result.message || "Failed to update profile.");
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert("Logout", "Kya aap logout karna chahte hain?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          await logout();
+        },
+      },
+    ]);
   };
 
   return (
-    <SafeAreaView
-      style={[styles.safeArea, { backgroundColor: colors.background }]}
-      edges={["top", "bottom"]}
-    >
-      {/* Header Bar */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Profile Settings
-        </Text>
-        <TouchableOpacity style={styles.themeToggleBtn} onPress={toggleTheme}>
-          <Text style={{ fontSize: 16 }}>
-            {theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode"}
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+      <ScrollView contentContainerStyle={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            Profile Settings
           </Text>
-        </TouchableOpacity>
-      </View>
+        </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* User Image & Avatar Card */}
+        {/* Profile Avatar Card */}
         <View style={[styles.card, { backgroundColor: colors.cardBg }]}>
-          <TouchableOpacity
-            onPress={handlePickImage}
-            style={styles.imageContainer}
-          >
+          <View style={styles.avatarContainer}>
             {profileImage ? (
               <Image
                 source={{ uri: profileImage }}
@@ -114,150 +137,183 @@ const ProfileScreen = ({ navigation }) => {
               />
             ) : (
               <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarText}>
-                  {typeof fullName === "string" && fullName.trim().length > 0
-                    ? fullName.trim().charAt(0).toUpperCase()
-                    : "U"}
+                <Text style={styles.avatarInitial}>
+                  {name ? name.charAt(0).toUpperCase() : "U"}
                 </Text>
               </View>
             )}
-            <Text style={styles.changePhotoText}>Change Photo 📷</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={styles.changePhotoBtn}
+              onPress={handlePickImage}
+            >
+              <Ionicons name="camera" size={16} color="#FFF" />
+              <Text style={styles.changePhotoText}>Change Photo</Text>
+            </TouchableOpacity>
+          </View>
 
-        {/* Input Details Card */}
-        <View style={[styles.card, { backgroundColor: colors.cardBg }]}>
-          <Text style={[styles.label, { color: colors.subText }]}>
-            Full Name
-          </Text>
+          {/* User Details Form */}
+          <Text style={styles.label}>Full Name</Text>
           <TextInput
             style={[
               styles.input,
-              {
-                backgroundColor: colors.inputBg,
-                color: colors.text,
-                borderColor: colors.border,
-              },
+              { color: colors.text, borderColor: colors.border },
             ]}
-            value={fullName}
-            onChangeText={setFullName}
+            value={name}
+            onChangeText={setName}
+            placeholder="Enter full name"
+            placeholderTextColor="#64748B"
           />
 
-          <Text style={[styles.label, { color: colors.subText }]}>
-            Email Address (Gmail)
-          </Text>
+          <Text style={styles.label}>Email Address</Text>
           <TextInput
             style={[
               styles.input,
-              {
-                backgroundColor: colors.inputBg,
-                color: colors.text,
-                borderColor: colors.border,
-              },
+              styles.disabledInput,
+              { color: "#94A3B8", borderColor: colors.border },
             ]}
             value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
+            editable={false}
           />
 
           <View style={styles.row}>
-            <View style={styles.halfInput}>
-              <Text style={[styles.label, { color: colors.subText }]}>
-                Height (cm)
-              </Text>
+            <View style={styles.halfInputContainer}>
+              <Text style={styles.label}>Height (cm)</Text>
               <TextInput
                 style={[
                   styles.input,
-                  {
-                    backgroundColor: colors.inputBg,
-                    color: colors.text,
-                    borderColor: colors.border,
-                  },
+                  { color: colors.text, borderColor: colors.border },
                 ]}
                 value={height}
                 onChangeText={setHeight}
                 keyboardType="numeric"
+                placeholder="e.g. 175"
+                placeholderTextColor="#64748B"
               />
             </View>
-            <View style={styles.halfInput}>
-              <Text style={[styles.label, { color: colors.subText }]}>
-                Weight (kg)
-              </Text>
+
+            <View style={styles.halfInputContainer}>
+              <Text style={styles.label}>Weight (kg)</Text>
               <TextInput
                 style={[
                   styles.input,
-                  {
-                    backgroundColor: colors.inputBg,
-                    color: colors.text,
-                    borderColor: colors.border,
-                  },
+                  { color: colors.text, borderColor: colors.border },
                 ]}
                 value={weight}
                 onChangeText={setWeight}
                 keyboardType="numeric"
+                placeholder="e.g. 70"
+                placeholderTextColor="#64748B"
               />
             </View>
           </View>
 
-          <Text style={[styles.label, { color: colors.subText }]}>
-            Daily Calorie Goal (kcal)
-          </Text>
+          <Text style={styles.label}>Daily Calorie Goal (kcal)</Text>
           <TextInput
             style={[
               styles.input,
-              {
-                backgroundColor: colors.inputBg,
-                color: colors.text,
-                borderColor: colors.border,
-              },
+              { color: colors.text, borderColor: colors.border },
             ]}
-            value={calories}
-            onChangeText={setCalories}
+            value={dailyCalorieGoal}
+            onChangeText={setDailyCalorieGoal}
             keyboardType="numeric"
+            placeholder="e.g. 2000"
+            placeholderTextColor="#64748B"
           />
 
           <TouchableOpacity
-            style={styles.saveBtn}
-            onPress={handleSaveProfile}
-            disabled={loading}
+            style={[styles.saveButton, isLoading && { opacity: 0.7 }]}
+            onPress={handleSaveChanges}
+            disabled={isLoading}
           >
-            <Text style={styles.saveBtnText}>
-              {loading ? "Saving..." : "Save Changes 💾"}
-            </Text>
+            {isLoading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <View style={styles.saveBtnContent}>
+                <Ionicons
+                  name="save-outline"
+                  size={20}
+                  color="#FFF"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.saveBtnText}>Save Changes</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* Plan Upgrade Trigger */}
-        <TouchableOpacity
-          style={styles.upgradeCard}
-          onPress={() => navigation?.navigate("SubscriptionScreen")}
-        >
-          <Text style={styles.upgradeTitle}>⭐ Upgrade to Pro Plan</Text>
-          <Text style={styles.upgradeSub}>
-            Unlock Voice AI Bot, Custom Meal Plans & Advanced Analytics
-          </Text>
+        {/* Dynamic Pro Plan Banner */}
+        {isPro ? (
+          <View style={styles.proActiveCard}>
+            <Ionicons name="ribbon" size={28} color="#F59E0B" />
+            <View style={{ marginLeft: 12, flex: 1 }}>
+              <Text style={styles.proActiveTitle}>Pro Member Active 👑</Text>
+              <Text style={styles.proActiveSub}>
+                You have unlimited access to NutriBot & AI Meal Scanner.
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.proBanner}
+            onPress={() => navigation.navigate("SubscriptionScreen")}
+          >
+            <Ionicons name="star" size={28} color="#FFD700" />
+            <View style={{ marginLeft: 12, flex: 1 }}>
+              <Text style={styles.proBannerTitle}>⭐ Upgrade to Pro Plan</Text>
+              <Text style={styles.proBannerSub}>
+                Unlock Voice AI Bot, Custom Meal Plans & Advanced Analytics
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#FFF" />
+          </TouchableOpacity>
+        )}
+
+        {/* Prominent Logout Button */}
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Ionicons
+            name="log-out-outline"
+            size={20}
+            color="#EF4444"
+            style={{ marginRight: 8 }}
+          />
+          <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
+  safeArea: {
+    flex: 1,
   },
-  headerTitle: { fontSize: 20, fontWeight: "bold" },
-  themeToggleBtn: { padding: 8, borderRadius: 12, backgroundColor: "#334155" },
-  scrollContent: { padding: 16 },
-  card: { borderRadius: 16, padding: 16, marginBottom: 16 },
-  imageContainer: { alignItems: "center" },
-  avatarImage: { width: 90, height: 90, borderRadius: 45 },
+  container: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  header: {
+    marginBottom: 20,
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+  },
+  card: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+  },
+  avatarContainer: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  avatarImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    marginBottom: 10,
+  },
   avatarPlaceholder: {
     width: 90,
     height: 90,
@@ -265,45 +321,119 @@ const styles = StyleSheet.create({
     backgroundColor: "#10B981",
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: 10,
   },
-  avatarText: { fontSize: 36, color: "#FFF", fontWeight: "bold" },
-  changePhotoText: {
-    marginTop: 8,
-    color: "#10B981",
-    fontWeight: "600",
-    fontSize: 13,
+  avatarInitial: {
+    fontSize: 36,
+    fontWeight: "bold",
+    color: "#FFFFFF",
   },
-  label: { fontSize: 13, marginTop: 10, marginBottom: 4 },
-  input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-  },
-  row: { flexDirection: "row", gap: 10 },
-  halfInput: { flex: 1 },
-  saveBtn: {
-    backgroundColor: "#10B981",
-    borderRadius: 12,
-    paddingVertical: 14,
+  changePhotoBtn: {
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 16,
+    backgroundColor: "#334155",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  saveBtnText: { color: "#FFF", fontWeight: "bold", fontSize: 15 },
-  upgradeCard: {
+  changePhotoText: {
+    color: "#10B981",
+    fontSize: 13,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
+  label: {
+    color: "#94A3B8",
+    fontSize: 13,
+    marginBottom: 6,
+    fontWeight: "500",
+  },
+  input: {
+    backgroundColor: "#0F172A",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+    fontSize: 15,
+    borderWidth: 1,
+  },
+  disabledInput: {
+    backgroundColor: "#1E293B",
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  halfInputContainer: {
+    width: "48%",
+  },
+  saveButton: {
+    backgroundColor: "#10B981",
+    padding: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  saveBtnContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  saveBtnText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  proBanner: {
     backgroundColor: "#8B5CF6",
     borderRadius: 16,
-    padding: 16,
+    padding: 18,
+    flexDirection: "row",
     alignItems: "center",
+    marginBottom: 20,
   },
-  upgradeTitle: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
-  upgradeSub: {
+  proBannerTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  proBannerSub: {
     color: "#E0E7FF",
     fontSize: 12,
-    textAlign: "center",
-    marginTop: 4,
+    marginTop: 2,
+  },
+  proActiveCard: {
+    backgroundColor: "#1E293B",
+    borderColor: "#F59E0B",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  proActiveTitle: {
+    color: "#F59E0B",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  proActiveSub: {
+    color: "#94A3B8",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderWidth: 1,
+    borderColor: "#EF4444",
+    padding: 14,
+    borderRadius: 12,
+    marginTop: 10,
+  },
+  logoutText: {
+    color: "#EF4444",
+    fontWeight: "bold",
+    fontSize: 16,
   },
 });
-
-export default ProfileScreen;

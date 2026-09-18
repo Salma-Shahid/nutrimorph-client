@@ -1,52 +1,81 @@
 import React from "react";
-import { useColorScheme } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors } from "../theme/colors";
+import { useAuthStore } from "../store/useAuthStore";
+import { getThemeColors } from "../theme/colors";
 
-// Screens Import karein
+// Screens Import
 import DashboardScreen from "../screens/DashboardScreen";
 import MealScannerScreen from "../screens/MealScannerScreen";
+import ChatBotScreen from "../screens/ChatBotScreen";
+import ProfileScreen from "../screens/ProfileScreen";
 
 const Tab = createBottomTabNavigator();
 
 export default function AppNavigator() {
-  const theme = useColorScheme();
-  const isDark = theme === "dark";
-  const activeColors = Colors[isDark ? "dark" : "light"];
+  const { theme } = useAuthStore();
+  const colors = getThemeColors(theme);
 
   return (
     <Tab.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: activeColors.tabBackground },
-        headerTintColor: activeColors.text,
+        headerShown: false,
         tabBarStyle: {
-          backgroundColor: activeColors.tabBackground,
-          borderTopWidth: 0,
+          backgroundColor: colors.cardBg,
+          borderTopColor: colors.border,
+          borderTopWidth: 1,
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 6,
         },
-        tabBarActiveTintColor: activeColors.tabIconSelected,
-        tabBarInactiveTintColor: activeColors.tabIconDefault,
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.subText,
       }}
     >
-      {/* Pehla Tab: Dashboard */}
       <Tab.Screen
-        name="Dashboard"
+        name="DashboardTab"
         component={DashboardScreen}
         options={{
+          title: "Dashboard",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" color={color} size={size} />
+            <Ionicons name="grid-outline" color={color} size={size} />
           ),
         }}
       />
 
-      {/* Doosra Tab: Meal Scanner */}
       <Tab.Screen
-        name="Scanner"
+        name="ScannerTab"
         component={MealScannerScreen}
         options={{
           title: "Scan Meal",
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="scan-circle" color={color} size={32} />
+          ),
+        }}
+      />
+
+      <Tab.Screen
+        name="ChatBotTab"
+        component={ChatBotScreen}
+        options={{
+          title: "NutriBot",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="scan-circle" color={color} size={32} /> // Scanner icon thoda bada rakha hai
+            <Ionicons
+              name="chatbubble-ellipses-outline"
+              color={color}
+              size={size}
+            />
+          ),
+        }}
+      />
+
+      <Tab.Screen
+        name="ProfileTab"
+        component={ProfileScreen}
+        options={{
+          title: "Profile",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-outline" color={color} size={size} />
           ),
         }}
       />

@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
 import { useAuthStore } from "../store/useAuthStore";
 
@@ -17,71 +20,82 @@ export default function LoginScreen({ navigation }) {
   const { login, isLoading, error } = useAuthStore();
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Please fill all fields");
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail || !password) {
+      Alert.alert("Error", "Please fill all fields.");
       return;
     }
 
-    const result = await login(email, password);
+    const result = await login(trimmedEmail, password);
 
-    if (!result.success) {
-      Alert.alert("Login Failed", result.message);
+    if (!result?.success) {
+      Alert.alert("Login Failed", result?.message || "Login fail ho gaya.");
     }
-    // 💡 NOTE: Successful login par navigation automatically App.js handle karega
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>NutriMorph</Text>
-      <Text style={styles.subtitle}>Welcome Back!</Text>
-
-      {error && <Text style={styles.errorText}>{error}</Text>}
-
-      <TextInput
-        style={styles.input}
-        placeholder="Email Address"
-        placeholderTextColor="#888"
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoCapitalize="none"
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        placeholderTextColor="#888"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-
-      <TouchableOpacity
-        style={styles.button}
-        onPress={handleLogin}
-        disabled={isLoading}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
       >
-        {isLoading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Login</Text>
-        )}
-      </TouchableOpacity>
+        <Text style={styles.title}>NutriMorph</Text>
+        <Text style={styles.subtitle}>Welcome Back!</Text>
 
-      <TouchableOpacity onPress={() => navigation.navigate("SignupScreen")}>
-        <Text style={styles.linkText}>
-          Account nahi hai? <Text style={styles.linkBold}>Signup karein</Text>
-        </Text>
-      </TouchableOpacity>
-    </View>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <TextInput
+          style={styles.input}
+          placeholder="Email Address"
+          placeholderTextColor="#888"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          placeholderTextColor="#888"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+
+        <TouchableOpacity
+          style={[styles.button, isLoading && { opacity: 0.7 }]}
+          onPress={handleLogin}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Login</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => navigation.navigate("Signup")}>
+          <Text style={styles.linkText}>
+            Account nahi hai? <Text style={styles.linkBold}>Signup karein</Text>
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 24,
+    paddingVertical: 32,
     backgroundColor: "#121212",
   },
   title: {

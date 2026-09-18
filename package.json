@@ -12,7 +12,7 @@
     "axios": "^1.19.0",
     "expo": "~57.0.16",
     "expo-camera": "~57.0.4",
-    "expo-image-picker": "~57.0.13",
+    "expo-image-picker": "~57.0.19",
     "expo-status-bar": "~57.0.1",
     "expo-web-browser": "~57.0.2",
     "react": "19.2.3",

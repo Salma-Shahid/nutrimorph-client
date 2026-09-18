@@ -6,6 +6,8 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  Platform,
+  ScrollView,
 } from "react-native";
 import Purchases from "react-native-purchases";
 import { useAuthStore } from "../store/useAuthStore";
@@ -15,8 +17,7 @@ export default function SubscriptionScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
 
-  // 🟢 Zustand store se user state sync karne ke liye
-  const { user, setUser } = useAuthStore();
+  const { user, updateUserGlobally } = useAuthStore();
 
   useEffect(() => {
     loadOfferings();
@@ -26,9 +27,18 @@ export default function SubscriptionScreen({ navigation }) {
     try {
       const isConfigured = await Purchases.isConfigured();
       if (!isConfigured) {
-        const apiKey = process.env.EXPO_PUBLIC_REVENUECAT_KEY;
+        const apiKey = __DEV__
+          ? process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY
+          : Platform.OS === "android"
+            ? process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY
+            : process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
+
         if (apiKey) {
           Purchases.configure({ apiKey });
+        } else {
+          console.warn(
+            "RevenueCat API key missing for current environment or platform.",
+          );
         }
       }
 
@@ -45,7 +55,7 @@ export default function SubscriptionScreen({ navigation }) {
       }
     } catch (error) {
       console.error("RevenueCat Offerings Error:", error);
-      Alert.alert("Error", "Subscription plans are not available.");
+      Alert.alert("Notice", "Subscription plans are currently unavailable.");
     } finally {
       setLoading(false);
     }
@@ -57,15 +67,21 @@ export default function SubscriptionScreen({ navigation }) {
       const { customerInfo } = await Purchases.purchasePackage(packageToBuy);
 
       if (customerInfo.entitlements.active["nutrimorph_pro"]?.isActive) {
-        // 🟢 Purchase success par local store sync karein
-        if (setUser) {
-          setUser({ ...user, subscriptionTier: "pro" });
+        // 🟢 Store update karein
+        if (updateUserGlobally) {
+          await updateUserGlobally({ subscriptionTier: "pro" });
         }
 
         Alert.alert("Success 🎉", "You are now a Pro member!", [
           {
             text: "OK",
-            onPress: () => navigation.navigate("HomeScreen"),
+            onPress: () => {
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.navigate("MainTabs");
+              }
+            },
           },
         ]);
       }
@@ -85,11 +101,21 @@ export default function SubscriptionScreen({ navigation }) {
         customerInfo.entitlements.active["nutrimorph_pro"]?.isActive;
 
       if (isProActive) {
-        // 🟢 Restore par bhi local store sync karein
-        if (setUser) {
-          setUser({ ...user, subscriptionTier: "pro" });
+        if (updateUserGlobally) {
+          await updateUserGlobally({ subscriptionTier: "pro" });
         }
-        Alert.alert("Success 🎉", "Your subscription has been restored!");
+        Alert.alert("Success 🎉", "Your subscription has been restored!", [
+          {
+            text: "OK",
+            onPress: () => {
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.navigate("MainTabs");
+              }
+            },
+          },
+        ]);
       } else {
         Alert.alert("Notice", "No active subscription found.");
       }
@@ -107,52 +133,71 @@ export default function SubscriptionScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Choose Your Plan 🚀</Text>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>Unlock NutriMorph Pro 🚀</Text>
+      <Text style={styles.subtitle}>
+        Get unlimited AI meal scans, personalized diet plans, and priority
+        NutriBot access.
+      </Text>
 
-      {packages.map((pkg) => (
-        <TouchableOpacity
-          key={pkg.identifier}
-          style={styles.buyButton}
-          disabled={purchasing}
-          onPress={() => handlePurchase(pkg)}
-        >
-          {purchasing ? (
-            <ActivityIndicator color="#FFF" />
-          ) : (
-            <Text style={styles.buttonText}>
-              Upgrade to Pro — {pkg.product.priceString} / mo
-            </Text>
-          )}
-        </TouchableOpacity>
-      ))}
+      {packages.length > 0 ? (
+        packages.map((pkg) => (
+          <TouchableOpacity
+            key={pkg.identifier}
+            style={styles.buyButton}
+            disabled={purchasing}
+            onPress={() => handlePurchase(pkg)}
+          >
+            {purchasing ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.buttonText}>
+                Upgrade to Pro — {pkg.product.priceString} / mo
+              </Text>
+            )}
+          </TouchableOpacity>
+        ))
+      ) : (
+        <View style={styles.noPackageCard}>
+          <Text style={styles.noPackageText}>
+            No active plans available at the moment. Please check back later.
+          </Text>
+        </View>
+      )}
 
       <TouchableOpacity onPress={handleRestore} style={styles.restoreButton}>
         <Text style={styles.restoreText}>Restore Purchases</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    padding: 20,
+    flexGrow: 1,
+    padding: 24,
     justifyContent: "center",
-    backgroundColor: "#0B0F17",
+    backgroundColor: "#0F172A",
   },
   center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#0B0F17",
+    backgroundColor: "#0F172A",
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "bold",
-    color: "#FFF",
+    color: "#FFFFFF",
     textAlign: "center",
-    marginBottom: 30,
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#94A3B8",
+    textAlign: "center",
+    marginBottom: 32,
+    lineHeight: 20,
   },
   buyButton: {
     backgroundColor: "#10B981",
@@ -161,7 +206,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginVertical: 10,
   },
-  buttonText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
-  restoreButton: { marginTop: 20, alignItems: "center" },
-  restoreText: { color: "#9CA3AF", fontSize: 14 },
+  buttonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  noPackageCard: {
+    backgroundColor: "#1E293B",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  noPackageText: {
+    color: "#94A3B8",
+    textAlign: "center",
+  },
+  restoreButton: {
+    marginTop: 20,
+    alignItems: "center",
+    paddingVertical: 10,
+  },
+  restoreText: {
+    color: "#94A3B8",
+    fontSize: 14,
+    textDecorationLine: "underline",
+  },
 });

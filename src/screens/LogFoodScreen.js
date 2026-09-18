@@ -33,7 +33,7 @@ export default function LogFoodScreen({ navigation, route }) {
   // AI Auto-Fill Handler
   const handleAiAutoFill = async () => {
     if (!name.trim()) {
-      Alert.alert("Input Required", "Pehle food item ka naam enter karein.");
+      Alert.alert("Input Required", "Please enter the food item name.");
       return;
     }
 
@@ -49,14 +49,14 @@ export default function LogFoodScreen({ navigation, route }) {
     } else {
       Alert.alert(
         "AI Error",
-        res?.message || "Nutrition details fetch nahi ho sakein.",
+        res?.message || "Failed to fetch nutrition details.",
       );
     }
   };
 
   const handleSave = async () => {
     if (!name || !calories) {
-      Alert.alert("Error", "Food name aur calories enter karein.");
+      Alert.alert("Error", "Please enter Food name and calories.");
       return;
     }
 
@@ -69,7 +69,7 @@ export default function LogFoodScreen({ navigation, route }) {
     });
 
     if (res.success) {
-      Alert.alert("Success", "Meal log ho chuki hai!");
+      Alert.alert("Success", "Meal is successfully logged!");
       navigation.goBack();
     } else {
       Alert.alert("Error", res.message);

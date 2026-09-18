@@ -1,5 +1,5 @@
-import React, { useEffect } from "react";
-import { StatusBar, StyleSheet } from "react-native";
+import React, { useEffect, useState } from "react";
+import { StatusBar, StyleSheet, View, ActivityIndicator } from "react-native";
 import {
   NavigationContainer,
   DarkTheme,
@@ -10,20 +10,18 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import Purchases from "react-native-purchases";
 import { useAuthStore } from "./src/store/useAuthStore";
 
+import AppNavigator from "./src/navigation/AppNavigator";
 import LogFoodScreen from "./src/screens/LogFoodScreen";
-import MealScannerScreen from "./src/screens/MealScannerScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import SignupScreen from "./src/screens/SignupScreen";
-import HomeScreen from "./src/screens/HomeScreen";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
-import ProfileScreen from "./src/screens/ProfileScreen";
-import ChatBotScreen from "./src/screens/ChatBotScreen";
 import SubscriptionScreen from "./src/screens/SubscriptionScreen";
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   const { user, theme, loadStorage } = useAuthStore();
+  const [isInitializing, setIsInitializing] = useState(true);
   const isDark = theme === "dark";
 
   useEffect(() => {
@@ -33,30 +31,46 @@ export default function App() {
           await loadStorage();
         }
 
-        // App level par ek dafa initialize check
-        const isConfigured = await Purchases.isConfigured();
         const apiKey = process.env.EXPO_PUBLIC_REVENUECAT_KEY;
-
-        if (!isConfigured && apiKey) {
-          Purchases.configure({ apiKey });
+        if (apiKey) {
+          const isConfigured = await Purchases.isConfigured();
+          if (!isConfigured) {
+            Purchases.configure({ apiKey });
+          }
         }
       } catch (err) {
         console.error("Boot Load Error:", err);
+      } finally {
+        setIsInitializing(false);
       }
     };
+
     initApp();
   }, []);
+
+  if (isInitializing) {
+    return (
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: isDark ? "#0F172A" : "#F8FAFC" },
+        ]}
+      >
+        <ActivityIndicator size="large" color="#10B981" />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaProvider
       style={[
         styles.container,
-        { backgroundColor: isDark ? "#121212" : "#f8fafc" },
+        { backgroundColor: isDark ? "#0F172A" : "#F8FAFC" },
       ]}
     >
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
-        backgroundColor={isDark ? "#121212" : "#f8fafc"}
+        backgroundColor={isDark ? "#0F172A" : "#F8FAFC"}
       />
 
       <NavigationContainer theme={isDark ? DarkTheme : DefaultTheme}>
@@ -69,22 +83,13 @@ export default function App() {
               />
             ) : (
               <>
-                <Stack.Screen name="HomeScreen" component={HomeScreen} />
-                <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
+                {/* Main Flow with Bottom Tabs */}
+                <Stack.Screen name="MainTabs" component={AppNavigator} />
                 <Stack.Screen name="LogFoodScreen" component={LogFoodScreen} />
-                <Stack.Screen
-                  name="MealScannerScreen"
-                  component={MealScannerScreen}
-                />
-                <Stack.Screen
-                  name="ChatBotScreen"
-                  component={ChatBotScreen}
-                  options={{ title: "NutriBot Assistant" }}
-                />
                 <Stack.Screen
                   name="SubscriptionScreen"
                   component={SubscriptionScreen}
-                  options={{ title: "Upgrade to Pro" }}
+                  options={{ title: "Upgrade to Pro", headerShown: true }}
                 />
               </>
             )
@@ -102,4 +107,10 @@ export default function App() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
 });
+

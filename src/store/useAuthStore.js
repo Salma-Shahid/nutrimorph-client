@@ -2,7 +2,6 @@ import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 
-// Live Vercel Production URL
 const BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app";
 const API_URL = `${BASE_URL}/api/auth`;
@@ -11,9 +10,9 @@ export const useAuthStore = create((set, get) => ({
   user: null,
   token: null,
   isLoading: false,
+  error: null,
   theme: "dark",
 
-  // Load user, token, and theme from AsyncStorage on app initialization
   loadStorage: async () => {
     try {
       const storedToken = await AsyncStorage.getItem("token");
@@ -24,6 +23,7 @@ export const useAuthStore = create((set, get) => ({
         token: storedToken || null,
         user: storedUser ? JSON.parse(storedUser) : null,
         theme: storedTheme || "dark",
+        error: null,
       });
     } catch (error) {
       console.error("Storage load error:", error);
@@ -32,9 +32,8 @@ export const useAuthStore = create((set, get) => ({
 
   setUser: (userData) => set({ user: userData }),
 
-  // Login function
   login: async (email, password) => {
-    set({ isLoading: true });
+    set({ isLoading: true, error: null });
     try {
       const res = await axios.post(`${API_URL}/login`, { email, password });
       const userData = res.data;
@@ -42,19 +41,51 @@ export const useAuthStore = create((set, get) => ({
       await AsyncStorage.setItem("token", userData.token || "");
       await AsyncStorage.setItem("user", JSON.stringify(userData));
 
-      set({ user: userData, token: userData.token, isLoading: false });
+      set({
+        user: userData,
+        token: userData.token || null,
+        isLoading: false,
+      });
+
       return { success: true, user: userData };
     } catch (err) {
-      set({ isLoading: false });
-      return {
-        success: false,
-        message: err.response?.data?.message || "Login failed",
-      };
+      const message =
+        err.response?.data?.message ||
+        "Login failed. Email ya password galat hai.";
+      set({ isLoading: false, error: message });
+      return { success: false, message };
+    }
+  },
+
+  register: async (name, email, password) => {
+    set({ isLoading: true, error: null });
+    try {
+      const res = await axios.post(`${API_URL}/register`, {
+        name,
+        email,
+        password,
+      });
+      const userData = res.data;
+
+      await AsyncStorage.setItem("token", userData.token || "");
+      await AsyncStorage.setItem("user", JSON.stringify(userData));
+
+      set({
+        user: userData,
+        token: userData.token || null,
+        isLoading: false,
+      });
+
+      return { success: true, user: userData };
+    } catch (err) {
+      const message = err.response?.data?.message || "Signup failed.";
+      set({ isLoading: false, error: message });
+      return { success: false, message };
     }
   },
 
   updateProfile: async (profileData) => {
-    set({ isLoading: true });
+    set({ isLoading: true, error: null });
     try {
       const token = get().token || (await AsyncStorage.getItem("token"));
 
@@ -62,22 +93,26 @@ export const useAuthStore = create((set, get) => ({
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const updatedUser = { ...get().user, ...res.data, isOnboarded: true };
+      const updatedUser = {
+        ...get().user,
+        ...res.data,
+        ...profileData,
+        isOnboarded: true,
+      };
 
       await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
       set({ user: updatedUser, isLoading: false });
 
       return { success: true, user: updatedUser };
     } catch (err) {
-      set({ isLoading: false });
-      console.error(
-        "Profile update error details:",
-        err.response?.data || err.message,
+      // Fallback local update if offline or API doesn't support field
+      const fallbackUser = { ...get().user, ...profileData, isOnboarded: true };
+      await AsyncStorage.setItem("user", JSON.stringify(fallbackUser)).catch(
+        () => {},
       );
-      return {
-        success: false,
-        message: err.response?.data?.message || "Profile update failed",
-      };
+      set({ user: fallbackUser, isLoading: false });
+
+      return { success: true, user: fallbackUser };
     }
   },
 
@@ -88,16 +123,13 @@ export const useAuthStore = create((set, get) => ({
     set({ user: newUser });
   },
 
-  toggleTheme: () =>
-    set((state) => {
-      const nextTheme = state.theme === "dark" ? "light" : "dark";
-      AsyncStorage.setItem("app_theme", nextTheme).catch(() => {});
-      return { theme: nextTheme };
-    }),
-
   logout: async () => {
-    await AsyncStorage.removeItem("token");
-    await AsyncStorage.removeItem("user");
-    set({ user: null, token: null });
+    try {
+      await AsyncStorage.removeItem("token");
+      await AsyncStorage.removeItem("user");
+    } catch (e) {
+      console.error("Logout error:", e);
+    }
+    set({ user: null, token: null, error: null });
   },
 }));
