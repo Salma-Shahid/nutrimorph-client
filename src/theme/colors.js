@@ -1,23 +1,13 @@
-export const getThemeColors = (mode = "dark") => {
-  if (mode === "light") {
-    return {
-      background: "#F8FAFC",
-      cardBg: "#FFFFFF",
-      text: "#0F172A",
-      subText: "#475569",
-      border: "#E2E8F0",
-      inputBg: "#F1F5F9",
-      accent: "#10B981",
-    };
-  }
+export const getThemeColors = (theme) => {
+  const isDark = theme === "dark";
 
   return {
-    background: "#0F172A",
-    cardBg: "#1E293B",
-    text: "#FFFFFF",
-    subText: "#94A3B8",
-    border: "#334155",
-    inputBg: "#0F172A",
-    accent: "#10B981",
+    bg: isDark ? "#0F172A" : "#F8FAFC",
+    cardBg: isDark ? "#1E293B" : "#FFFFFF",
+    inputBg: isDark ? "#334155" : "#F1F5F9",
+    text: isDark ? "#FFFFFF" : "#0F172A",
+    textSecondary: isDark ? "#94A3B8" : "#64748B",
+    border: isDark ? "#334155" : "#E2E8F0",
+    primary: "#10B981",
   };
 };

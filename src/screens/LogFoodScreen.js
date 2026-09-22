@@ -6,13 +6,20 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  View,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { useMealStore } from "../store/useMealStore";
+import { useAuthStore } from "../store/useAuthStore";
+import { getThemeColors } from "../theme/colors";
 
 export default function LogFoodScreen({ navigation, route }) {
   const initialData = route.params?.initialData || {};
   const { logMeal, analyzeTextMeal, isLoading } = useMealStore();
+  const theme = useAuthStore((state) => state.theme);
+  const colors = getThemeColors(theme);
 
   const [name, setName] = useState(initialData.name || "");
   const [calories, setCalories] = useState(
@@ -55,120 +62,231 @@ export default function LogFoodScreen({ navigation, route }) {
   };
 
   const handleSave = async () => {
-    if (!name || !calories) {
+    if (!name.trim() || !calories) {
       Alert.alert("Error", "Please enter Food name and calories.");
       return;
     }
 
     const res = await logMeal({
-      name,
+      name: name.trim(),
       calories: Number(calories),
       protein: Number(protein) || 0,
       carbs: Number(carbs) || 0,
       fats: Number(fats) || 0,
     });
 
-    if (res.success) {
-      Alert.alert("Success", "Meal is successfully logged!");
+    if (res?.success) {
+      Alert.alert("Success 🎉", "Meal is successfully logged!");
       navigation.goBack();
     } else {
-      Alert.alert("Error", res.message);
+      Alert.alert("Error", res?.message || "Failed to log meal.");
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Log Food Item 📝</Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Food Name (e.g. Biryani)"
-        placeholderTextColor="#888"
-        value={name}
-        onChangeText={setName}
-      />
-
-      {/* AI Auto-Fill Action Button */}
-      <TouchableOpacity
-        style={styles.aiButton}
-        onPress={handleAiAutoFill}
-        disabled={aiLoading}
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
-        {aiLoading ? (
-          <ActivityIndicator color="#fff" size="small" />
-        ) : (
-          <Text style={styles.aiBtnText}>Auto-Fill Macros with AI ✨</Text>
-        )}
-      </TouchableOpacity>
+        {/* Header with Back Button */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={[
+              styles.backBtn,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={20} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: colors.text }]}>
+            Log Food Item 📝
+          </Text>
+        </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Calories (kcal)"
-        placeholderTextColor="#888"
-        keyboardType="numeric"
-        value={calories}
-        onChangeText={setCalories}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Protein (g)"
-        placeholderTextColor="#888"
-        keyboardType="numeric"
-        value={protein}
-        onChangeText={setProtein}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Carbs (g)"
-        placeholderTextColor="#888"
-        keyboardType="numeric"
-        value={carbs}
-        onChangeText={setCarbs}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Fats (g)"
-        placeholderTextColor="#888"
-        keyboardType="numeric"
-        value={fats}
-        onChangeText={setFats}
-      />
+        {/* Input Fields */}
+        <Text style={[styles.label, { color: colors.textSecondary }]}>
+          Food Name
+        </Text>
+        <TextInput
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.inputBg,
+              color: colors.text,
+              borderColor: colors.border,
+            },
+          ]}
+          placeholder="e.g. Chicken Biryani / Salad"
+          placeholderTextColor={colors.textSecondary}
+          value={name}
+          onChangeText={setName}
+        />
 
-      <TouchableOpacity
-        style={styles.button}
-        onPress={handleSave}
-        disabled={isLoading}
-      >
-        {isLoading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.btnText}>Save Meal</Text>
-        )}
-      </TouchableOpacity>
+        {/* AI Auto-Fill Action Button */}
+        <TouchableOpacity
+          style={styles.aiButton}
+          onPress={handleAiAutoFill}
+          disabled={aiLoading}
+        >
+          {aiLoading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <View style={styles.aiBtnRow}>
+              <Ionicons
+                name="sparkles"
+                size={16}
+                color="#FFF"
+                style={{ marginRight: 6 }}
+              />
+              <Text style={styles.aiBtnText}>Auto-Fill Macros with AI</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <Text style={[styles.label, { color: colors.textSecondary }]}>
+          Calories (kcal)
+        </Text>
+        <TextInput
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.inputBg,
+              color: colors.text,
+              borderColor: colors.border,
+            },
+          ]}
+          placeholder="e.g. 450"
+          placeholderTextColor={colors.textSecondary}
+          keyboardType="numeric"
+          value={calories}
+          onChangeText={setCalories}
+        />
+
+        <View style={styles.row}>
+          <View style={styles.halfInput}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>
+              Protein (g)
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
+              placeholder="0"
+              placeholderTextColor={colors.textSecondary}
+              keyboardType="numeric"
+              value={protein}
+              onChangeText={setProtein}
+            />
+          </View>
+
+          <View style={styles.halfInput}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>
+              Carbs (g)
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
+              placeholder="0"
+              placeholderTextColor={colors.textSecondary}
+              keyboardType="numeric"
+              value={carbs}
+              onChangeText={setCarbs}
+            />
+          </View>
+        </View>
+
+        <Text style={[styles.label, { color: colors.textSecondary }]}>
+          Fats (g)
+        </Text>
+        <TextInput
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.inputBg,
+              color: colors.text,
+              borderColor: colors.border,
+            },
+          ]}
+          placeholder="0"
+          placeholderTextColor={colors.textSecondary}
+          keyboardType="numeric"
+          value={fats}
+          onChangeText={setFats}
+        />
+
+        <TouchableOpacity
+          style={styles.saveButton}
+          onPress={handleSave}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.btnText}>Save Meal</Text>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#121212", padding: 20 },
-  title: { fontSize: 24, fontWeight: "bold", color: "#fff", marginBottom: 20 },
-  input: {
-    backgroundColor: "#1e1e1e",
-    color: "#fff",
-    padding: 15,
+  container: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 40 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  backBtn: {
+    padding: 8,
     borderRadius: 10,
-    marginBottom: 12,
+    borderWidth: 1,
+    marginRight: 12,
+  },
+  title: { fontSize: 22, fontWeight: "bold" },
+  label: { fontSize: 13, fontWeight: "600", marginBottom: 6 },
+  input: {
+    padding: 14,
+    borderRadius: 10,
+    fontSize: 15,
+    borderWidth: 1,
+    marginBottom: 14,
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  halfInput: {
+    width: "48%",
   },
   aiButton: {
     backgroundColor: "#2563EB",
     padding: 13,
     borderRadius: 10,
     alignItems: "center",
-    marginBottom: 14,
+    marginBottom: 16,
+  },
+  aiBtnRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   aiBtnText: { color: "#fff", fontSize: 14, fontWeight: "bold" },
-  button: {
-    backgroundColor: "#4CAF50",
+  saveButton: {
+    backgroundColor: "#10B981",
     padding: 15,
     borderRadius: 10,
     alignItems: "center",

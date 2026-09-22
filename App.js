@@ -89,12 +89,14 @@ export default function App() {
                 <Stack.Screen
                   name="SubscriptionScreen"
                   component={SubscriptionScreen}
-                  options={{ title: "Upgrade to Pro", headerShown: true }}
                 />
               </>
             )
           ) : (
             <>
+              {/* 🟢 Screen Name Aliases ("Login"/"LoginScreen" & "Signup"/"SignupScreen") */}
+              <Stack.Screen name="Login" component={LoginScreen} />
+              <Stack.Screen name="Signup" component={SignupScreen} />
               <Stack.Screen name="LoginScreen" component={LoginScreen} />
               <Stack.Screen name="SignupScreen" component={SignupScreen} />
             </>
@@ -113,4 +115,3 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 });
-

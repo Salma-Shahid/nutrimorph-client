@@ -17,6 +17,7 @@
       "bundleIdentifier": "com.nutrimorph.app"
     },
     "android": {
+      "softwareKeyboardLayoutMode": "resize",
       "usesCleartextTraffic": true,
       "package": "com.nutrimorph.app",
       "adaptiveIcon": {

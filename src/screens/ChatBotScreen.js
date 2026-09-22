@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   FlatList,
   StyleSheet,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Alert,
@@ -16,8 +15,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { renderMessage } from "./ChatMessageItem";
 import { useAuthStore } from "../store/useAuthStore";
+import CustomAppLoader from "../components/CustomAppLoader";
 
-const BASE_URL = `${process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app"}/api`;
+const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app"}/api`;
 
 const ChatBotScreen = () => {
   const { user } = useAuthStore();
@@ -47,27 +47,37 @@ const ChatBotScreen = () => {
 
   const fetchHistory = async () => {
     try {
+      setFetchingHistory(true);
       const token = await getToken();
-      if (!currentUserId || !token) {
-        setFetchingHistory(false);
-        return;
-      }
 
-      const res = await axios.get(`${BASE_URL}/chat/${currentUserId}`, {
+      if (!token) return;
+
+      const rawUrl =
+        process.env.EXPO_PUBLIC_API_URL ||
+        "https://nutrimorph-backend.vercel.app";
+      const cleanBase = rawUrl.replace(/\/api\/?$/, "").replace(/\/$/, "");
+      const targetUrl = `${cleanBase}/api/chat/history`;
+
+      const res = await axios.get(targetUrl, {
         headers: { Authorization: `Bearer ${token}` },
+        timeout: 10000,
       });
 
-      if (res.data?.success && res.data?.history) {
-        setMessages(res.data.history);
-        scrollToBottom();
+      let historyData = [];
+      if (Array.isArray(res.data)) {
+        historyData = res.data;
+      } else if (Array.isArray(res.data?.history)) {
+        historyData = res.data.history;
+      } else if (Array.isArray(res.data?.messages)) {
+        historyData = res.data.messages;
       }
+
+      setMessages(historyData);
     } catch (error) {
-      console.error(
-        "Fetch History Error:",
-        error.response?.data || error.message,
-      );
+      // History error handled silently
     } finally {
       setFetchingHistory(false);
+      setLoading(false);
     }
   };
 
@@ -77,7 +87,7 @@ const ChatBotScreen = () => {
 
     const token = await getToken();
     if (!token) {
-      Alert.alert("Error", "Session expired. Dobara login karein.");
+      Alert.alert("Session Expired", "Please login again to continue.");
       return;
     }
 
@@ -87,30 +97,85 @@ const ChatBotScreen = () => {
       model: "gemini-3.5-flash-lite",
     };
 
-    const userMsg = { sender: "user", text: textToSend };
+    // Unique temporary ID for user message
+    const userMsg = {
+      _id: `user-${Date.now()}`,
+      sender: "user",
+      role: "user",
+      text: textToSend,
+    };
+
+    // 1. Append user message immediately
     setMessages((prev) => [...prev, userMsg]);
     setInputText("");
     setLoading(true);
     scrollToBottom();
 
     try {
-      const res = await axios.post(`${BASE_URL}/chat`, payload, {
+      const res = await axios.post(`${API_BASE}/chat`, payload, {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
       });
 
+      // 2. Append bot response in correct order
       if (res.data?.success) {
-        const botMsg = { sender: "bot", text: res.data.reply };
+        const botMsg = {
+          _id: `bot-${Date.now()}`,
+          sender: "bot",
+          role: "bot",
+          text: res.data.reply,
+        };
         setMessages((prev) => [...prev, botMsg]);
-        scrollToBottom();
+      } else if (res.data?.limitReached || res.data?.reply) {
+        const limitMsg = {
+          _id: `bot-limit-${Date.now()}`,
+          sender: "bot",
+          role: "bot",
+          text: res.data.reply || res.data.message,
+        };
+        setMessages((prev) => [...prev, limitMsg]);
       } else {
-        Alert.alert("Error", res.data?.message || "Server error.");
+        const fallbackMsg = {
+          _id: `bot-err-${Date.now()}`,
+          sender: "bot",
+          role: "bot",
+          text: res.data?.message || "An unexpected error occurred.",
+        };
+        setMessages((prev) => [...prev, fallbackMsg]);
       }
+      scrollToBottom();
     } catch (error) {
-      console.error("Send Error:", error.response?.data || error.message);
-      Alert.alert("Error", "Backend server connection mein masla aaya.");
+      const errorData = error.response?.data;
+      const status = error.response?.status;
+
+      if (status === 403 || errorData?.limitReached) {
+        const limitMessageText =
+          errorData?.message ||
+          "Your daily limit of 5 free messages has been reached. Upgrade to the Pro plan for unlimited messaging!";
+
+        const limitBotMsg = {
+          _id: `bot-limit-${Date.now()}`,
+          sender: "bot",
+          role: "bot",
+          text: limitMessageText,
+        };
+        setMessages((prev) => [...prev, limitBotMsg]);
+      } else {
+        const genericErrorMessage =
+          errorData?.message ||
+          "Unable to connect to the backend server. Please check your internet connection.";
+
+        const errorBotMsg = {
+          _id: `bot-err-${Date.now()}`,
+          sender: "bot",
+          role: "bot",
+          text: genericErrorMessage,
+        };
+        setMessages((prev) => [...prev, errorBotMsg]);
+      }
+      scrollToBottom();
     } finally {
       setLoading(false);
     }
@@ -120,36 +185,43 @@ const ChatBotScreen = () => {
     <SafeAreaView style={screenStyles.safeArea} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
         style={screenStyles.container}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
         {/* Header */}
         <View style={screenStyles.header}>
           <Text style={screenStyles.headerTitle}>NutriBot Assistant</Text>
         </View>
 
+        {/* Chat History / Loader */}
         {fetchingHistory ? (
-          <ActivityIndicator
-            size="large"
-            color="#10B981"
-            style={{ flex: 1, justifyContent: "center" }}
-          />
+          <View style={screenStyles.loaderContainer}>
+            <CustomAppLoader size={70} />
+          </View>
         ) : (
           <FlatList
             ref={flatListRef}
             data={messages}
-            keyExtractor={(_, index) => index.toString()}
+            keyExtractor={(item, index) =>
+              item._id || item.id || `chat-msg-${index}`
+            }
             renderItem={({ item }) => renderMessage(item)}
             contentContainerStyle={screenStyles.listPadding}
             onContentSizeChange={scrollToBottom}
+            keyboardShouldPersistTaps="handled"
+            // Performance Optimizations
+            initialNumToRender={12}
+            maxToRenderPerBatch={8}
+            windowSize={5}
+            removeClippedSubviews={Platform.OS === "android"}
           />
         )}
 
+        {/* Bot Response Loader */}
         {loading && (
-          <ActivityIndicator
-            size="small"
-            color="#10B981"
-            style={{ marginBottom: 8 }}
-          />
+          <View style={screenStyles.bottomLoader}>
+            <CustomAppLoader size={38} />
+          </View>
         )}
 
         {/* Input Bar */}
@@ -200,10 +272,19 @@ const screenStyles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
   },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   listPadding: {
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 20,
+  },
+  bottomLoader: {
+    paddingVertical: 6,
+    alignItems: "center",
   },
   inputContainer: {
     flexDirection: "row",

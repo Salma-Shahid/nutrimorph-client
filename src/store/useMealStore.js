@@ -9,6 +9,15 @@ const BASE_URL =
 const API_URL = `${BASE_URL}/api/meals`;
 const WATER_API_URL = `${BASE_URL}/api/water`;
 
+// Local Timezone YYYY-MM-DD Date Helper (Avoids UTC Timezone mismatch)
+const getTodayDateString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 // Helper function to fetch JWT authorization token
 const getToken = async () => {
   const authStateToken = useAuthStore.getState().token;
@@ -19,36 +28,49 @@ const getToken = async () => {
 export const useMealStore = create((set, get) => ({
   todaySummary: { calories: 0, protein: 0, carbs: 0, fats: 0 },
   todayMeals: [],
+  meals: [], // Alias for Dashboard Screen compatibility
+  totalCalories: 0, // Direct state for Dashboard Screen
   weeklyHistory: [],
   waterIntake: 0,
-  selectedDate: new Date().toISOString().split("T")[0],
+  selectedDate: getTodayDateString(),
   isLoading: false,
 
-  setSelectedDate: (date) => set({ selectedDate: date }),
+  setSelectedDate: (date) =>
+    set({ selectedDate: date || getTodayDateString() }),
 
-  // 1. Fetch Daily Summary
+  // 1. Fetch Daily Summary & Meals
   fetchDailySummary: async (dateParam) => {
     try {
       set({ isLoading: true });
       const token = await getToken();
-      const dateToFetch = dateParam || get().selectedDate;
+      // Always fallback to current local date if not explicitly provided
+      const targetDate =
+        dateParam || get().selectedDate || getTodayDateString();
 
-      const res = await axios.get(`${API_URL}/summary?date=${dateToFetch}`, {
+      const res = await axios.get(`${API_URL}/summary?date=${targetDate}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (res.data?.success) {
         const data = res.data.data;
+        const summary = data.summary || {
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fats: 0,
+        };
+        const mealsList = data.meals || [];
+
         set({
-          todaySummary: data.summary || {
-            calories: 0,
-            protein: 0,
-            carbs: 0,
-            fats: 0,
-          },
-          todayMeals: data.meals || [],
+          todaySummary: summary,
+          totalCalories: summary.calories || 0,
+          todayMeals: mealsList,
+          meals: mealsList, // Update alias
+          selectedDate: targetDate,
           isLoading: false,
         });
+      } else {
+        set({ isLoading: false });
       }
     } catch (error) {
       console.error(
@@ -57,6 +79,11 @@ export const useMealStore = create((set, get) => ({
       );
       set({ isLoading: false });
     }
+  },
+
+  // Alias Method for DashboardScreen
+  fetchTodayMeals: async (dateParam) => {
+    return await get().fetchDailySummary(dateParam);
   },
 
   // 2. Fetch Weekly Summary
@@ -82,9 +109,10 @@ export const useMealStore = create((set, get) => ({
   fetchWaterIntake: async (dateParam) => {
     try {
       const token = await getToken();
-      const dateToFetch = dateParam || get().selectedDate;
+      const targetDate =
+        dateParam || get().selectedDate || getTodayDateString();
 
-      const res = await axios.get(`${WATER_API_URL}?date=${dateToFetch}`, {
+      const res = await axios.get(`${WATER_API_URL}?date=${targetDate}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -100,24 +128,28 @@ export const useMealStore = create((set, get) => ({
     }
   },
 
-  updateWaterIntake: async (glasses) => {
+  updateWaterIntake: async (glasses, dateParam) => {
     try {
       const token = await getToken();
-      const date = get().selectedDate;
+      const targetDate =
+        dateParam || get().selectedDate || getTodayDateString();
 
       const res = await axios.post(
         WATER_API_URL,
-        { date, glasses },
+        { date: targetDate, glasses },
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
       if (res.data?.success) {
-        set({ waterIntake: res.data.data?.glasses || glasses });
+        set({ waterIntake: res.data.data?.glasses ?? glasses });
         return { success: true };
       }
     } catch (error) {
       console.error("Water update error:", error.message);
-      return { success: false };
+      return {
+        success: false,
+        message: error?.response?.data?.message || "Failed to update water",
+      };
     }
   },
 
@@ -126,12 +158,19 @@ export const useMealStore = create((set, get) => ({
     set({ isLoading: true });
     try {
       const token = await getToken();
-      const res = await axios.post(`${API_URL}/log`, mealData, {
+      const targetDate = get().selectedDate || getTodayDateString();
+
+      const payload = {
+        ...mealData,
+        date: mealData.date || targetDate,
+      };
+
+      const res = await axios.post(`${API_URL}/log`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (res.data?.success) {
-        await get().fetchDailySummary();
+        await get().fetchDailySummary(payload.date);
         set({ isLoading: false });
         return { success: true };
       }
@@ -156,11 +195,6 @@ export const useMealStore = create((set, get) => ({
       });
 
       if (res.data?.success) {
-        set((state) => ({
-          todayMeals: state.todayMeals.map((meal) =>
-            (meal._id || meal.id) === mealId ? res.data.data : meal,
-          ),
-        }));
         await get().fetchDailySummary();
         return { success: true };
       } else {
@@ -186,11 +220,6 @@ export const useMealStore = create((set, get) => ({
       });
 
       if (res.data?.success) {
-        set((state) => ({
-          todayMeals: state.todayMeals.filter(
-            (item) => (item._id || item.id) !== mealId,
-          ),
-        }));
         await get().fetchDailySummary();
         return { success: true };
       } else {
@@ -207,7 +236,7 @@ export const useMealStore = create((set, get) => ({
     }
   },
 
-  // 7. AI Scan Image Meal (using gemini-3.5-flash-lite on backend)
+  // 7. AI Scan Image Meal
   scanMealImage: async (imageBase64) => {
     set({ isLoading: true });
     try {
@@ -233,7 +262,7 @@ export const useMealStore = create((set, get) => ({
     }
   },
 
-  // 8. AI Analyze Text Meal (using gemini-3.5-flash-lite on backend)
+  // 8. AI Analyze Text Meal
   analyzeTextMeal: async (text) => {
     try {
       const token = await getToken();
@@ -245,7 +274,10 @@ export const useMealStore = create((set, get) => ({
       if (res.data?.success) {
         return { success: true, data: res.data.data };
       }
-      return { success: false, message: res.data?.message || "Parsing failed" };
+      return {
+        success: false,
+        message: res.data?.message || "Parsing failed",
+      };
     } catch (err) {
       const statusCode = err.response?.status;
       return {

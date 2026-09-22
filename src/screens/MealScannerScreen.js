@@ -5,191 +5,356 @@ import {
   View,
   TouchableOpacity,
   Image,
-  Alert,
   ActivityIndicator,
+  Alert,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import Purchases from "react-native-purchases"; // 👈 RevenueCat import
-import { useMealStore } from "../store/useMealStore";
 import { useAuthStore } from "../store/useAuthStore";
+import { useMealStore } from "../store/useMealStore";
+import { getThemeColors } from "../theme/colors";
 
-const MealScannerScreen = ({ navigation }) => {
+export default function ScanMealScreen({ navigation }) {
+  const theme = useAuthStore((state) => state.theme);
+  const colors = getThemeColors(theme);
+
+  const { scanMealImage, logMeal } = useMealStore();
+
   const [imageUri, setImageUri] = useState(null);
-  const { scanMealImage, isLoading } = useMealStore();
+  const [base64Image, setBase64Image] = useState(null);
+  const [scannedData, setScannedData] = useState(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isLogging, setIsLogging] = useState(false);
 
-  // Consume global user state and theme
-  const { user, theme } = useAuthStore();
-  const isDark = theme === "dark";
-
-  // Dynamic color palette
-  const colors = {
-    bg: isDark ? "#121212" : "#F8FAFC",
-    cardBg: isDark ? "#1E1E1E" : "#E2E8F0",
-    text: isDark ? "#FFFFFF" : "#0F172A",
-    subText: isDark ? "#888888" : "#64748B",
-    primary: "#4CAF50",
-    secondaryBtn: isDark ? "#333333" : "#CBD5E1",
-    secondaryBtnText: isDark ? "#FFFFFF" : "#0F172A",
-  };
-
-  const handleScanTrigger = async (useCamera = false) => {
-    // 🟢 1. Local state ya Development mode check
-    let isPro = user?.subscriptionTier === "pro" || __DEV__;
-
-    // 🟢 2. Agar local state update nahi hui, to RevenueCat se live entitlement check karein
-    if (!isPro) {
-      try {
-        const customerInfo = await Purchases.getCustomerInfo();
-        if (customerInfo?.entitlements?.active["nutrimorph_pro"]?.isActive) {
-          isPro = true;
-        }
-      } catch (e) {
-        console.log("RevenueCat entitlement check error:", e);
-      }
-    }
-
-    // 🔒 Pro Feature Guard Check
-    if (!isPro) {
-      Alert.alert(
-        "⭐ Pro Feature Required",
-        "Instant Camera Meal Scanner is available exclusively for Pro plan subscribers.",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Upgrade to Pro 🚀",
-            onPress: () => navigation?.navigate("SubscriptionScreen"),
-          },
-        ],
-      );
-      return;
-    }
-
-    pickImage(useCamera);
+  // Clear / Reset State Function
+  const handleReset = () => {
+    setImageUri(null);
+    setBase64Image(null);
+    setScannedData(null);
+    setIsScanning(false);
+    setIsLogging(false);
   };
 
   const pickImage = async (useCamera = false) => {
-    let result;
-    const options = {
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      quality: 0.7,
-      base64: true,
-    };
+    try {
+      const permissionResult = useCamera
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    if (useCamera) {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== "granted") {
-        return Alert.alert("Permission Needed", "Camera access is required.");
+      if (!permissionResult.granted) {
+        Alert.alert(
+          "Permission Required",
+          "Permission to access camera/gallery is needed.",
+        );
+        return;
       }
-      result = await ImagePicker.launchCameraAsync(options);
-    } else {
-      result = await ImagePicker.launchImageLibraryAsync(options);
-    }
 
-    if (!result.canceled && result.assets[0].base64) {
-      setImageUri(result.assets[0].uri);
-      processImage(result.assets[0].base64);
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync({
+            base64: true,
+            quality: 0.6,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            base64: true,
+            quality: 0.6,
+          });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setImageUri(asset.uri);
+        setBase64Image(asset.base64);
+        setScannedData(null);
+      }
+    } catch (error) {
+      Alert.alert("Error", "Could not select image.");
     }
   };
 
-  const processImage = async (base64) => {
-    const res = await scanMealImage(base64);
-    if (res?.success) {
-      navigation?.navigate("LogFoodScreen", { initialData: res.data });
+  const handleScanImage = async () => {
+    if (!base64Image) {
+      Alert.alert("No Image", "Please capture or select an image first.");
+      return;
+    }
+
+    setIsScanning(true);
+    const result = await scanMealImage(base64Image);
+    setIsScanning(false);
+
+    if (result.success) {
+      setScannedData(result.data);
     } else {
-      Alert.alert("Scan Failed", res?.message || "Could not analyze image.");
+      if (result.isProRequired) {
+        Alert.alert(
+          "Pro Feature",
+          "AI Scanning is available for Pro users only.",
+        );
+      } else {
+        Alert.alert(
+          "Scan Failed",
+          result.message || "Failed to analyze image.",
+        );
+      }
+    }
+  };
+
+  const handleSaveMeal = async () => {
+    if (!scannedData) return;
+    setIsLogging(true);
+
+    const res = await logMeal({
+      name: scannedData.name || "Scanned Food",
+      calories: scannedData.calories || 0,
+      protein: scannedData.protein || 0,
+      carbs: scannedData.carbs || 0,
+      fats: scannedData.fats || 0,
+    });
+
+    setIsLogging(false);
+
+    if (res.success) {
+      Alert.alert("Success", "Meal logged successfully!", [
+        {
+          text: "OK",
+          onPress: () => {
+            handleReset();
+            navigation.navigate("Dashboard");
+          },
+        },
+      ]);
+    } else {
+      Alert.alert("Error", res.message || "Failed to log meal.");
     }
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-      <Text style={[styles.title, { color: colors.text }]}>
-        AI Meal Scanner 📸
-      </Text>
+      {/* 🔙 Navigation Header with Back Button */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => {
+            handleReset();
+            navigation.goBack();
+          }}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          Scan Meal
+        </Text>
+        <TouchableOpacity onPress={handleReset}>
+          <Ionicons name="refresh-outline" size={22} color="#3B82F6" />
+        </TouchableOpacity>
+      </View>
 
-      {imageUri ? (
-        <Image source={{ uri: imageUri }} style={styles.preview} />
-      ) : (
-        <View style={[styles.placeholder, { backgroundColor: colors.cardBg }]}>
-          <Text style={{ color: colors.subText }}>
-            Take a photo or pick from gallery
-          </Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Image Preview Area */}
+        <View
+          style={[
+            styles.imageContainer,
+            { backgroundColor: colors.cardBg, borderColor: colors.border },
+          ]}
+        >
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.previewImage} />
+          ) : (
+            <View style={styles.placeholder}>
+              <Ionicons
+                name="camera-outline"
+                size={50}
+                color={colors.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.placeholderText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Select or capture a food photo
+              </Text>
+            </View>
+          )}
         </View>
-      )}
 
-      {isLoading ? (
-        <View style={styles.loadingBox}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={{ color: colors.text, marginTop: 10 }}>
-            Analyzing food with AI...
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.btnRow}>
+        {/* Action Buttons for Image Picker */}
+        <View style={styles.pickerRow}>
           <TouchableOpacity
-            style={[styles.btn, { backgroundColor: colors.primary }]}
-            onPress={() => handleScanTrigger(true)}
+            style={[styles.pickerBtn, { backgroundColor: "#3B82F6" }]}
+            onPress={() => pickImage(true)}
           >
-            <Text style={styles.btnText}>📷 Camera</Text>
+            <Ionicons name="camera" size={18} color="#FFF" />
+            <Text style={styles.pickerBtnText}>Camera</Text>
           </TouchableOpacity>
+
           <TouchableOpacity
-            style={[styles.btn, { backgroundColor: colors.secondaryBtn }]}
-            onPress={() => handleScanTrigger(false)}
+            style={[styles.pickerBtn, { backgroundColor: "#6366F1" }]}
+            onPress={() => pickImage(false)}
           >
-            <Text style={[styles.btnText, { color: colors.secondaryBtnText }]}>
-              🖼️ Gallery
+            <Ionicons name="images" size={18} color="#FFF" />
+            <Text style={styles.pickerBtnText}>Gallery</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* AI Scan Trigger Button */}
+        {imageUri && !scannedData && (
+          <TouchableOpacity
+            style={[styles.scanBtn, { backgroundColor: "#10B981" }]}
+            onPress={handleScanImage}
+            disabled={isScanning}
+          >
+            {isScanning ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <>
+                <Ionicons name="sparkles" size={20} color="#FFF" />
+                <Text style={styles.scanBtnText}>Analyze Food</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* 🥗 Scanned Result Display & Reset Option */}
+        {scannedData && (
+          <View
+            style={[
+              styles.resultCard,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.foodTitle, { color: colors.text }]}>
+              {scannedData.name}
             </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+
+            <View style={styles.macroGrid}>
+              <View style={styles.macroBox}>
+                <Text style={{ color: "#10B981", fontWeight: "bold" }}>
+                  {scannedData.calories}
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                  Calories
+                </Text>
+              </View>
+              <View style={styles.macroBox}>
+                <Text style={{ color: "#3B82F6", fontWeight: "bold" }}>
+                  {scannedData.protein}g
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                  Protein
+                </Text>
+              </View>
+              <View style={styles.macroBox}>
+                <Text style={{ color: "#F59E0B", fontWeight: "bold" }}>
+                  {scannedData.carbs}g
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                  Carbs
+                </Text>
+              </View>
+              <View style={styles.macroBox}>
+                <Text style={{ color: "#EF4444", fontWeight: "bold" }}>
+                  {scannedData.fats}g
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                  Fats
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.btnGroup}>
+              <TouchableOpacity
+                style={[
+                  styles.saveBtn,
+                  { backgroundColor: "#10B981", flex: 1, marginRight: 8 },
+                ]}
+                onPress={handleSaveMeal}
+                disabled={isLogging}
+              >
+                {isLogging ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Log to Daily Tracker</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.saveBtn,
+                  { backgroundColor: "#64748B", paddingHorizontal: 12 },
+                ]}
+                onPress={handleReset}
+              >
+                <Ionicons name="refresh" size={18} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
+  container: { flex: 1 },
+  header: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 20,
-  },
-  preview: {
-    width: "100%",
-    height: 300,
-    borderRadius: 15,
-    marginBottom: 20,
-  },
-  placeholder: {
-    width: "100%",
-    height: 300,
-    borderRadius: 15,
+  backBtn: { padding: 4 },
+  headerTitle: { fontSize: 18, fontWeight: "bold" },
+  scrollContent: { padding: 20 },
+  imageContainer: {
+    height: 220,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  btnRow: {
+  previewImage: { width: "100%", height: "100%" },
+  placeholder: { alignItems: "center" },
+  placeholderText: { marginTop: 8, fontSize: 13 },
+  pickerRow: {
     flexDirection: "row",
-    gap: 10,
+    justifyContent: "space-between",
+    marginBottom: 16,
   },
-  btn: {
-    flex: 1,
-    padding: 15,
+  pickerBtn: {
+    width: "48%",
+    padding: 12,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickerBtnText: { color: "#FFF", fontWeight: "bold", marginLeft: 6 },
+  scanBtn: {
+    padding: 14,
+    borderRadius: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scanBtnText: { color: "#FFF", fontWeight: "bold", marginLeft: 8 },
+  resultCard: { padding: 18, borderRadius: 16, borderWidth: 1, marginTop: 10 },
+  foodTitle: { fontSize: 18, fontWeight: "bold", textAlign: "center" },
+  macroGrid: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginVertical: 16,
+  },
+  macroBox: { alignItems: "center" },
+  btnGroup: { flexDirection: "row", marginTop: 10 },
+  saveBtn: {
+    padding: 14,
     borderRadius: 10,
     alignItems: "center",
+    justifyContent: "center",
   },
-  btnText: {
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
-  loadingBox: {
-    alignItems: "center",
-    marginVertical: 20,
-  },
+  saveBtnText: { color: "#FFF", fontWeight: "bold" },
 });
-
-export default MealScannerScreen;

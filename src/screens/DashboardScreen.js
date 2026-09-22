@@ -1,116 +1,102 @@
 import React, { useState, useCallback } from "react";
 import {
-  View,
-  Text,
   StyleSheet,
+  Text,
+  View,
   ScrollView,
-  ActivityIndicator,
-  RefreshControl,
+  TouchableOpacity,
+  Modal,
+  FlatList,
+  Alert,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import axios from "axios";
-import { getThemeColors } from "../theme/colors";
+import { useFocusEffect } from "@react-navigation/native";
 import { useAuthStore } from "../store/useAuthStore";
-
-const TARGETS = { calories: 2000, protein: 140, carbs: 220, fats: 65 };
-const BASE_URL = `${process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app"}/api`;
+import { useMealStore } from "../store/useMealStore";
+import { getThemeColors } from "../theme/colors";
 
 export default function DashboardScreen({ navigation }) {
-  // Auth store se token aur user ko get kar rahe hain
-  const { theme, token, user } = useAuthStore();
+  const user = useAuthStore((state) => state.user);
+  const theme = useAuthStore((state) => state.theme);
   const colors = getThemeColors(theme);
-  const isDark = theme === "dark";
 
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [dailySummary, setDailySummary] = useState({
-    calories: 0,
-    protein: 0,
-    carbs: 0,
-    fats: 0,
-  });
-  const [weeklyData, setWeeklyData] = useState([]);
+  const {
+    meals,
+    totalCalories,
+    fetchTodayMeals,
+    waterIntake,
+    fetchWaterIntake,
+    updateWaterIntake,
+    deleteMeal,
+    weeklyHistory,
+    fetchWeeklySummary,
+  } = useMealStore();
 
-  const fetchDashboardData = async () => {
-    // Auth token check
-    const authToken = token || user?.token;
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
-    if (!authToken) {
-      console.warn("No token found. User needs to login again.");
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
-
-    try {
-      // Request headers mein Authorization Bearer token attach kar diya hai
-      const config = {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      };
-
-      const [dailyRes, weeklyRes] = await Promise.all([
-        axios.get(`${BASE_URL}/meals/daily-summary`, config),
-        axios.get(`${BASE_URL}/meals/weekly-summary`, config),
-      ]);
-
-      if (dailyRes.data?.success) setDailySummary(dailyRes.data.data.summary);
-      if (weeklyRes.data?.success) setWeeklyData(weeklyRes.data.data);
-    } catch (error) {
-      console.error(
-        "Dashboard Fetch Error:",
-        error?.response?.data || error.message,
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
+  // Focus effect to sync Dashboard with database on tab switch
   useFocusEffect(
     useCallback(() => {
-      fetchDashboardData();
-    }, [token, user]),
+      fetchTodayMeals();
+      fetchWaterIntake();
+      fetchWeeklySummary();
+    }, []),
   );
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchDashboardData();
+  const handleWaterChange = async (newGlasses) => {
+    if (newGlasses < 0) return;
+    await updateWaterIntake(newGlasses);
   };
 
-  if (loading) {
-    return (
-      <View
-        style={[styles.centerContainer, { backgroundColor: colors.background }]}
-      >
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
+  const handleDeleteMeal = (mealId, mealName) => {
+    Alert.alert(
+      "Delete Meal",
+      `Are you sure you want to delete "${mealName}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const res = await deleteMeal(mealId);
+            if (!res.success) {
+              Alert.alert("Error", res.message || "Could not delete meal.");
+            }
+          },
+        },
+      ],
     );
-  }
+  };
+
+  const calorieGoal = user?.dailyCalorieGoal || 2000;
+  const remainingCal = Math.max(0, calorieGoal - (totalCalories || 0));
+  const isPro = user?.subscriptionTier === "pro" || user?.isPro === true;
 
   return (
-    <View
-      style={[styles.rootContainer, { backgroundColor: colors.background }]}
-    >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={{ paddingBottom: 40 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.text}
-          />
-        }
-      >
-        <View style={styles.headerRow}>
-          <Text style={[styles.title, { color: colors.text }]}>Dashboard</Text>
-          <Ionicons name="stats-chart" size={24} color={colors.accent} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={[styles.greeting, { color: colors.textSecondary }]}>
+              Welcome back,
+            </Text>
+            <Text style={[styles.userName, { color: colors.text }]}>
+              {user?.name || "User"} 👋
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.badge,
+              { backgroundColor: isPro ? "#F59E0B" : "#10B981" },
+            ]}
+          >
+            <Text style={styles.badgeText}>{isPro ? "PRO 👑" : "FREE"}</Text>
+          </View>
         </View>
 
-        {/* Daily Macros Overview */}
+        {/* Calorie Progress Card */}
         <View
           style={[
             styles.card,
@@ -118,185 +104,338 @@ export default function DashboardScreen({ navigation }) {
           ]}
         >
           <Text style={[styles.cardTitle, { color: colors.text }]}>
-            Today's Macros
+            Daily Calorie Summary
           </Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statNum, { color: "#10B981" }]}>
+                {totalCalories || 0}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                Eaten
+              </Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={[styles.statNum, { color: colors.text }]}>
+                {remainingCal}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                Remaining
+              </Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={[styles.statNum, { color: colors.textSecondary }]}>
+                {calorieGoal}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                Goal
+              </Text>
+            </View>
+          </View>
 
-          <ProgressBarItem
-            label="Calories"
-            current={dailySummary.calories}
-            target={TARGETS.calories}
-            unit="kcal"
-            color="#3b82f6"
-            colors={colors}
-            isDark={isDark}
-          />
-          <ProgressBarItem
-            label="Protein"
-            current={dailySummary.protein}
-            target={TARGETS.protein}
-            unit="g"
-            color="#ef4444"
-            colors={colors}
-            isDark={isDark}
-          />
-          <ProgressBarItem
-            label="Carbs"
-            current={dailySummary.carbs}
-            target={TARGETS.carbs}
-            unit="g"
-            color="#f59e0b"
-            colors={colors}
-            isDark={isDark}
-          />
-          <ProgressBarItem
-            label="Fats"
-            current={dailySummary.fats}
-            target={TARGETS.fats}
-            unit="g"
-            color="#10b981"
-            colors={colors}
-            isDark={isDark}
-          />
+          <TouchableOpacity
+            style={[styles.historyBtn, { backgroundColor: colors.inputBg }]}
+            onPress={() => setShowHistoryModal(true)}
+          >
+            <Ionicons name="time-outline" size={18} color="#10B981" />
+            <Text style={[styles.historyBtnText, { color: colors.text }]}>
+              View Logged History ({meals?.length || 0})
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Weekly Trend */}
+        {/* 💧 Water Tracker Card (Synced with Mongo DB) */}
         <View
           style={[
             styles.card,
             { backgroundColor: colors.cardBg, borderColor: colors.border },
           ]}
         >
-          <Text style={[styles.cardTitle, { color: colors.text }]}>
-            Weekly Calories Trend
+          <View style={styles.waterHeader}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Ionicons name="water" size={22} color="#3B82F6" />
+              <Text
+                style={[
+                  styles.cardTitle,
+                  { color: colors.text, marginLeft: 8 },
+                ]}
+              >
+                Water Tracker
+              </Text>
+            </View>
+            <Text style={{ color: "#3B82F6", fontWeight: "bold" }}>
+              {(waterIntake || 0) * 250} ml / 2000 ml
+            </Text>
+          </View>
+
+          <View style={styles.waterControls}>
+            <TouchableOpacity
+              style={styles.waterBtn}
+              onPress={() => handleWaterChange((waterIntake || 0) - 1)}
+            >
+              <Ionicons name="remove" size={20} color="#FFF" />
+            </TouchableOpacity>
+
+            <Text style={[styles.waterCountText, { color: colors.text }]}>
+              {waterIntake || 0} Glasses 🥛
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.waterBtn, { backgroundColor: "#3B82F6" }]}
+              onPress={() => handleWaterChange((waterIntake || 0) + 1)}
+            >
+              <Ionicons name="add" size={20} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 📊 Weekly Record Card */}
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.cardBg, borderColor: colors.border },
+          ]}
+        >
+          <Text
+            style={[styles.cardTitle, { color: colors.text, marginBottom: 10 }]}
+          >
+            Weekly Calorie History
           </Text>
-          {weeklyData.length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.subText }]}>
-              No weekly data logged yet.
+
+          {!weeklyHistory || weeklyHistory.length === 0 ? (
+            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+              No weekly data available yet.
             </Text>
           ) : (
-            <View style={styles.chartContainer}>
-              {weeklyData.map((item, index) => {
-                const maxCal = Math.max(
-                  ...weeklyData.map((d) => d.calories),
-                  TARGETS.calories,
-                );
-                const barHeightPercent = Math.min(
-                  (item.calories / maxCal) * 100,
-                  100,
-                );
-                const dateObj = new Date(item._id);
-                const dayName = isNaN(dateObj)
-                  ? item._id
-                  : dateObj.toLocaleDateString("en-US", { weekday: "short" });
-
-                return (
-                  <View key={index} style={styles.barWrapper}>
-                    <Text style={[styles.barValue, { color: colors.subText }]}>
-                      {Math.round(item.calories)}
-                    </Text>
-                    <View
-                      style={[
-                        styles.barBackground,
-                        { backgroundColor: colors.inputBg },
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.barFill,
-                          {
-                            height: `${barHeightPercent || 4}%`,
-                            backgroundColor:
-                              item.calories >= TARGETS.calories
-                                ? "#ef4444"
-                                : colors.accent,
-                          },
-                        ]}
-                      />
-                    </View>
-                    <Text style={[styles.barLabel, { color: colors.subText }]}>
-                      {dayName}
-                    </Text>
-                  </View>
-                );
-              })}
+            <View style={{ gap: 8 }}>
+              {weeklyHistory.slice(-7).map((item) => (
+                <View key={item._id} style={styles.weeklyRow}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                    {item._id}
+                  </Text>
+                  <Text style={{ color: "#10B981", fontWeight: "bold" }}>
+                    {item.calories} kcal
+                  </Text>
+                </View>
+              ))}
             </View>
           )}
         </View>
+
+        {/* Action Buttons */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: "#10B981" }]}
+            onPress={() => navigation.navigate("LogFoodScreen")}
+          >
+            <Ionicons name="add-circle-outline" size={24} color="#FFF" />
+            <Text style={styles.actionCardText}>Log Meal</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: "#3B82F6" }]}
+            onPress={() => navigation.navigate("Scan Meal")}
+          >
+            <Ionicons name="camera-outline" size={24} color="#FFF" />
+            <Text style={styles.actionCardText}>Scan Food</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
-    </View>
+
+      {/* 📜 Meal History & Delete Modal */}
+      <Modal
+        visible={showHistoryModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowHistoryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Today's Meal History
+              </Text>
+              <TouchableOpacity onPress={() => setShowHistoryModal(false)}>
+                <Ionicons
+                  name="close-circle"
+                  size={26}
+                  color={colors.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {!meals || meals.length === 0 ? (
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  textAlign: "center",
+                  marginVertical: 30,
+                }}
+              >
+                No meals logged today yet.
+              </Text>
+            ) : (
+              <FlatList
+                data={meals}
+                keyExtractor={(item, index) =>
+                  item._id || item.id || String(index)
+                }
+                renderItem={({ item }) => (
+                  <View
+                    style={[
+                      styles.historyItem,
+                      {
+                        backgroundColor: colors.inputBg,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.mealName, { color: colors.text }]}>
+                        {item.name}
+                      </Text>
+                      <Text
+                        style={{ color: colors.textSecondary, fontSize: 12 }}
+                      >
+                        P: {item.protein || 0}g | C: {item.carbs || 0}g | F:{" "}
+                        {item.fats || 0}g
+                      </Text>
+                    </View>
+
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
+                      <Text
+                        style={{
+                          color: "#10B981",
+                          fontWeight: "bold",
+                          marginRight: 12,
+                        }}
+                      >
+                        {item.calories} kcal
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          handleDeleteMeal(item._id || item.id, item.name)
+                        }
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={20}
+                          color="#EF4444"
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
-const ProgressBarItem = ({
-  label,
-  current,
-  target,
-  unit,
-  color,
-  colors,
-  isDark,
-}) => {
-  const percentage = Math.min(Math.round((current / target) * 100), 100);
-  return (
-    <View style={styles.macroRow}>
-      <View style={styles.macroHeader}>
-        <Text style={[styles.macroLabel, { color: colors.text }]}>{label}</Text>
-        <Text style={[styles.macroValue, { color: colors.subText }]}>
-          {Math.round(current)} / {target} {unit} ({percentage}%)
-        </Text>
-      </View>
-      <View style={[styles.progressBg, { backgroundColor: colors.inputBg }]}>
-        <View
-          style={[
-            styles.progressFill,
-            { width: `${percentage}%`, backgroundColor: color },
-          ]}
-        />
-      </View>
-    </View>
-  );
-};
-
 const styles = StyleSheet.create({
-  rootContainer: { flex: 1 },
-  container: { flex: 1, paddingHorizontal: 16, paddingTop: 50 },
-  centerContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  headerRow: {
+  container: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 30 },
+  header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 20,
   },
-  title: { fontSize: 26, fontWeight: "bold" },
-  card: { borderRadius: 16, padding: 18, marginBottom: 20, borderWidth: 1 },
-  cardTitle: { fontSize: 18, fontWeight: "600", marginBottom: 16 },
-  macroRow: { marginBottom: 14 },
-  macroHeader: {
+  greeting: { fontSize: 13, fontWeight: "500" },
+  userName: { fontSize: 20, fontWeight: "bold" },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  badgeText: { color: "#FFF", fontSize: 11, fontWeight: "bold" },
+  card: { borderRadius: 16, padding: 18, borderWidth: 1, marginBottom: 16 },
+  cardTitle: { fontSize: 16, fontWeight: "bold" },
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginVertical: 16,
+  },
+  statItem: { alignItems: "center" },
+  statNum: { fontSize: 20, fontWeight: "bold" },
+  statLabel: { fontSize: 12, marginTop: 4 },
+  historyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 6,
+  },
+  historyBtnText: { fontWeight: "600", marginLeft: 8, fontSize: 13 },
+  waterHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 6,
+    alignItems: "center",
+    marginBottom: 14,
   },
-  macroLabel: { fontSize: 14, fontWeight: "500" },
-  macroValue: { fontSize: 13 },
-  progressBg: { height: 10, borderRadius: 5, overflow: "hidden" },
-  progressFill: { height: "100%", borderRadius: 5 },
-  emptyText: { textAlign: "center", paddingVertical: 20 },
-  chartContainer: {
+  waterControls: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "space-between",
-    height: 180,
-    paddingTop: 20,
   },
-  barWrapper: { alignItems: "center", flex: 1 },
-  barValue: { fontSize: 10, marginBottom: 4 },
-  barBackground: {
-    height: 120,
-    width: 14,
-    borderRadius: 7,
-    justifyContent: "flex-end",
-    overflow: "hidden",
+  waterBtn: {
+    backgroundColor: "#64748B",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  barFill: { width: "100%", borderRadius: 7 },
-  barLabel: { fontSize: 11, marginTop: 6 },
+  waterCountText: { fontSize: 16, fontWeight: "bold" },
+  weeklyRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#334155",
+  },
+  actionRow: { flexDirection: "row", justifyContent: "space-between" },
+  actionCard: {
+    width: "48%",
+    padding: 16,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  actionCardText: { color: "#FFF", fontWeight: "bold", marginTop: 8 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalContent: {
+    borderRadius: 16,
+    padding: 20,
+    maxHeight: "80%",
+    borderWidth: 1,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: { fontSize: 18, fontWeight: "bold" },
+  historyItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  mealName: { fontWeight: "bold", fontSize: 14, marginBottom: 2 },
 });
