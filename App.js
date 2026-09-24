@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { StatusBar, StyleSheet, View, ActivityIndicator } from "react-native";
+import {
+  StatusBar,
+  StyleSheet,
+  View,
+  ActivityIndicator,
+  Platform,
+} from "react-native";
 import {
   NavigationContainer,
   DarkTheme,
@@ -31,12 +37,30 @@ export default function App() {
           await loadStorage();
         }
 
-        const apiKey = process.env.EXPO_PUBLIC_REVENUECAT_KEY;
-        if (apiKey) {
-          const isConfigured = await Purchases.isConfigured();
-          if (!isConfigured) {
-            Purchases.configure({ apiKey });
+        // 🛡️ Safety check: Safe RevenueCat guard for standard Expo Go
+        const isRevenueCatAvailable =
+          typeof Purchases?.isConfigured === "function" &&
+          typeof Purchases?.configure === "function";
+
+        if (isRevenueCatAvailable) {
+          const apiKey =
+            process.env.EXPO_PUBLIC_REVENUECAT_KEY ||
+            (__DEV__
+              ? process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY
+              : Platform.OS === "android"
+                ? process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY
+                : process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY);
+
+          if (apiKey) {
+            const isConfigured = await Purchases.isConfigured();
+            if (!isConfigured) {
+              Purchases.configure({ apiKey });
+            }
           }
+        } else {
+          console.log(
+            "RevenueCat native modules are not available in standard Expo Go. Skipping RevenueCat initialization.",
+          );
         }
       } catch (err) {
         console.error("Boot Load Error:", err);
@@ -94,7 +118,7 @@ export default function App() {
             )
           ) : (
             <>
-              {/* 🟢 Screen Name Aliases ("Login"/"LoginScreen" & "Signup"/"SignupScreen") */}
+              {/* Screen Name Aliases ("Login"/"LoginScreen" & "Signup"/"SignupScreen") */}
               <Stack.Screen name="Login" component={LoginScreen} />
               <Stack.Screen name="Signup" component={SignupScreen} />
               <Stack.Screen name="LoginScreen" component={LoginScreen} />

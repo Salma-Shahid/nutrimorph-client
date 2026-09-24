@@ -12,6 +12,12 @@ import {
 import Purchases from "react-native-purchases";
 import { useAuthStore } from "../store/useAuthStore";
 
+// 🛡️ Guard: Check if native RevenueCat module is linked and available
+const isRevenueCatAvailable =
+  typeof Purchases?.isConfigured === "function" &&
+  typeof Purchases?.configure === "function" &&
+  typeof Purchases?.getOfferings === "function";
+
 export default function SubscriptionScreen({ navigation }) {
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,6 +31,15 @@ export default function SubscriptionScreen({ navigation }) {
 
   const loadOfferings = async () => {
     try {
+      // Bypass gracefully if running in standard Expo Go or unsupported environment
+      if (!isRevenueCatAvailable) {
+        console.warn(
+          "RevenueCat native modules are not available in Expo Go. Skipping offerings load.",
+        );
+        setLoading(false);
+        return;
+      }
+
       const isConfigured = await Purchases.isConfigured();
       if (!isConfigured) {
         const apiKey = __DEV__
@@ -42,12 +57,18 @@ export default function SubscriptionScreen({ navigation }) {
         }
       }
 
-      Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
+      // Safe check for Log Level to avoid synchronous TypeError
+      if (
+        typeof Purchases?.setLogLevel === "function" &&
+        Purchases?.LOG_LEVEL?.DEBUG
+      ) {
+        Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
+      }
 
       const offerings = await Purchases.getOfferings();
       if (
-        offerings.current !== null &&
-        offerings.current.availablePackages.length !== 0
+        offerings?.current !== null &&
+        offerings?.current?.availablePackages?.length > 0
       ) {
         setPackages(offerings.current.availablePackages);
       } else {
@@ -62,12 +83,19 @@ export default function SubscriptionScreen({ navigation }) {
   };
 
   const handlePurchase = async (packageToBuy) => {
+    if (!isRevenueCatAvailable) {
+      Alert.alert(
+        "Expo Go Restriction",
+        "In-App Purchases require a Standalone APK / EAS Development Build to test.",
+      );
+      return;
+    }
+
     setPurchasing(true);
     try {
       const { customerInfo } = await Purchases.purchasePackage(packageToBuy);
 
-      if (customerInfo.entitlements.active["nutrimorph_pro"]?.isActive) {
-        // 🟢 Store update karein
+      if (customerInfo?.entitlements?.active?.["nutrimorph_pro"]?.isActive) {
         if (updateUserGlobally) {
           await updateUserGlobally({ subscriptionTier: "pro" });
         }
@@ -76,9 +104,9 @@ export default function SubscriptionScreen({ navigation }) {
           {
             text: "OK",
             onPress: () => {
-              if (navigation.canGoBack()) {
+              if (navigation?.canGoBack && navigation.canGoBack()) {
                 navigation.goBack();
-              } else {
+              } else if (navigation?.navigate) {
                 navigation.navigate("MainTabs");
               }
             },
@@ -86,8 +114,11 @@ export default function SubscriptionScreen({ navigation }) {
         ]);
       }
     } catch (error) {
-      if (!error.userCancelled) {
-        Alert.alert("Purchase Failed", error.message);
+      if (!error?.userCancelled) {
+        Alert.alert(
+          "Purchase Failed",
+          error?.message || "Something went wrong",
+        );
       }
     } finally {
       setPurchasing(false);
@@ -95,10 +126,18 @@ export default function SubscriptionScreen({ navigation }) {
   };
 
   const handleRestore = async () => {
+    if (!isRevenueCatAvailable) {
+      Alert.alert(
+        "Expo Go Restriction",
+        "Restoring purchases requires a Standalone APK / EAS Development Build.",
+      );
+      return;
+    }
+
     try {
       const customerInfo = await Purchases.restorePurchases();
       const isProActive =
-        customerInfo.entitlements.active["nutrimorph_pro"]?.isActive;
+        customerInfo?.entitlements?.active?.["nutrimorph_pro"]?.isActive;
 
       if (isProActive) {
         if (updateUserGlobally) {
@@ -108,9 +147,9 @@ export default function SubscriptionScreen({ navigation }) {
           {
             text: "OK",
             onPress: () => {
-              if (navigation.canGoBack()) {
+              if (navigation?.canGoBack && navigation.canGoBack()) {
                 navigation.goBack();
-              } else {
+              } else if (navigation?.navigate) {
                 navigation.navigate("MainTabs");
               }
             },
@@ -120,7 +159,10 @@ export default function SubscriptionScreen({ navigation }) {
         Alert.alert("Notice", "No active subscription found.");
       }
     } catch (error) {
-      Alert.alert("Restore Error", error.message);
+      Alert.alert(
+        "Restore Error",
+        error?.message || "Could not restore purchases.",
+      );
     }
   };
 
@@ -152,7 +194,7 @@ export default function SubscriptionScreen({ navigation }) {
               <ActivityIndicator color="#FFF" />
             ) : (
               <Text style={styles.buttonText}>
-                Upgrade to Pro — {pkg.product.priceString} / mo
+                Upgrade to Pro — {pkg.product?.priceString || "$--"} / mo
               </Text>
             )}
           </TouchableOpacity>
@@ -160,7 +202,9 @@ export default function SubscriptionScreen({ navigation }) {
       ) : (
         <View style={styles.noPackageCard}>
           <Text style={styles.noPackageText}>
-            No active plans available at the moment. Please check back later.
+            {!isRevenueCatAvailable
+              ? "In-App Subscriptions are disabled in Expo Go mode. Please use EAS Development Build to test purchases."
+              : "No active plans available at the moment. Please check back later."}
           </Text>
         </View>
       )}

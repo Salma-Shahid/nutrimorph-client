@@ -2,19 +2,14 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 
-import DashboardModule from "../screens/DashboardScreen";
-import MealScannerModule from "../screens/MealScannerScreen";
-import ChatBotModule from "../screens/ChatBotScreen";
-import ProfileModule from "../screens/ProfileScreen";
+// Direct Clean Imports
+import DashboardScreen from "../screens/DashboardScreen";
+import MealScannerScreen from "../screens/MealScannerScreen";
+import ChatBotScreen from "../screens/ChatBotScreen";
+import ProfileScreen from "../screens/ProfileScreen";
 
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
-
-// Ensure valid React components regardless of named vs default export for all screens
-const DashboardScreen = DashboardModule?.default || DashboardModule;
-const MealScannerScreen = MealScannerModule?.default || MealScannerModule;
-const ChatBotScreen = ChatBotModule?.default || ChatBotModule;
-const ProfileScreen = ProfileModule?.default || ProfileModule;
 
 const Tab = createBottomTabNavigator();
 

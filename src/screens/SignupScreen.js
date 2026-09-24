@@ -30,7 +30,20 @@ export default function SignupScreen({ navigation }) {
     }
 
     const result = await register(trimmedName, trimmedEmail, password);
-    if (!result?.success) {
+
+    if (result?.success) {
+      Alert.alert(
+        "Verify Your Email 📧",
+        result?.message ||
+          "Registration successful! Apni email inbox check karke account verify karein.",
+        [
+          {
+            text: "OK",
+            onPress: () => navigation.navigate("Login"),
+          },
+        ],
+      );
+    } else {
       Alert.alert(
         "Signup Failed",
         result?.message || "Kuch masla hua hai. Dobara koshish karein.",

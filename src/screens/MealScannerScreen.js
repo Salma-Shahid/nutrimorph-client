@@ -5,152 +5,207 @@ import {
   View,
   TouchableOpacity,
   Image,
+  ScrollView,
   ActivityIndicator,
   Alert,
-  ScrollView,
+  Modal,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import { useAuthStore } from "../store/useAuthStore";
-import { useMealStore } from "../store/useMealStore";
 import { getThemeColors } from "../theme/colors";
 
-export default function ScanMealScreen({ navigation }) {
-  const theme = useAuthStore((state) => state.theme);
+const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app"}/api`;
+
+export default function MealScannerScreen({ navigation }) {
+  // 🟢 Extract token directly from Zustand store
+  const { theme, token: storeToken } = useAuthStore();
   const colors = getThemeColors(theme);
 
-  const { scanMealImage, logMeal } = useMealStore();
-
   const [imageUri, setImageUri] = useState(null);
-  const [base64Image, setBase64Image] = useState(null);
-  const [scannedData, setScannedData] = useState(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [isLogging, setIsLogging] = useState(false);
+  const [imageBase64, setImageBase64] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
-  // Clear / Reset State Function
-  const handleReset = () => {
-    setImageUri(null);
-    setBase64Image(null);
-    setScannedData(null);
-    setIsScanning(false);
-    setIsLogging(false);
+  // Modal & Draft State for User Confirmation/Correction
+  const [modalVisible, setModalVisible] = useState(false);
+  const [foodName, setFoodName] = useState("");
+  const [calories, setCalories] = useState("");
+  const [protein, setProtein] = useState("");
+  const [carbs, setCarbs] = useState("");
+  const [fats, setFats] = useState("");
+  const [confidence, setConfidence] = useState("High");
+  const [savingMeal, setSavingMeal] = useState(false);
+
+  // Helper function to reliably get user JWT Token
+  const getAuthToken = async () => {
+    let activeToken = storeToken;
+    if (!activeToken) {
+      activeToken = await AsyncStorage.getItem("token");
+    }
+    return activeToken;
   };
 
   const pickImage = async (useCamera = false) => {
-    try {
-      const permissionResult = useCamera
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const permissionResult = useCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-      if (!permissionResult.granted) {
-        Alert.alert(
-          "Permission Required",
-          "Permission to access camera/gallery is needed.",
-        );
-        return;
-      }
-
-      const result = useCamera
-        ? await ImagePicker.launchCameraAsync({
-            base64: true,
-            quality: 0.6,
-          })
-        : await ImagePicker.launchImageLibraryAsync({
-            base64: true,
-            quality: 0.6,
-          });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setImageUri(asset.uri);
-        setBase64Image(asset.base64);
-        setScannedData(null);
-      }
-    } catch (error) {
-      Alert.alert("Error", "Could not select image.");
-    }
-  };
-
-  const handleScanImage = async () => {
-    if (!base64Image) {
-      Alert.alert("No Image", "Please capture or select an image first.");
+    if (!permissionResult.granted) {
+      Alert.alert(
+        "Permission Denied",
+        "Camera/Gallery permission is required to analyze food photos.",
+      );
       return;
     }
 
-    setIsScanning(true);
-    const result = await scanMealImage(base64Image);
-    setIsScanning(false);
+    const options = {
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.5,
+      base64: true,
+    };
 
-    if (result.success) {
-      setScannedData(result.data);
-    } else {
-      if (result.isProRequired) {
-        Alert.alert(
-          "Pro Feature",
-          "AI Scanning is available for Pro users only.",
-        );
-      } else {
-        Alert.alert(
-          "Scan Failed",
-          result.message || "Failed to analyze image.",
-        );
-      }
+    const result = useCamera
+      ? await ImagePicker.launchCameraAsync(options)
+      : await ImagePicker.launchImageLibraryAsync(options);
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      setImageUri(asset.uri);
+      setImageBase64(asset.base64);
     }
   };
 
-  const handleSaveMeal = async () => {
-    if (!scannedData) return;
-    setIsLogging(true);
+  const handleAnalyzePhoto = async () => {
+    if (!imageBase64) {
+      Alert.alert("No Image Selected", "Please select or take a photo first.");
+      return;
+    }
 
-    const res = await logMeal({
-      name: scannedData.name || "Scanned Food",
-      calories: scannedData.calories || 0,
-      protein: scannedData.protein || 0,
-      carbs: scannedData.carbs || 0,
-      fats: scannedData.fats || 0,
-    });
+    setAnalyzing(true);
+    try {
+      const activeToken = await getAuthToken();
 
-    setIsLogging(false);
+      if (!activeToken) {
+        Alert.alert(
+          "Authentication Error",
+          "Session token is missing. Please log out and log in again.",
+        );
+        setAnalyzing(false);
+        return;
+      }
 
-    if (res.success) {
-      Alert.alert("Success", "Meal logged successfully!", [
+      // Ensure proper base64 prefix
+      const formattedBase64 = imageBase64.startsWith("data:image")
+        ? imageBase64
+        : `data:image/jpeg;base64,${imageBase64}`;
+
+      const res = await axios.post(
+        `${API_BASE}/meals/scan`,
+        { imageBase64: formattedBase64 },
         {
-          text: "OK",
-          onPress: () => {
-            handleReset();
-            navigation.navigate("Dashboard");
+          headers: {
+            Authorization: `Bearer ${activeToken}`,
+            "Content-Type": "application/json",
           },
         },
-      ]);
-    } else {
-      Alert.alert("Error", res.message || "Failed to log meal.");
+      );
+
+      if (res.data?.success || res.data?.status === "success") {
+        const data = res.data.data || res.data;
+        setFoodName(data.name || data.foodName || "Scanned Meal");
+        setCalories(String(data.calories || 350));
+        setProtein(String(data.protein || 20));
+        setCarbs(String(data.carbs || 30));
+        setFats(String(data.fats || 10));
+        setConfidence(data.confidence || "High");
+
+        setModalVisible(true);
+      } else {
+        Alert.alert(
+          "Analysis Failed",
+          "Could not clearly identify food items. Please try another photo or enter manually.",
+        );
+      }
+    } catch (error) {
+      console.error("Meal Analysis Error:", error);
+      const msg =
+        error.response?.data?.message ||
+        "Failed to analyze meal photo. Check your connection or token.";
+      Alert.alert("Analysis Error", msg);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleConfirmAndSave = async () => {
+    if (!foodName.trim() || !calories.trim()) {
+      Alert.alert(
+        "Missing Details",
+        "Please provide at least Food Name and Calories.",
+      );
+      return;
+    }
+
+    setSavingMeal(true);
+    try {
+      const activeToken = await getAuthToken();
+
+      if (!activeToken) {
+        Alert.alert("Authentication Error", "Please log in again.");
+        setSavingMeal(false);
+        return;
+      }
+
+      const payload = {
+        name: foodName.trim(),
+        calories: Number(calories) || 0,
+        protein: Number(protein) || 0,
+        carbs: Number(carbs) || 0,
+        fats: Number(fats) || 0,
+      };
+
+      await axios.post(`${API_BASE}/meals/log`, payload, {
+        headers: {
+          Authorization: `Bearer ${activeToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      setModalVisible(false);
+      setImageUri(null);
+      setImageBase64(null);
+
+      Alert.alert(
+        "Meal Saved! 🎉",
+        `${foodName} logged into your diary successfully.`,
+      );
+    } catch (error) {
+      console.error("Save Meal Error:", error);
+      const msg =
+        error.response?.data?.message || "Failed to save meal entry to diary.";
+      Alert.alert("Save Error", msg);
+    } finally {
+      setSavingMeal(false);
     }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-      {/* 🔙 Navigation Header with Back Button */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => {
-            handleReset();
-            navigation.goBack();
-          }}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Scan Meal
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={[styles.title, { color: colors.text }]}>AI Scan Meal</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          Take or upload a food photo to automatically estimate calories and
+          macros.
         </Text>
-        <TouchableOpacity onPress={handleReset}>
-          <Ionicons name="refresh-outline" size={22} color="#3B82F6" />
-        </TouchableOpacity>
-      </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Image Preview Area */}
+        {/* Image Preview Box */}
         <View
           style={[
             styles.imageContainer,
@@ -160,201 +215,296 @@ export default function ScanMealScreen({ navigation }) {
           {imageUri ? (
             <Image source={{ uri: imageUri }} style={styles.previewImage} />
           ) : (
-            <View style={styles.placeholder}>
+            <View style={styles.placeholderBox}>
               <Ionicons
                 name="camera-outline"
-                size={50}
+                size={54}
                 color={colors.textSecondary}
               />
-              <Text
-                style={[
-                  styles.placeholderText,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                Select or capture a food photo
+              <Text style={{ color: colors.textSecondary, marginTop: 8 }}>
+                No image selected
               </Text>
             </View>
           )}
         </View>
 
-        {/* Action Buttons for Image Picker */}
-        <View style={styles.pickerRow}>
+        {/* Picker Actions */}
+        <View style={styles.actionRow}>
           <TouchableOpacity
-            style={[styles.pickerBtn, { backgroundColor: "#3B82F6" }]}
+            style={[
+              styles.pickerBtn,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
             onPress={() => pickImage(true)}
           >
-            <Ionicons name="camera" size={18} color="#FFF" />
-            <Text style={styles.pickerBtnText}>Camera</Text>
+            <Ionicons name="camera" size={20} color="#10B981" />
+            <Text style={[styles.pickerText, { color: colors.text }]}>
+              Camera
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.pickerBtn, { backgroundColor: "#6366F1" }]}
+            style={[
+              styles.pickerBtn,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
             onPress={() => pickImage(false)}
           >
-            <Ionicons name="images" size={18} color="#FFF" />
-            <Text style={styles.pickerBtnText}>Gallery</Text>
+            <Ionicons name="images" size={20} color="#10B981" />
+            <Text style={[styles.pickerText, { color: colors.text }]}>
+              Gallery
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* AI Scan Trigger Button */}
-        {imageUri && !scannedData && (
-          <TouchableOpacity
-            style={[styles.scanBtn, { backgroundColor: "#10B981" }]}
-            onPress={handleScanImage}
-            disabled={isScanning}
-          >
-            {isScanning ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <>
-                <Ionicons name="sparkles" size={20} color="#FFF" />
-                <Text style={styles.scanBtnText}>Analyze Food</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        )}
+        {/* Analyze Button */}
+        <TouchableOpacity
+          style={[
+            styles.analyzeBtn,
+            (!imageBase64 || analyzing) && { opacity: 0.6 },
+          ]}
+          onPress={handleAnalyzePhoto}
+          disabled={!imageBase64 || analyzing}
+        >
+          {analyzing ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <>
+              <Ionicons
+                name="sparkles"
+                size={18}
+                color="#FFF"
+                style={{ marginRight: 8 }}
+              />
+              <Text style={styles.analyzeBtnText}>Analyze Photo with AI</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
 
-        {/* 🥗 Scanned Result Display & Reset Option */}
-        {scannedData && (
-          <View
-            style={[
-              styles.resultCard,
-              { backgroundColor: colors.cardBg, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.foodTitle, { color: colors.text }]}>
-              {scannedData.name}
-            </Text>
-
-            <View style={styles.macroGrid}>
-              <View style={styles.macroBox}>
-                <Text style={{ color: "#10B981", fontWeight: "bold" }}>
-                  {scannedData.calories}
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-                  Calories
-                </Text>
-              </View>
-              <View style={styles.macroBox}>
-                <Text style={{ color: "#3B82F6", fontWeight: "bold" }}>
-                  {scannedData.protein}g
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-                  Protein
-                </Text>
-              </View>
-              <View style={styles.macroBox}>
-                <Text style={{ color: "#F59E0B", fontWeight: "bold" }}>
-                  {scannedData.carbs}g
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-                  Carbs
-                </Text>
-              </View>
-              <View style={styles.macroBox}>
-                <Text style={{ color: "#EF4444", fontWeight: "bold" }}>
-                  {scannedData.fats}g
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-                  Fats
+      {/* Confirmation & Editing Modal */}
+      <Modal visible={modalVisible} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.cardBg }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Confirm Nutrition
+              </Text>
+              <View style={styles.confidenceBadge}>
+                <Text style={styles.confidenceText}>
+                  {confidence} Confidence
                 </Text>
               </View>
             </View>
 
-            <View style={styles.btnGroup}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>
+              Food Item Name
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
+              value={foodName}
+              onChangeText={setFoodName}
+            />
+
+            <Text style={[styles.label, { color: colors.textSecondary }]}>
+              Total Calories (kcal)
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
+              value={calories}
+              onChangeText={setCalories}
+              keyboardType="numeric"
+            />
+
+            <View style={styles.macroRow}>
+              <View style={styles.macroCol}>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>
+                  Protein (g)
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBg,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  value={protein}
+                  onChangeText={setProtein}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.macroCol}>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>
+                  Carbs (g)
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBg,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  value={carbs}
+                  onChangeText={setCarbs}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.macroCol}>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>
+                  Fats (g)
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBg,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  value={fats}
+                  onChangeText={setFats}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
               <TouchableOpacity
-                style={[
-                  styles.saveBtn,
-                  { backgroundColor: "#10B981", flex: 1, marginRight: 8 },
-                ]}
-                onPress={handleSaveMeal}
-                disabled={isLogging}
+                style={styles.cancelBtn}
+                onPress={() => setModalVisible(false)}
               >
-                {isLogging ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
-                  <Text style={styles.saveBtnText}>Log to Daily Tracker</Text>
-                )}
+                <Text style={{ color: "#EF4444", fontWeight: "bold" }}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[
-                  styles.saveBtn,
-                  { backgroundColor: "#64748B", paddingHorizontal: 12 },
-                ]}
-                onPress={handleReset}
+                style={styles.confirmBtn}
+                onPress={handleConfirmAndSave}
+                disabled={savingMeal}
               >
-                <Ionicons name="refresh" size={18} color="#FFF" />
+                {savingMeal ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Text style={{ color: "#FFF", fontWeight: "bold" }}>
+                    Confirm & Save
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
-        )}
-      </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+  safeArea: { flex: 1 },
+  container: { padding: 20 },
+  title: { fontSize: 22, fontWeight: "bold", textAlign: "center" },
+  subtitle: {
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 4,
+    marginBottom: 20,
   },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: "bold" },
-  scrollContent: { padding: 20 },
   imageContainer: {
     height: 220,
     borderRadius: 16,
     borderWidth: 1,
     overflow: "hidden",
-    justifyContent: "center",
-    alignItems: "center",
     marginBottom: 16,
   },
   previewImage: { width: "100%", height: "100%" },
-  placeholder: { alignItems: "center" },
-  placeholderText: { marginTop: 8, fontSize: 13 },
-  pickerRow: {
+  placeholderBox: { flex: 1, justifyContent: "center", alignItems: "center" },
+  actionRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16,
+    justify: "space-between",
+    marginBottom: 20,
   },
   pickerBtn: {
-    width: "48%",
-    padding: 12,
-    borderRadius: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-  },
-  pickerBtnText: { color: "#FFF", fontWeight: "bold", marginLeft: 6 },
-  scanBtn: {
+    width: "48%",
     padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  pickerText: { fontWeight: "bold", marginLeft: 8 },
+  analyzeBtn: {
+    backgroundColor: "#10B981",
+    padding: 16,
     borderRadius: 12,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
   },
-  scanBtnText: { color: "#FFF", fontWeight: "bold", marginLeft: 8 },
-  resultCard: { padding: 18, borderRadius: 16, borderWidth: 1, marginTop: 10 },
-  foodTitle: { fontSize: 18, fontWeight: "bold", textAlign: "center" },
-  macroGrid: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginVertical: 16,
-  },
-  macroBox: { alignItems: "center" },
-  btnGroup: { flexDirection: "row", marginTop: 10 },
-  saveBtn: {
-    padding: 14,
-    borderRadius: 10,
-    alignItems: "center",
+  analyzeBtnText: { color: "#FFF", fontWeight: "bold", fontSize: 16 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
+    padding: 20,
   },
-  saveBtnText: { color: "#FFF", fontWeight: "bold" },
+  modalCard: { borderRadius: 16, padding: 20 },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: { fontSize: 18, fontWeight: "bold" },
+  confidenceBadge: {
+    backgroundColor: "rgba(16, 185, 129, 0.15)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  confidenceText: { color: "#10B981", fontSize: 11, fontWeight: "bold" },
+  label: { fontSize: 12, fontWeight: "600", marginBottom: 4 },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+    fontSize: 14,
+  },
+  macroRow: { flexDirection: "row", justifyContent: "space-between" },
+  macroCol: { width: "31%" },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 12,
+    alignItems: "center",
+  },
+  cancelBtn: { padding: 12, marginRight: 12 },
+  confirmBtn: {
+    backgroundColor: "#10B981",
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
 });

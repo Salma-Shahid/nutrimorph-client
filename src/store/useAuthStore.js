@@ -63,7 +63,7 @@ export const useAuthStore = create((set, get) => ({
       plan: newTier,
     };
 
-    // 1. Local state aur storage update
+    // 1. Local state and storage update
     await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
     set({ user: updatedUser });
 
@@ -116,6 +116,41 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
+  // 🟢 Signup / Register Function
+  signup: async (name, email, password) => {
+    set({ isLoading: true, error: null });
+    try {
+      const payload =
+        typeof name === "object" ? name : { name, email, password };
+
+      const res = await axios.post(`${API_URL}/register`, payload);
+      const userData = res.data;
+
+      if (userData.token) {
+        await AsyncStorage.setItem("token", userData.token || "");
+        await AsyncStorage.setItem("user", JSON.stringify(userData));
+        set({
+          user: userData,
+          token: userData.token || null,
+          isLoading: false,
+        });
+      } else {
+        set({ isLoading: false });
+      }
+
+      return { success: true, ...userData };
+    } catch (err) {
+      const message = err.response?.data?.message || "Signup failed.";
+      set({ isLoading: false, error: message });
+      return { success: false, message };
+    }
+  },
+
+  // Alias for signup if component uses register
+  register: async (name, email, password) => {
+    return await get().signup(name, email, password);
+  },
+
   login: async (email, password) => {
     set({ isLoading: true, error: null });
     try {
@@ -156,5 +191,47 @@ export const useAuthStore = create((set, get) => ({
       console.error("Logout error:", e);
     }
     set({ user: null, token: null, error: null });
+  },
+
+  // 🔴 Permanent Account Deletion Action (Google Play Compliance P0)
+  deleteAccount: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const token = get().token || (await AsyncStorage.getItem("token"));
+
+      if (!token) {
+        set({ isLoading: false });
+        return { success: false, message: "Authentication token missing." };
+      }
+
+      const res = await axios.delete(`${API_URL}/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.data?.success) {
+        const currentUser = get().user;
+        if (currentUser) {
+          await AsyncStorage.removeItem(
+            `avatar_${currentUser._id || currentUser.email}`,
+          ).catch(() => {});
+        }
+        await AsyncStorage.removeItem("token");
+        await AsyncStorage.removeItem("user");
+
+        set({ user: null, token: null, isLoading: false, error: null });
+        return { success: true, message: res.data.message };
+      }
+
+      set({ isLoading: false });
+      return {
+        success: false,
+        message: res.data?.message || "Account deletion failed.",
+      };
+    } catch (err) {
+      const message =
+        err.response?.data?.message || "Failed to delete account. Try again.";
+      set({ isLoading: false, error: message });
+      return { success: false, message };
+    }
   },
 }));

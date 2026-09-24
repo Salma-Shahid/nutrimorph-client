@@ -21,10 +21,11 @@ export default function ProfileScreen({ navigation }) {
   const {
     user,
     theme,
-    toggleTheme, // 👈 toggleTheme yahan add kiya gaya hai
+    toggleTheme,
     updateProfile,
     toggleSubscriptionTier,
     logout,
+    deleteAccount, // 👈 Delete account store action
     isLoading,
   } = useAuthStore();
   const colors = getThemeColors(theme);
@@ -99,6 +100,35 @@ export default function ProfileScreen({ navigation }) {
     } else {
       Alert.alert("Error", res?.message || "Failed to update profile.");
     }
+  };
+
+  // Confirmation modal for permanent account deletion
+  const handleDeleteAccountPress = () => {
+    Alert.alert(
+      "Delete Account ⚠️",
+      "Are you sure you want to permanently delete your account? This will erase all your profile data, chat history, and preferences. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Permanently",
+          style: "destructive",
+          onPress: async () => {
+            const res = await deleteAccount();
+            if (res?.success) {
+              Alert.alert(
+                "Account Deleted",
+                "Your account and all associated data have been deleted successfully.",
+              );
+            } else {
+              Alert.alert(
+                "Error",
+                res?.message || "Failed to delete account. Please try again.",
+              );
+            }
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -331,6 +361,16 @@ export default function ProfileScreen({ navigation }) {
           <Ionicons name="log-out-outline" size={18} color="#EF4444" />
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
+
+        {/* 🔴 Delete Account (Google Play Compliance P0) */}
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={handleDeleteAccountPress}
+          disabled={isLoading}
+        >
+          <Ionicons name="trash-outline" size={18} color="#EF4444" />
+          <Text style={styles.deleteText}>Delete Account</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -414,6 +454,20 @@ const styles = StyleSheet.create({
     borderColor: "#EF4444",
     padding: 14,
     borderRadius: 12,
+    marginBottom: 12,
   },
   logoutText: { color: "#EF4444", fontWeight: "bold", marginLeft: 8 },
+  deleteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 14,
+  },
+  deleteText: {
+    color: "#EF4444",
+    fontWeight: "600",
+    fontSize: 14,
+    marginLeft: 6,
+    textDecorationLine: "underline",
+  },
 });

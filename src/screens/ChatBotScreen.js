@@ -13,14 +13,68 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import { renderMessage } from "./ChatMessageItem";
+
+import ChatMessageItemModule from "./ChatMessageItem";
 import { useAuthStore } from "../store/useAuthStore";
 import CustomAppLoader from "../components/CustomAppLoader";
+import { getThemeColors } from "../theme/colors";
+
+// Resolution for ChatMessageItem component
+const ChatMessageItem =
+  ChatMessageItemModule?.default ||
+  ChatMessageItemModule?.ChatMessageItem ||
+  ChatMessageItemModule;
+
+// Dynamic Message Bubble UI supporting both Light & Dark modes
+const DefaultMessageBubble = ({ item, colors }) => {
+  const isUser = item.sender === "user" || item.role === "user";
+  const messageText = item.text || item.message || item.content || "";
+
+  return (
+    <View
+      style={[
+        bubbleStyles.container,
+        isUser
+          ? bubbleStyles.userContainer
+          : [
+              bubbleStyles.botContainer,
+              {
+                backgroundColor: colors.cardBg,
+                borderColor: colors.border || "#334155",
+                borderWidth: 1,
+              },
+            ],
+      ]}
+    >
+      <Text
+        style={[bubbleStyles.text, { color: isUser ? "#FFFFFF" : colors.text }]}
+      >
+        {messageText}
+      </Text>
+    </View>
+  );
+};
+
+const renderMessageItem = (item, colors) => {
+  if (typeof ChatMessageItemModule?.renderMessage === "function") {
+    const rendered = ChatMessageItemModule.renderMessage(item, colors);
+    if (rendered) return rendered;
+  }
+  if (
+    typeof ChatMessageItem === "function" ||
+    (typeof ChatMessageItem === "object" && ChatMessageItem !== null)
+  ) {
+    return <ChatMessageItem item={item} message={item} colors={colors} />;
+  }
+  return <DefaultMessageBubble item={item} colors={colors} />;
+};
 
 const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app"}/api`;
 
 const ChatBotScreen = () => {
-  const { user } = useAuthStore();
+  const { user, theme } = useAuthStore();
+  const colors = getThemeColors(theme);
+
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,9 +84,16 @@ const ChatBotScreen = () => {
   const currentUserId = user?._id || user?.id;
 
   const getToken = async () => {
-    const token = useAuthStore.getState().token;
-    if (token) return token;
-    return await AsyncStorage.getItem("token");
+    try {
+      const storeToken =
+        typeof useAuthStore?.getState === "function"
+          ? useAuthStore.getState()?.token
+          : null;
+      if (storeToken) return storeToken;
+      return await AsyncStorage.getItem("token");
+    } catch (error) {
+      return await AsyncStorage.getItem("token");
+    }
   };
 
   useEffect(() => {
@@ -42,7 +103,7 @@ const ChatBotScreen = () => {
   const scrollToBottom = () => {
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    }, 150);
   };
 
   const fetchHistory = async () => {
@@ -73,8 +134,9 @@ const ChatBotScreen = () => {
       }
 
       setMessages(historyData);
+      scrollToBottom();
     } catch (error) {
-      // History error handled silently
+      console.error("History fetch error:", error);
     } finally {
       setFetchingHistory(false);
       setLoading(false);
@@ -97,7 +159,7 @@ const ChatBotScreen = () => {
       model: "gemini-3.5-flash-lite",
     };
 
-    // Unique temporary ID for user message
+    // Immediate user message append
     const userMsg = {
       _id: `user-${Date.now()}`,
       sender: "user",
@@ -105,7 +167,6 @@ const ChatBotScreen = () => {
       text: textToSend,
     };
 
-    // 1. Append user message immediately
     setMessages((prev) => [...prev, userMsg]);
     setInputText("");
     setLoading(true);
@@ -119,13 +180,12 @@ const ChatBotScreen = () => {
         },
       });
 
-      // 2. Append bot response in correct order
       if (res.data?.success) {
         const botMsg = {
           _id: `bot-${Date.now()}`,
           sender: "bot",
           role: "bot",
-          text: res.data.reply,
+          text: res.data.reply || res.data.response,
         };
         setMessages((prev) => [...prev, botMsg]);
       } else if (res.data?.limitReached || res.data?.reply) {
@@ -182,15 +242,28 @@ const ChatBotScreen = () => {
   };
 
   return (
-    <SafeAreaView style={screenStyles.safeArea} edges={["top", "bottom"]}>
+    <SafeAreaView
+      style={[screenStyles.safeArea, { backgroundColor: colors.bg }]}
+      edges={["top", "bottom"]}
+    >
       <KeyboardAvoidingView
         style={screenStyles.container}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
         {/* Header */}
-        <View style={screenStyles.header}>
-          <Text style={screenStyles.headerTitle}>NutriBot Assistant</Text>
+        <View
+          style={[
+            screenStyles.header,
+            {
+              backgroundColor: colors.cardBg,
+              borderBottomColor: colors.border || "#334155",
+            },
+          ]}
+        >
+          <Text style={[screenStyles.headerTitle, { color: colors.text }]}>
+            NutriBot Assistant
+          </Text>
         </View>
 
         {/* Chat History / Loader */}
@@ -205,15 +278,13 @@ const ChatBotScreen = () => {
             keyExtractor={(item, index) =>
               item._id || item.id || `chat-msg-${index}`
             }
-            renderItem={({ item }) => renderMessage(item)}
+            renderItem={({ item }) => renderMessageItem(item, colors)}
             contentContainerStyle={screenStyles.listPadding}
             onContentSizeChange={scrollToBottom}
             keyboardShouldPersistTaps="handled"
-            // Performance Optimizations
-            initialNumToRender={12}
-            maxToRenderPerBatch={8}
+            initialNumToRender={15}
+            maxToRenderPerBatch={10}
             windowSize={5}
-            removeClippedSubviews={Platform.OS === "android"}
           />
         )}
 
@@ -225,11 +296,25 @@ const ChatBotScreen = () => {
         )}
 
         {/* Input Bar */}
-        <View style={screenStyles.inputContainer}>
+        <View
+          style={[
+            screenStyles.inputContainer,
+            {
+              backgroundColor: colors.cardBg,
+              borderTopColor: colors.border || "#334155",
+            },
+          ]}
+        >
           <TextInput
-            style={screenStyles.input}
+            style={[
+              screenStyles.input,
+              {
+                backgroundColor: colors.inputBg,
+                color: colors.text,
+              },
+            ]}
             placeholder="Ask about diet, macros, or recipes..."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={colors.textSecondary || "#94A3B8"}
             value={inputText}
             onChangeText={setInputText}
             onSubmitEditing={handleSend}
@@ -251,10 +336,31 @@ const ChatBotScreen = () => {
   );
 };
 
+const bubbleStyles = StyleSheet.create({
+  container: {
+    padding: 14,
+    borderRadius: 16,
+    marginVertical: 6,
+    maxWidth: "82%",
+  },
+  userContainer: {
+    backgroundColor: "#10B981", // Vibrant Green Accent for User Messages
+    alignSelf: "flex-end",
+    borderBottomRightRadius: 4,
+  },
+  botContainer: {
+    alignSelf: "flex-start",
+    borderBottomLeftRadius: 4,
+  },
+  text: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+});
+
 const screenStyles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0F172A",
   },
   container: {
     flex: 1,
@@ -262,13 +368,10 @@ const screenStyles = StyleSheet.create({
   header: {
     paddingVertical: 14,
     paddingHorizontal: 20,
-    backgroundColor: "#1E293B",
     borderBottomWidth: 1,
-    borderBottomColor: "#334155",
     alignItems: "center",
   },
   headerTitle: {
-    color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "bold",
   },
@@ -291,15 +394,11 @@ const screenStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: Platform.OS === "android" ? 14 : 10,
-    backgroundColor: "#1E293B",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#334155",
   },
   input: {
     flex: 1,
-    color: "#FFFFFF",
-    backgroundColor: "#334155",
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
