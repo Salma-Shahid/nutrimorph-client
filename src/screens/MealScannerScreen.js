@@ -181,9 +181,11 @@ export default function MealScannerScreen({ navigation }) {
     setAnalyzing(true);
     try {
       const cleanBarcode = String(barcode).trim();
+
+      // 1. Try Open Food Facts API first
       const response = await axios.get(
         `https://world.openfoodfacts.org/api/v2/product/${cleanBarcode}.json`,
-        { validateStatus: (status) => status < 500, timeout: 8000 },
+        { validateStatus: (status) => status < 500, timeout: 6000 },
       );
 
       if (response.status === 200 && response.data?.status === 1) {
@@ -211,19 +213,20 @@ export default function MealScannerScreen({ navigation }) {
         setCarbs(String(Math.round(carb)));
         setFats(String(Math.round(fat)));
         setConfidence("High (Barcode)");
-
         setModalVisible(true);
       } else {
+        // 2. 🟢 Fallback Alert: Offer user to use AI photo scan or manual entry
         Alert.alert(
-          "Product Not Found 🔍",
-          "This barcode was not found in the database. You can take a photo of the food instead.",
+          "Product Not Registered 🔍",
+          "This barcode isn't in the global database yet. Please take a photo of the food item or nutrition label using Camera/Gallery for AI scanning.",
+          [{ text: "OK" }],
         );
       }
     } catch (error) {
       console.error("Barcode Fetch Error:", error);
       Alert.alert(
         "Barcode Error",
-        "Could not retrieve barcode details. Please check your network connection and try again.",
+        "Could not retrieve barcode details. Please try taking a photo instead.",
       );
     } finally {
       setAnalyzing(false);
