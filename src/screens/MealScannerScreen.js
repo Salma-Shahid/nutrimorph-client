@@ -64,7 +64,7 @@ export default function MealScannerScreen({ navigation }) {
     }
 
     const options = {
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.5,
@@ -163,12 +163,16 @@ export default function MealScannerScreen({ navigation }) {
         return;
       }
 
+      // 🟢 Mobile local date tag (YYYY-MM-DD) for timezone accuracy
+      const localDate = new Date().toLocaleDateString("en-CA");
+
       const payload = {
         name: foodName.trim(),
         calories: Number(calories) || 0,
         protein: Number(protein) || 0,
         carbs: Number(carbs) || 0,
         fats: Number(fats) || 0,
+        date: localDate, // 👈 Phone local date sent to backend
       };
 
       await axios.post(`${API_BASE}/meals/log`, payload, {
@@ -441,7 +445,7 @@ const styles = StyleSheet.create({
   placeholderBox: { flex: 1, justifyContent: "center", alignItems: "center" },
   actionRow: {
     flexDirection: "row",
-    justify: "space-between",
+    justifyContent: "space-between",
     marginBottom: 20,
   },
   pickerBtn: {
