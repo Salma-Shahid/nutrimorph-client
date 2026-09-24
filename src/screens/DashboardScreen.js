@@ -68,7 +68,6 @@ export default function DashboardScreen({ navigation }) {
             if (!res.success) {
               Alert.alert("Error", res.message || "Could not delete meal.");
             } else {
-              // Deletion ke baad local date se refresh karein
               fetchTodayMeals(getLocalDate());
             }
           },
@@ -114,6 +113,7 @@ export default function DashboardScreen({ navigation }) {
           <Text style={[styles.cardTitle, { color: colors.text }]}>
             Daily Calorie Summary
           </Text>
+
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={[styles.statNum, { color: "#10B981" }]}>
@@ -205,7 +205,7 @@ export default function DashboardScreen({ navigation }) {
           ]}
         >
           <Text
-            style={[styles.cardTitle, { color: colors.text, marginBottom: 10 }]}
+            style={[styles.cardTitle, { color: colors.text, marginBottom: 12 }]}
           >
             Weekly Calorie History
           </Text>
@@ -367,16 +367,18 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 16, fontWeight: "bold" },
   statsRow: {
     flexDirection: "row",
-    justify: "space-around",
+    justifyContent: "space-around", // 🟢 Fixed typo (was justify)
+    alignItems: "center",
+    width: "100%",
     marginVertical: 16,
   },
-  statItem: { alignItems: "center" },
+  statItem: { flex: 1, alignItems: "center" }, // 🟢 Added flex: 1 for equal distribution
   statNum: { fontSize: 20, fontWeight: "bold" },
   statLabel: { fontSize: 12, marginTop: 4 },
   historyBtn: {
     flexDirection: "row",
     alignItems: "center",
-    justify: "center",
+    justifyContent: "center",
     padding: 12,
     borderRadius: 10,
     marginTop: 6,
@@ -384,28 +386,32 @@ const styles = StyleSheet.create({
   historyBtnText: { fontWeight: "600", marginLeft: 8, fontSize: 13 },
   waterHeader: {
     flexDirection: "row",
-    justify: "space-between",
+    justifyContent: "space-between",
     alignItems: "center",
+    width: "100%", // 🟢 Added width: 100%
     marginBottom: 14,
   },
   waterControls: {
     flexDirection: "row",
     alignItems: "center",
-    justify: "space-between",
+    justifyContent: "space-between",
+    width: "100%", // 🟢 Added width: 100%
   },
   waterBtn: {
     backgroundColor: "#64748B",
     width: 38,
     height: 38,
     borderRadius: 19,
-    justify: "center",
+    justifyContent: "center",
     alignItems: "center",
   },
   waterCountText: { fontSize: 16, fontWeight: "bold" },
   weeklyRow: {
     flexDirection: "row",
-    justify: "space-between",
-    paddingVertical: 4,
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%", // 🟢 Added width: 100%
+    paddingVertical: 6,
     borderBottomWidth: 0.5,
     borderBottomColor: "#334155",
   },
@@ -420,7 +426,7 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
-    justify: "center",
+    justifyContent: "center",
     padding: 20,
   },
   modalContent: {
@@ -431,14 +437,14 @@ const styles = StyleSheet.create({
   },
   modalHeader: {
     flexDirection: "row",
-    justify: "space-between",
+    justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
   },
   modalTitle: { fontSize: 18, fontWeight: "bold" },
   historyItem: {
     flexDirection: "row",
-    justify: "space-between",
+    justifyContent: "space-between",
     alignItems: "center",
     padding: 12,
     borderRadius: 10,

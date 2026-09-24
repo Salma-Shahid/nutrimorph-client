@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
+import Markdown from "react-native-markdown-display";
 
 import ChatMessageItemModule from "./ChatMessageItem";
 import { useAuthStore } from "../store/useAuthStore";
@@ -25,32 +26,76 @@ const ChatMessageItem =
   ChatMessageItemModule?.ChatMessageItem ||
   ChatMessageItemModule;
 
-// Dynamic Message Bubble UI supporting both Light & Dark modes
+// Dynamic Message Bubble UI supporting Markdown for Bot & Plain Text for User
 const DefaultMessageBubble = ({ item, colors }) => {
   const isUser = item.sender === "user" || item.role === "user";
   const messageText = item.text || item.message || item.content || "";
+
+  if (isUser) {
+    return (
+      <View style={[bubbleStyles.container, bubbleStyles.userContainer]}>
+        <Text style={[bubbleStyles.text, { color: "#FFFFFF" }]}>
+          {messageText}
+        </Text>
+      </View>
+    );
+  }
+
+  // Dynamic Markdown Styles according to Theme Colors
+  const markdownStyles = {
+    body: {
+      color: colors.text,
+      fontSize: 14,
+      lineHeight: 22,
+    },
+    heading3: {
+      color: "#10B981",
+      fontSize: 16,
+      fontWeight: "bold",
+      marginTop: 8,
+      marginBottom: 4,
+    },
+    heading4: {
+      color: "#10B981",
+      fontSize: 15,
+      fontWeight: "bold",
+      marginTop: 6,
+      marginBottom: 2,
+    },
+    strong: {
+      color: colors.text,
+      fontWeight: "bold",
+    },
+    em: {
+      color: colors.text,
+      fontStyle: "italic",
+    },
+    list_item: {
+      color: colors.text,
+      marginVertical: 2,
+    },
+    bullet_list: {
+      marginVertical: 4,
+    },
+    paragraph: {
+      marginTop: 0,
+      marginBottom: 6,
+    },
+  };
 
   return (
     <View
       style={[
         bubbleStyles.container,
-        isUser
-          ? bubbleStyles.userContainer
-          : [
-              bubbleStyles.botContainer,
-              {
-                backgroundColor: colors.cardBg,
-                borderColor: colors.border || "#334155",
-                borderWidth: 1,
-              },
-            ],
+        bubbleStyles.botContainer,
+        {
+          backgroundColor: colors.cardBg,
+          borderColor: colors.border || "#334155",
+          borderWidth: 1,
+        },
       ]}
     >
-      <Text
-        style={[bubbleStyles.text, { color: isUser ? "#FFFFFF" : colors.text }]}
-      >
-        {messageText}
-      </Text>
+      <Markdown style={markdownStyles}>{messageText}</Markdown>
     </View>
   );
 };
@@ -344,7 +389,7 @@ const bubbleStyles = StyleSheet.create({
     maxWidth: "82%",
   },
   userContainer: {
-    backgroundColor: "#10B981", // Vibrant Green Accent for User Messages
+    backgroundColor: "#10B981",
     alignSelf: "flex-end",
     borderBottomRightRadius: 4,
   },

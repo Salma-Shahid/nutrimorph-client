@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -23,7 +24,6 @@ import { getThemeColors } from "../theme/colors";
 const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app"}/api`;
 
 export default function MealScannerScreen({ navigation }) {
-  // 🟢 Extract token directly from Zustand store
   const { theme, token: storeToken } = useAuthStore();
   const colors = getThemeColors(theme);
 
@@ -31,7 +31,12 @@ export default function MealScannerScreen({ navigation }) {
   const [imageBase64, setImageBase64] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
 
-  // Modal & Draft State for User Confirmation/Correction
+  // Barcode Camera Modal & Lock States
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [isScanningBarcode, setIsScanningBarcode] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  // Modal & Draft State
   const [modalVisible, setModalVisible] = useState(false);
   const [foodName, setFoodName] = useState("");
   const [calories, setCalories] = useState("");
@@ -41,7 +46,6 @@ export default function MealScannerScreen({ navigation }) {
   const [confidence, setConfidence] = useState("High");
   const [savingMeal, setSavingMeal] = useState(false);
 
-  // Helper function to reliably get user JWT Token
   const getAuthToken = async () => {
     let activeToken = storeToken;
     if (!activeToken) {
@@ -58,7 +62,7 @@ export default function MealScannerScreen({ navigation }) {
     if (!permissionResult.granted) {
       Alert.alert(
         "Permission Denied",
-        "Camera/Gallery permission is required to analyze food photos.",
+        "Camera and media library permissions are required to analyze food photos.",
       );
       return;
     }
@@ -82,26 +86,28 @@ export default function MealScannerScreen({ navigation }) {
     }
   };
 
+  // 1. AI Image Analysis with Strict Non-Food Prevention
   const handleAnalyzePhoto = async () => {
     if (!imageBase64) {
-      Alert.alert("No Image Selected", "Please select or take a photo first.");
+      Alert.alert(
+        "No Image Selected",
+        "Please select or capture a food photo first.",
+      );
       return;
     }
 
     setAnalyzing(true);
     try {
       const activeToken = await getAuthToken();
-
       if (!activeToken) {
         Alert.alert(
           "Authentication Error",
-          "Session token is missing. Please log out and log in again.",
+          "Session expired. Please log in again.",
         );
         setAnalyzing(false);
         return;
       }
 
-      // Ensure proper base64 prefix
       const formattedBase64 = imageBase64.startsWith("data:image")
         ? imageBase64
         : `data:image/jpeg;base64,${imageBase64}`;
@@ -119,36 +125,138 @@ export default function MealScannerScreen({ navigation }) {
 
       if (res.data?.success || res.data?.status === "success") {
         const data = res.data.data || res.data;
+        const nameLower = (data.name || data.foodName || "").toLowerCase();
+
+        // Strict Non-Food Detection: Do not open modal or allow logging if non-food item
+        const isNonFood =
+          data.isFood === false ||
+          data.isFood === "false" ||
+          nameLower.includes("non-food") ||
+          nameLower.includes("fabric") ||
+          nameLower.includes("flower") ||
+          nameLower.includes("object") ||
+          nameLower.includes("not food") ||
+          (Number(data.calories) === 0 &&
+            Number(data.protein) === 0 &&
+            Number(data.carbs) === 0 &&
+            Number(data.fats) === 0);
+
+        if (isNonFood) {
+          Alert.alert(
+            "Invalid Food Image 🚫",
+            "This image does not appear to contain edible food. Please scan or select a valid food photo.",
+          );
+          setModalVisible(false);
+          return;
+        }
+
         setFoodName(data.name || data.foodName || "Scanned Meal");
-        setCalories(String(data.calories || 350));
-        setProtein(String(data.protein || 20));
-        setCarbs(String(data.carbs || 30));
-        setFats(String(data.fats || 10));
+        setCalories(String(data.calories || 0));
+        setProtein(String(data.protein || 0));
+        setCarbs(String(data.carbs || 0));
+        setFats(String(data.fats || 0));
         setConfidence(data.confidence || "High");
 
         setModalVisible(true);
       } else {
         Alert.alert(
           "Analysis Failed",
-          "Could not clearly identify food items. Please try another photo or enter manually.",
+          "Could not clearly identify food items in the image.",
         );
       }
     } catch (error) {
       console.error("Meal Analysis Error:", error);
-      const msg =
-        error.response?.data?.message ||
-        "Failed to analyze meal photo. Check your connection or token.";
-      Alert.alert("Analysis Error", msg);
+      Alert.alert(
+        "Analysis Error",
+        "Failed to analyze meal photo. Please try again.",
+      );
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  // 2. Barcode Product Lookup using Open Food Facts API (Fixed 404 & Lock)
+  const fetchProductByBarcode = async (barcode) => {
+    setShowBarcodeScanner(false);
+    setAnalyzing(true);
+    try {
+      const cleanBarcode = String(barcode).trim();
+      const response = await axios.get(
+        `https://world.openfoodfacts.org/api/v2/product/${cleanBarcode}.json`,
+        { validateStatus: (status) => status < 500, timeout: 8000 },
+      );
+
+      if (response.status === 200 && response.data?.status === 1) {
+        const product = response.data.product || {};
+        const nutriments = product.nutriments || {};
+
+        const name =
+          product.product_name ||
+          product.product_name_en ||
+          product.brands ||
+          "Packaged Food";
+        const cal =
+          nutriments["energy-kcal_100g"] ||
+          nutriments["energy-kcal"] ||
+          nutriments["energy-kcal_value"] ||
+          0;
+        const prot = nutriments.proteins_100g || nutriments.proteins || 0;
+        const carb =
+          nutriments.carbohydrates_100g || nutriments.carbohydrates || 0;
+        const fat = nutriments.fat_100g || nutriments.fat || 0;
+
+        setFoodName(name);
+        setCalories(String(Math.round(cal)));
+        setProtein(String(Math.round(prot)));
+        setCarbs(String(Math.round(carb)));
+        setFats(String(Math.round(fat)));
+        setConfidence("High (Barcode)");
+
+        setModalVisible(true);
+      } else {
+        Alert.alert(
+          "Product Not Found 🔍",
+          "This barcode was not found in the database. You can take a photo of the food instead.",
+        );
+      }
+    } catch (error) {
+      console.error("Barcode Fetch Error:", error);
+      Alert.alert(
+        "Barcode Error",
+        "Could not retrieve barcode details. Please check your network connection and try again.",
+      );
+    } finally {
+      setAnalyzing(false);
+      setIsScanningBarcode(false);
+    }
+  };
+
+  const handleBarCodeScanned = ({ data }) => {
+    if (isScanningBarcode || !data) return;
+    setIsScanningBarcode(true);
+    fetchProductByBarcode(data);
+  };
+
+  const handleOpenBarcodeScanner = async () => {
+    if (!permission?.granted) {
+      const res = await requestPermission();
+      if (!res.granted) {
+        Alert.alert(
+          "Permission Required",
+          "Camera permission is required to scan barcodes.",
+        );
+        return;
+      }
+    }
+    setIsScanningBarcode(false);
+    setShowBarcodeScanner(true);
   };
 
   const handleConfirmAndSave = async () => {
     if (!foodName.trim() || !calories.trim()) {
       Alert.alert(
         "Missing Details",
-        "Please provide at least Food Name and Calories.",
+        "Please provide at least a food item name and calorie count.",
       );
       return;
     }
@@ -156,14 +264,6 @@ export default function MealScannerScreen({ navigation }) {
     setSavingMeal(true);
     try {
       const activeToken = await getAuthToken();
-
-      if (!activeToken) {
-        Alert.alert("Authentication Error", "Please log in again.");
-        setSavingMeal(false);
-        return;
-      }
-
-      // 🟢 Mobile local date tag (YYYY-MM-DD) for timezone accuracy
       const localDate = new Date().toLocaleDateString("en-CA");
 
       const payload = {
@@ -172,7 +272,7 @@ export default function MealScannerScreen({ navigation }) {
         protein: Number(protein) || 0,
         carbs: Number(carbs) || 0,
         fats: Number(fats) || 0,
-        date: localDate, // 👈 Phone local date sent to backend
+        date: localDate,
       };
 
       await axios.post(`${API_BASE}/meals/log`, payload, {
@@ -191,10 +291,7 @@ export default function MealScannerScreen({ navigation }) {
         `${foodName} logged into your diary successfully.`,
       );
     } catch (error) {
-      console.error("Save Meal Error:", error);
-      const msg =
-        error.response?.data?.message || "Failed to save meal entry to diary.";
-      Alert.alert("Save Error", msg);
+      Alert.alert("Save Error", "Failed to save meal entry to diary.");
     } finally {
       setSavingMeal(false);
     }
@@ -205,8 +302,7 @@ export default function MealScannerScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={[styles.title, { color: colors.text }]}>AI Scan Meal</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Take or upload a food photo to automatically estimate calories and
-          macros.
+          Take or upload a food photo, or scan a packaged product barcode.
         </Text>
 
         {/* Image Preview Box */}
@@ -232,7 +328,26 @@ export default function MealScannerScreen({ navigation }) {
           )}
         </View>
 
-        {/* Picker Actions */}
+        {/* Reset Photo Button */}
+        {imageUri && (
+          <TouchableOpacity
+            style={styles.resetButton}
+            onPress={() => {
+              setImageUri(null);
+              setImageBase64(null);
+            }}
+          >
+            <Ionicons
+              name="refresh"
+              size={16}
+              color="#FFF"
+              style={{ marginRight: 6 }}
+            />
+            <Text style={styles.resetText}>Reset Photo</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Picker Actions: Camera, Gallery, Barcode */}
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={[
@@ -241,7 +356,7 @@ export default function MealScannerScreen({ navigation }) {
             ]}
             onPress={() => pickImage(true)}
           >
-            <Ionicons name="camera" size={20} color="#10B981" />
+            <Ionicons name="camera" size={18} color="#10B981" />
             <Text style={[styles.pickerText, { color: colors.text }]}>
               Camera
             </Text>
@@ -254,9 +369,22 @@ export default function MealScannerScreen({ navigation }) {
             ]}
             onPress={() => pickImage(false)}
           >
-            <Ionicons name="images" size={20} color="#10B981" />
+            <Ionicons name="images" size={18} color="#10B981" />
             <Text style={[styles.pickerText, { color: colors.text }]}>
               Gallery
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.pickerBtn,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+            onPress={handleOpenBarcodeScanner}
+          >
+            <Ionicons name="barcode-outline" size={18} color="#3B82F6" />
+            <Text style={[styles.pickerText, { color: colors.text }]}>
+              Barcode
             </Text>
           </TouchableOpacity>
         </View>
@@ -286,6 +414,25 @@ export default function MealScannerScreen({ navigation }) {
         </TouchableOpacity>
       </ScrollView>
 
+      {/* Barcode Scanner Modal */}
+      <Modal visible={showBarcodeScanner} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: "#000" }}>
+          <CameraView
+            style={StyleSheet.absoluteFillObject}
+            onBarcodeScanned={handleBarCodeScanned}
+            barcodeScannerSettings={{
+              barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "qr"],
+            }}
+          />
+          <TouchableOpacity
+            style={styles.closeBarcodeBtn}
+            onPress={() => setShowBarcodeScanner(false)}
+          >
+            <Ionicons name="close" size={28} color="#FFF" />
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
       {/* Confirmation & Editing Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
@@ -295,9 +442,7 @@ export default function MealScannerScreen({ navigation }) {
                 Confirm Nutrition
               </Text>
               <View style={styles.confidenceBadge}>
-                <Text style={styles.confidenceText}>
-                  {confidence} Confidence
-                </Text>
+                <Text style={styles.confidenceText}>{confidence}</Text>
               </View>
             </View>
 
@@ -432,32 +577,41 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "center",
     marginTop: 4,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   imageContainer: {
     height: 220,
     borderRadius: 16,
     borderWidth: 1,
     overflow: "hidden",
-    marginBottom: 16,
   },
   previewImage: { width: "100%", height: "100%" },
   placeholderBox: { flex: 1, justifyContent: "center", alignItems: "center" },
+  resetButton: {
+    backgroundColor: "#EF4444",
+    paddingVertical: 10,
+    borderRadius: 10,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 12,
+  },
+  resetText: { color: "#FFF", fontWeight: "bold", fontSize: 13 },
   actionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 20,
+    marginVertical: 16,
   },
   pickerBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    width: "48%",
-    padding: 14,
+    width: "31%",
+    paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
   },
-  pickerText: { fontWeight: "bold", marginLeft: 8 },
+  pickerText: { fontWeight: "bold", marginLeft: 4, fontSize: 12 },
   analyzeBtn: {
     backgroundColor: "#10B981",
     padding: 16,
@@ -467,6 +621,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   analyzeBtnText: { color: "#FFF", fontWeight: "bold", fontSize: 16 },
+  closeBarcodeBtn: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    padding: 10,
+    borderRadius: 25,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
