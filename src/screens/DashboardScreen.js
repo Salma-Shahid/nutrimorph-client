@@ -35,18 +35,23 @@ export default function DashboardScreen({ navigation }) {
 
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
-  // Focus effect to sync Dashboard with database on tab switch
+  // Device local date in YYYY-MM-DD format
+  const getLocalDate = () => new Date().toLocaleDateString("en-CA");
+
+  // Focus effect to sync Dashboard with database on tab switch using local date
   useFocusEffect(
     useCallback(() => {
-      fetchTodayMeals();
-      fetchWaterIntake();
+      const todayDate = getLocalDate();
+      fetchTodayMeals(todayDate);
+      fetchWaterIntake(todayDate);
       fetchWeeklySummary();
     }, []),
   );
 
   const handleWaterChange = async (newGlasses) => {
     if (newGlasses < 0) return;
-    await updateWaterIntake(newGlasses);
+    const todayDate = getLocalDate();
+    await updateWaterIntake(newGlasses, todayDate);
   };
 
   const handleDeleteMeal = (mealId, mealName) => {
@@ -62,6 +67,9 @@ export default function DashboardScreen({ navigation }) {
             const res = await deleteMeal(mealId);
             if (!res.success) {
               Alert.alert("Error", res.message || "Could not delete meal.");
+            } else {
+              // Deletion ke baad local date se refresh karein
+              fetchTodayMeals(getLocalDate());
             }
           },
         },
@@ -144,7 +152,7 @@ export default function DashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* 💧 Water Tracker Card (Synced with Mongo DB) */}
+        {/* 💧 Water Tracker Card */}
         <View
           style={[
             styles.card,
@@ -359,7 +367,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 16, fontWeight: "bold" },
   statsRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    justify: "space-around",
     marginVertical: 16,
   },
   statItem: { alignItems: "center" },
@@ -368,7 +376,7 @@ const styles = StyleSheet.create({
   historyBtn: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justify: "center",
     padding: 12,
     borderRadius: 10,
     marginTop: 6,
@@ -376,27 +384,27 @@ const styles = StyleSheet.create({
   historyBtnText: { fontWeight: "600", marginLeft: 8, fontSize: 13 },
   waterHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justify: "space-between",
     alignItems: "center",
     marginBottom: 14,
   },
   waterControls: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justify: "space-between",
   },
   waterBtn: {
     backgroundColor: "#64748B",
     width: 38,
     height: 38,
     borderRadius: 19,
-    justifyContent: "center",
+    justify: "center",
     alignItems: "center",
   },
   waterCountText: { fontSize: 16, fontWeight: "bold" },
   weeklyRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justify: "space-between",
     paddingVertical: 4,
     borderBottomWidth: 0.5,
     borderBottomColor: "#334155",
@@ -412,7 +420,7 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
+    justify: "center",
     padding: 20,
   },
   modalContent: {
@@ -423,14 +431,14 @@ const styles = StyleSheet.create({
   },
   modalHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justify: "space-between",
     alignItems: "center",
     marginBottom: 16,
   },
   modalTitle: { fontSize: 18, fontWeight: "bold" },
   historyItem: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justify: "space-between",
     alignItems: "center",
     padding: 12,
     borderRadius: 10,
