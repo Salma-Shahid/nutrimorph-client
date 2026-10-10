@@ -20,9 +20,13 @@
       "softwareKeyboardLayoutMode": "resize",
       "usesCleartextTraffic": true,
       "package": "com.nutrimorph.app",
+      "googleServicesFile": "./google-services.json",
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34,
+      "multidexEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0d4e45"
+        "backgroundColor": "#0F172A"
       },
       "permissions": [
         "CAMERA",
@@ -30,10 +34,13 @@
         "WRITE_EXTERNAL_STORAGE",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
-      ]
+      ],
+      "config": {
+        "googleMobileAdsAppId": "ca-app-pub-3940256099942544~3347511713"
+      }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.favicon"
     },
     "plugins": [
       [
@@ -42,7 +49,11 @@
           "cameraPermission": "Allow NutriMorph to access your camera to scan meals and analyze food photos for AI nutrition tracking."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-image-picker",
+      "expo-font",
+      "@react-native-firebase/app",
+      "@react-native-firebase/crashlytics"
     ],
     "extra": {
       "eas": {

@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
+import NotificationSettings from "../components/NotificationSettings"; // 👈 Import Notification Settings component
 
 export default function ProfileScreen({ navigation }) {
   const {
@@ -25,7 +26,7 @@ export default function ProfileScreen({ navigation }) {
     updateProfile,
     toggleSubscriptionTier,
     logout,
-    deleteAccount, // 👈 Delete account store action
+    deleteAccount,
     isLoading,
   } = useAuthStore();
   const colors = getThemeColors(theme);
@@ -312,6 +313,9 @@ export default function ProfileScreen({ navigation }) {
             />
           </View>
         </View>
+
+        {/* 🔔 Notifications Settings Card */}
+        <NotificationSettings />
 
         {/* Plan Switcher Box */}
         <View

@@ -14,6 +14,7 @@ import {
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import Purchases from "react-native-purchases";
+import crashlytics from "@react-native-firebase/crashlytics";
 import { useAuthStore } from "./src/store/useAuthStore";
 
 import AppNavigator from "./src/navigation/AppNavigator";
@@ -35,6 +36,22 @@ export default function App() {
       try {
         if (typeof loadStorage === "function") {
           await loadStorage();
+        }
+
+        // 🛡️ Safety check: Firebase Crashlytics initialization guard
+        try {
+          if (
+            typeof crashlytics === "function" ||
+            crashlytics()?.setCrashlyticsCollectionEnabled
+          ) {
+            await crashlytics().setCrashlyticsCollectionEnabled(true);
+            console.log("Firebase Crashlytics initialized successfully.");
+          }
+        } catch (firebaseErr) {
+          console.log(
+            "Firebase Crashlytics native module not available in Expo Go. Skipping.",
+            firebaseErr,
+          );
         }
 
         // 🛡️ Safety check: Safe RevenueCat guard for standard Expo Go

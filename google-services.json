@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "907953926262",
+    "project_id": "nutrimorph-103a9",
+    "storage_bucket": "nutrimorph-103a9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:907953926262:android:c9441163a692c17dbb2f57",
+        "android_client_info": {
+          "package_name": "com.nutrimorph.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBtzqIIgcro2fhdmtSDfwMXSGXYonJK9VE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -15,6 +15,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useAuthStore } from "../store/useAuthStore";
 import { useMealStore } from "../store/useMealStore";
 import { getThemeColors } from "../theme/colors";
+import AdBanner from "../components/AdBanner";
 
 export default function DashboardScreen({ navigation }) {
   const user = useAuthStore((state) => state.user);
@@ -346,6 +347,7 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+      <AdBanner />
     </SafeAreaView>
   );
 }
