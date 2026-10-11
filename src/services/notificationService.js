@@ -60,3 +60,27 @@ export async function scheduleWaterReminder() {
     },
   });
 }
+
+// 🛡️ Ensure water reminder is always active (Prevents it from turning off automatically)
+export async function ensureWaterReminderScheduled() {
+  try {
+    const scheduledNotifications =
+      await Notifications.getAllScheduledNotificationsAsync();
+
+    const hasWaterReminder = scheduledNotifications.some(
+      (notification) =>
+        notification.content.title === "Time to Drink Water! 💧",
+    );
+
+    if (!hasWaterReminder) {
+      await scheduleWaterReminder();
+      console.log(
+        "Water reminder was missing and has been re-scheduled automatically.",
+      );
+    } else {
+      console.log("Water reminder is already active.");
+    }
+  } catch (error) {
+    console.error("Error ensuring water reminder is scheduled:", error);
+  }
+}

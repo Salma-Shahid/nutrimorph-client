@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import Purchases from "react-native-purchases";
 import crashlytics from "@react-native-firebase/crashlytics";
 import { useAuthStore } from "./src/store/useAuthStore";
+import { ensureWaterReminderScheduled } from "./src/services/notificationService";
 
 import AppNavigator from "./src/navigation/AppNavigator";
 import LogFoodScreen from "./src/screens/LogFoodScreen";
@@ -23,6 +24,7 @@ import LoginScreen from "./src/screens/LoginScreen";
 import SignupScreen from "./src/screens/SignupScreen";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import SubscriptionScreen from "./src/screens/SubscriptionScreen";
+import SavedMealsScreen from "./src/screens/SavedMealsScreen"; // Path apne folder ke mutabiq adjust kar lein
 
 const Stack = createNativeStackNavigator();
 
@@ -37,6 +39,9 @@ export default function App() {
         if (typeof loadStorage === "function") {
           await loadStorage();
         }
+
+        // 💧 Ensure water notification reminder is scheduled on app start
+        await ensureWaterReminderScheduled();
 
         // 🛡️ Safety check: Firebase Crashlytics initialization guard
         try {
@@ -127,6 +132,10 @@ export default function App() {
                 {/* Main Flow with Bottom Tabs */}
                 <Stack.Screen name="MainTabs" component={AppNavigator} />
                 <Stack.Screen name="LogFoodScreen" component={LogFoodScreen} />
+                <Stack.Screen
+                  name="SavedMealsScreen"
+                  component={SavedMealsScreen}
+                />
                 <Stack.Screen
                   name="SubscriptionScreen"
                   component={SubscriptionScreen}

@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useMealStore } from "../store/useMealStore";
 
 function WaterTracker({ date }) {
@@ -26,12 +27,19 @@ function WaterTracker({ date }) {
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.title}>Water Intake 💧</Text>
-          <Text style={styles.subTitle}>
-            {currentMl} / {targetMl} ml ({waterIntake}/8 glasses)
-          </Text>
+        <View style={styles.titleContainer}>
+          <Ionicons name="water" size={22} color="#38BDF8" />
+          <Text style={styles.title}>Water Tracker</Text>
         </View>
+        <Text style={styles.targetText}>
+          {currentMl} ml / {targetMl} ml
+        </Text>
+      </View>
+
+      <View style={styles.middleRow}>
+        <Text style={styles.glassesText}>
+          {waterIntake} Glasses <Text style={styles.glassEmoji}>🥛</Text>
+        </Text>
         <Text style={styles.percentageText}>{percentage}%</Text>
       </View>
 
@@ -58,7 +66,7 @@ function WaterTracker({ date }) {
           style={[styles.btn, styles.btnPrimary]}
           onPress={handleAddGlass}
         >
-          <Text style={styles.btnTextPrimary}>+ 1 Glass 🥛</Text>
+          <Text style={styles.btnTextPrimary}>+ 1 Glass</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -67,33 +75,45 @@ function WaterTracker({ date }) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#1e1e1e",
+    backgroundColor: "#1E293B",
     borderRadius: 16,
     padding: 18,
-    marginHorizontal: 20,
-    marginBottom: 20,
+    marginHorizontal: 16,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#2a2a2a",
+    borderColor: "#334155",
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 8,
+  },
+  titleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  title: { color: "#F8FAFC", fontSize: 16, fontWeight: "bold" },
+  targetText: { color: "#94A3B8", fontSize: 13, fontWeight: "500" },
+  middleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
-  title: { color: "#fff", fontSize: 16, fontWeight: "bold" },
-  subTitle: { color: "#aaa", fontSize: 12, marginTop: 2 },
-  percentageText: { color: "#3B82F6", fontSize: 16, fontWeight: "bold" },
+  glassesText: { color: "#E2E8F0", fontSize: 14, fontWeight: "600" },
+  percentageText: { color: "#38BDF8", fontSize: 15, fontWeight: "bold" },
   progressBg: {
     height: 8,
-    backgroundColor: "#2a2a2a",
+    backgroundColor: "#334155",
     borderRadius: 4,
     overflow: "hidden",
-    marginBottom: 16,
+    marginBottom: 14,
   },
   progressFill: {
     height: "100%",
-    backgroundColor: "#3B82F6",
+    backgroundColor: "#38BDF8",
     borderRadius: 4,
   },
   btnRow: { flexDirection: "row", gap: 10 },
@@ -103,13 +123,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
   },
-  btnPrimary: { backgroundColor: "#1d3557" },
-  btnSecondary: { backgroundColor: "#2a2a2a" },
+  btnPrimary: { backgroundColor: "#0284C7" },
+  btnSecondary: { backgroundColor: "#334155" },
   btnDisabled: { opacity: 0.4 },
-  btnTextPrimary: { color: "#60A5FA", fontWeight: "bold" },
-  btnTextSecondary: { color: "#aaa", fontWeight: "bold" },
+  btnTextPrimary: { color: "#FFFFFF", fontWeight: "bold", fontSize: 13 },
+  btnTextSecondary: { color: "#CBD5E1", fontWeight: "bold", fontSize: 13 },
 });
 
-// Clean single named and default export
 export { WaterTracker };
 export default WaterTracker;

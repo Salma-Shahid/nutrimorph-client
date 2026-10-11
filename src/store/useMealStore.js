@@ -8,6 +8,7 @@ const BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app";
 const API_URL = `${BASE_URL}/api/meals`;
 const WATER_API_URL = `${BASE_URL}/api/water`;
+const SAVED_MEALS_API_URL = `${BASE_URL}/api/saved-meals`;
 
 // Local Timezone YYYY-MM-DD Date Helper (Avoids UTC Timezone mismatch)
 const getTodayDateString = () => {
@@ -32,6 +33,7 @@ export const useMealStore = create((set, get) => ({
   totalCalories: 0, // Direct state for Dashboard Screen
   weeklyHistory: [],
   waterIntake: 0,
+  savedMeals: [], // Saved meals / recipes list
   selectedDate: getTodayDateString(),
   isLoading: false,
 
@@ -153,7 +155,64 @@ export const useMealStore = create((set, get) => ({
     }
   },
 
-  // 4. Log Meal
+  // 4. Saved Meals / Recipes Methods
+  fetchSavedMeals: async () => {
+    try {
+      const token = await getToken();
+      const res = await axios.get(SAVED_MEALS_API_URL, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.data?.success) {
+        set({ savedMeals: res.data.data || [] });
+      }
+    } catch (error) {
+      console.error("Error fetching saved meals:", error.message);
+    }
+  },
+
+  saveMealRecipe: async (mealData) => {
+    try {
+      const token = await getToken();
+      const res = await axios.post(SAVED_MEALS_API_URL, mealData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.data?.success) {
+        await get().fetchSavedMeals();
+        return { success: true, message: "Meal recipe saved successfully!" };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || "Failed to save meal recipe",
+      };
+    }
+  },
+
+  deleteSavedMeal: async (recipeId) => {
+    try {
+      const token = await getToken();
+      const res = await axios.delete(`${SAVED_MEALS_API_URL}/${recipeId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.data?.success) {
+        set((state) => ({
+          savedMeals: state.savedMeals.filter((item) => item._id !== recipeId),
+        }));
+        return { success: true };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message:
+          error.response?.data?.message || "Failed to delete saved recipe",
+      };
+    }
+  },
+
+  // 5. Log Meal
   logMeal: async (mealData) => {
     set({ isLoading: true });
     try {
@@ -183,7 +242,7 @@ export const useMealStore = create((set, get) => ({
     }
   },
 
-  // 5. Update Meal
+  // 6. Update Meal
   updateMeal: async (mealId, updatedValues) => {
     try {
       const token = await getToken();
@@ -211,10 +270,10 @@ export const useMealStore = create((set, get) => ({
     }
   },
 
-  // 6. Delete Meal
+  // 7. Delete Meal
   deleteMeal: async (mealId) => {
     try {
-      const token = await getToken();
+      const token = awaitgetToken();
       const res = await axios.delete(`${API_URL}/${mealId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -236,7 +295,7 @@ export const useMealStore = create((set, get) => ({
     }
   },
 
-  // 7. AI Scan Image Meal
+  // 8. AI Scan Image Meal
   scanMealImage: async (imageBase64) => {
     set({ isLoading: true });
     try {
@@ -262,7 +321,7 @@ export const useMealStore = create((set, get) => ({
     }
   },
 
-  // 8. AI Analyze Text Meal
+  // 9. AI Analyze Text Meal
   analyzeTextMeal: async (text) => {
     try {
       const token = await getToken();

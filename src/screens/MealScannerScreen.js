@@ -182,7 +182,6 @@ export default function MealScannerScreen({ navigation }) {
     try {
       const cleanBarcode = String(barcode).trim();
 
-      // 1. Try Open Food Facts API first
       const response = await axios.get(
         `https://world.openfoodfacts.org/api/v2/product/${cleanBarcode}.json`,
         { validateStatus: (status) => status < 500, timeout: 6000 },
@@ -215,7 +214,6 @@ export default function MealScannerScreen({ navigation }) {
         setConfidence("High (Barcode)");
         setModalVisible(true);
       } else {
-        // 2. 🟢 Fallback Alert: Offer user to use AI photo scan or manual entry
         Alert.alert(
           "Product Not Registered 🔍",
           "This barcode isn't in the global database yet. Please take a photo of the food item or nutrition label using Camera/Gallery for AI scanning.",
@@ -278,6 +276,7 @@ export default function MealScannerScreen({ navigation }) {
         date: localDate,
       };
 
+      // 1. Log meal to daily diary
       await axios.post(`${API_BASE}/meals/log`, payload, {
         headers: {
           Authorization: `Bearer ${activeToken}`,
@@ -285,15 +284,38 @@ export default function MealScannerScreen({ navigation }) {
         },
       });
 
+      // 2. Automatically save as a recipe / saved meal
+      try {
+        await axios.post(
+          `${API_BASE}/saved-meals`,
+          {
+            name: foodName.trim(),
+            calories: Number(calories) || 0,
+            protein: Number(protein) || 0,
+            carbs: Number(carbs) || 0,
+            fats: Number(fats) || 0,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${activeToken}`,
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      } catch (recipeErr) {
+        console.log("Saved recipe note:", recipeErr.message);
+      }
+
       setModalVisible(false);
       setImageUri(null);
       setImageBase64(null);
 
       Alert.alert(
         "Meal Saved! 🎉",
-        `${foodName} logged into your diary successfully.`,
+        `${foodName} logged into your diary and added to your saved recipes successfully.`,
       );
     } catch (error) {
+      console.error("Save Error:", error);
       Alert.alert("Save Error", "Failed to save meal entry to diary.");
     } finally {
       setSavingMeal(false);
@@ -350,43 +372,56 @@ export default function MealScannerScreen({ navigation }) {
           </TouchableOpacity>
         )}
 
-        {/* Picker Actions: Camera, Gallery, Barcode */}
-        <View style={styles.actionRow}>
+        {/* Picker Actions: Camera, Gallery, Saved Recipes, Barcode (2x2 Grid Layout) */}
+        <View style={styles.actionGrid}>
           <TouchableOpacity
             style={[
-              styles.pickerBtn,
+              styles.gridBtn,
               { backgroundColor: colors.cardBg, borderColor: colors.border },
             ]}
             onPress={() => pickImage(true)}
           >
             <Ionicons name="camera" size={18} color="#10B981" />
-            <Text style={[styles.pickerText, { color: colors.text }]}>
+            <Text style={[styles.gridBtnText, { color: colors.text }]}>
               Camera
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
-              styles.pickerBtn,
+              styles.gridBtn,
               { backgroundColor: colors.cardBg, borderColor: colors.border },
             ]}
             onPress={() => pickImage(false)}
           >
             <Ionicons name="images" size={18} color="#10B981" />
-            <Text style={[styles.pickerText, { color: colors.text }]}>
+            <Text style={[styles.gridBtnText, { color: colors.text }]}>
               Gallery
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
-              styles.pickerBtn,
+              styles.gridBtn,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+            onPress={() => navigation.navigate("SavedMealsScreen")}
+          >
+            <Ionicons name="bookmark-outline" size={18} color="#38BDF8" />
+            <Text style={[styles.gridBtnText, { color: colors.text }]}>
+              Saved Recipes
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.gridBtn,
               { backgroundColor: colors.cardBg, borderColor: colors.border },
             ]}
             onPress={handleOpenBarcodeScanner}
           >
             <Ionicons name="barcode-outline" size={18} color="#3B82F6" />
-            <Text style={[styles.pickerText, { color: colors.text }]}>
+            <Text style={[styles.gridBtnText, { color: colors.text }]}>
               Barcode
             </Text>
           </TouchableOpacity>
@@ -600,21 +635,23 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   resetText: { color: "#FFF", fontWeight: "bold", fontSize: 13 },
-  actionRow: {
+  actionGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     marginVertical: 16,
+    gap: 10,
   },
-  pickerBtn: {
+  gridBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    width: "31%",
+    width: "48%",
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
   },
-  pickerText: { fontWeight: "bold", marginLeft: 4, fontSize: 12 },
+  gridBtnText: { fontWeight: "bold", marginLeft: 6, fontSize: 13 },
   analyzeBtn: {
     backgroundColor: "#10B981",
     padding: 16,
