@@ -273,7 +273,7 @@ export const useMealStore = create((set, get) => ({
   // 7. Delete Meal
   deleteMeal: async (mealId) => {
     try {
-      const token = awaitgetToken();
+      const token = await getToken(); // Fixed typo here (added space)
       const res = await axios.delete(`${API_URL}/${mealId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
