@@ -32,6 +32,7 @@ export const useMealStore = create((set, get) => ({
   meals: [], // Alias for Dashboard Screen compatibility
   totalCalories: 0, // Direct state for Dashboard Screen
   weeklyHistory: [],
+  weeklyAiInsight: "",
   waterIntake: 0,
   savedMeals: [], // Saved meals / recipes list
   selectedDate: getTodayDateString(),
@@ -97,7 +98,12 @@ export const useMealStore = create((set, get) => ({
       });
 
       if (res.data?.success) {
-        set({ weeklyHistory: res.data.data });
+        // Backend now returns an object containing weeklyHistory array and aiInsight
+        const responseData = res.data.data;
+        set({
+          weeklyHistory: responseData.weeklyHistory || [],
+          weeklyAiInsight: responseData.aiInsight || "",
+        });
       }
     } catch (error) {
       console.error(

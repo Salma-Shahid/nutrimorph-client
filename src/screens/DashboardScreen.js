@@ -31,6 +31,7 @@ export default function DashboardScreen({ navigation }) {
     updateWaterIntake,
     deleteMeal,
     weeklyHistory,
+    weeklyAiInsight,
     fetchWeeklySummary,
   } = useMealStore();
 
@@ -198,7 +199,7 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        {/* 📊 Weekly Record Card */}
+        {/* 📊 Weekly Record & AI Insight Card */}
         <View
           style={[
             styles.card,
@@ -208,8 +209,47 @@ export default function DashboardScreen({ navigation }) {
           <Text
             style={[styles.cardTitle, { color: colors.text, marginBottom: 12 }]}
           >
-            Weekly Calorie History
+            Weekly Calorie History & AI Insights
           </Text>
+
+          {/* AI Insight Badge / Card */}
+          {weeklyAiInsight ? (
+            <View
+              style={{
+                backgroundColor: colors.inputBg,
+                padding: 12,
+                borderRadius: 10,
+                marginBottom: 14,
+                borderWidth: 1,
+                borderColor: "#10B981",
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: 4,
+                }}
+              >
+                <Ionicons
+                  name="sparkles"
+                  size={16}
+                  color="#10B981"
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  style={{ color: "#10B981", fontWeight: "bold", fontSize: 13 }}
+                >
+                  Gemini AI Coach
+                </Text>
+              </View>
+              <Text
+                style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}
+              >
+                {weeklyAiInsight}
+              </Text>
+            </View>
+          ) : null}
 
           {!weeklyHistory || weeklyHistory.length === 0 ? (
             <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
@@ -249,6 +289,31 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.actionCardText}>Scan Food</Text>
           </TouchableOpacity>
         </View>
+        {/* 🥗 AI Meal Plan Button */}
+        <TouchableOpacity
+          style={[
+            styles.card,
+            {
+              backgroundColor: "#8B5CF6",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+              marginTop: 10,
+            },
+          ]}
+          onPress={() => navigation.navigate("MealPlan")} // Make sure route name matches your navigator
+        >
+          <Ionicons
+            name="restaurant-outline"
+            size={22}
+            color="#FFF"
+            style={{ marginRight: 8 }}
+          />
+          <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 15 }}>
+            View AI Meal Plan
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {/* 📜 Meal History & Delete Modal */}

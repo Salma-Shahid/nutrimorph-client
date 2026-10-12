@@ -7,6 +7,7 @@ import DashboardScreen from "../screens/DashboardScreen";
 import MealScannerScreen from "../screens/MealScannerScreen";
 import ChatBotScreen from "../screens/ChatBotScreen";
 import ProfileScreen from "../screens/ProfileScreen";
+import MealPlanScreen from "../screens/MealPlanScreen";
 
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
@@ -31,6 +32,8 @@ export default function AppNavigator() {
           let iconName = "grid-outline";
           if (route.name === "Dashboard") iconName = "grid-outline";
           else if (route.name === "Scan Meal") iconName = "scan-outline";
+          else if (route.name === "Meal Plan")
+            iconName = "restaurant-outline"; // 🟢 Added Icon for Meal Plan
           else if (route.name === "NutriBot") iconName = "chatbubbles-outline";
           else if (route.name === "Profile") iconName = "person-outline";
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -38,6 +41,11 @@ export default function AppNavigator() {
       })}
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
+      <Tab.Screen
+        name="Meal Plan"
+        component={MealPlanScreen}
+        options={{ tabBarLabel: "Meal Plan" }}
+      />
       <Tab.Screen name="Scan Meal" component={MealScannerScreen} />
       <Tab.Screen name="NutriBot" component={ChatBotScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
