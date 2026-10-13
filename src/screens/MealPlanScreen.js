@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMealPlanStore } from "../store/useMealPlanStore";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
+import { saveDataToCache, getDataFromCache } from "../utils/cache"; // 🟢 Offline Cache Utility Import
 
 export default function MealPlanScreen({ navigation }) {
   const user = useAuthStore((state) => state.user);
@@ -42,8 +43,29 @@ export default function MealPlanScreen({ navigation }) {
   const durationOptions = [3, 5, 7, 15, 30];
 
   useEffect(() => {
-    fetchActiveMealPlan();
+    const loadMealPlan = async () => {
+      try {
+        // 1. Fetch fresh plan from API
+        await fetchActiveMealPlan();
+      } catch (error) {
+        console.log("⚠️ Network offline. Checking for cached meal plan...");
+        // 2. Fallback to cached meal plan if offline
+        const cachedPlan = await getDataFromCache("active_meal_plan");
+        if (cachedPlan) {
+          useMealPlanStore.setState({ activeMealPlan: cachedPlan });
+        }
+      }
+    };
+
+    loadMealPlan();
   }, []);
+
+  // Save active meal plan to cache whenever it updates
+  useEffect(() => {
+    if (activeMealPlan) {
+      saveDataToCache("active_meal_plan", activeMealPlan);
+    }
+  }, [activeMealPlan]);
 
   const handleGenerate = async () => {
     const res = await generateMealPlan({
@@ -61,7 +83,7 @@ export default function MealPlanScreen({ navigation }) {
           { text: "Cancel", style: "cancel" },
           {
             text: "Upgrade to Pro",
-            onPress: () => navigation.navigate("Subscription"), // Agar aapki paywall screen ka naam Subscription / Upgrade / Premium hai toh woh yahan likhein
+            onPress: () => navigation.navigate("Subscription"),
           },
         ],
       );

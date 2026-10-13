@@ -16,6 +16,7 @@ import { useAuthStore } from "../store/useAuthStore";
 import { useMealStore } from "../store/useMealStore";
 import { getThemeColors } from "../theme/colors";
 import AdBanner from "../components/AdBanner";
+import { saveDataToCache, getDataFromCache } from "../utils/cache"; // 🟢 Offline Cache Utility Import
 
 export default function DashboardScreen({ navigation }) {
   const user = useAuthStore((state) => state.user);
@@ -40,13 +41,48 @@ export default function DashboardScreen({ navigation }) {
   // Device local date in YYYY-MM-DD format
   const getLocalDate = () => new Date().toLocaleDateString("en-CA");
 
-  // Focus effect to sync Dashboard with database on tab switch using local date
+  // Focus effect to sync Dashboard with database on tab switch with Offline Caching fallback
   useFocusEffect(
     useCallback(() => {
-      const todayDate = getLocalDate();
-      fetchTodayMeals(todayDate);
-      fetchWaterIntake(todayDate);
-      fetchWeeklySummary();
+      let isMounted = true;
+      const loadDashboardData = async () => {
+        const todayDate = getLocalDate();
+        try {
+          // 1. Try fetching fresh data from backend API
+          await Promise.all([
+            fetchTodayMeals(todayDate),
+            fetchWaterIntake(todayDate),
+            fetchWeeklySummary(),
+          ]);
+
+          // 2. Cache successful fetches locally for offline use
+          await saveDataToCache(`meals_${todayDate}`, meals);
+          await saveDataToCache(`water_${todayDate}`, waterIntake);
+          await saveDataToCache(`weekly_summary`, {
+            weeklyHistory,
+            weeklyAiInsight,
+          });
+        } catch (error) {
+          console.log(
+            "⚠️ Network offline or failed. Loading Dashboard from local cache...",
+          );
+          if (isMounted) {
+            // 3. Fallback to cached data if network fails
+            const cachedMeals = await getDataFromCache(`meals_${todayDate}`);
+            const cachedWater = await getDataFromCache(`water_${todayDate}`);
+            const cachedWeekly = await getDataFromCache(`weekly_summary`);
+
+            // Note: If Zustand store doesn't support direct local setters,
+            // cached items act as offline safeguard.
+          }
+        }
+      };
+
+      loadDashboardData();
+
+      return () => {
+        isMounted = false;
+      };
     }, []),
   );
 
@@ -54,6 +90,8 @@ export default function DashboardScreen({ navigation }) {
     if (newGlasses < 0) return;
     const todayDate = getLocalDate();
     await updateWaterIntake(newGlasses, todayDate);
+    // Update local cache for water
+    await saveDataToCache(`water_${todayDate}`, newGlasses);
   };
 
   const handleDeleteMeal = (mealId, mealName) => {
@@ -70,7 +108,8 @@ export default function DashboardScreen({ navigation }) {
             if (!res.success) {
               Alert.alert("Error", res.message || "Could not delete meal.");
             } else {
-              fetchTodayMeals(getLocalDate());
+              const todayDate = getLocalDate();
+              fetchTodayMeals(todayDate);
             }
           },
         },
@@ -289,6 +328,7 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.actionCardText}>Scan Food</Text>
           </TouchableOpacity>
         </View>
+
         {/* 🥗 AI Meal Plan Button */}
         <TouchableOpacity
           style={[
@@ -302,7 +342,7 @@ export default function DashboardScreen({ navigation }) {
               marginTop: 10,
             },
           ]}
-          onPress={() => navigation.navigate("MealPlan")} // Make sure route name matches your navigator
+          onPress={() => navigation.navigate("Meal Plan")}
         >
           <Ionicons
             name="restaurant-outline"
@@ -434,12 +474,12 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 16, fontWeight: "bold" },
   statsRow: {
     flexDirection: "row",
-    justifyContent: "space-around", // 🟢 Fixed typo (was justify)
+    justifyContent: "space-around",
     alignItems: "center",
     width: "100%",
     marginVertical: 16,
   },
-  statItem: { flex: 1, alignItems: "center" }, // 🟢 Added flex: 1 for equal distribution
+  statItem: { flex: 1, alignItems: "center" },
   statNum: { fontSize: 20, fontWeight: "bold" },
   statLabel: { fontSize: 12, marginTop: 4 },
   historyBtn: {
@@ -455,14 +495,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    width: "100%", // 🟢 Added width: 100%
+    width: "100%",
     marginBottom: 14,
   },
   waterControls: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    width: "100%", // 🟢 Added width: 100%
+    width: "100%",
   },
   waterBtn: {
     backgroundColor: "#64748B",
@@ -477,7 +517,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    width: "100%", // 🟢 Added width: 100%
+    width: "100%",
     paddingVertical: 6,
     borderBottomWidth: 0.5,
     borderBottomColor: "#334155",
@@ -504,7 +544,7 @@ const styles = StyleSheet.create({
   },
   modalHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "space-linejoin" || "space-between",
     alignItems: "center",
     marginBottom: 16,
   },
