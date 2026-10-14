@@ -60,7 +60,7 @@ const CustomAppLoader = ({ size = 60, text = "NutriBot is thinking..." }) => {
 
       {/* Animated App Icon */}
       <Animated.Image
-        source={require("../../assets/chatbot.png")} // Change to your app logo/icon path
+        source={require("../../assets/icon.png")} // Change to your app logo/icon path
         style={[
           styles.logo,
           {
