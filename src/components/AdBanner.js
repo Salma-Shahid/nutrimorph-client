@@ -1,25 +1,29 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
-import {
-  BannerAd,
-  BannerAdSize,
-  TestIds,
-} from "react-native-google-mobile-ads";
 import { useAuthStore } from "../store/useAuthStore";
 
-// Testing ke liye TestIds.BANNER use hoga. Play Store release ke waqt yahan apni real Ad Unit ID dal dijiyega.
-const adUnitId = __DEV__
-  ? TestIds.BANNER
-  : "ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy";
+let BannerAd, BannerAdSize, TestIds;
+try {
+  const MobileAds = require("react-native-google-mobile-ads");
+  BannerAd = MobileAds.BannerAd;
+  BannerAdSize = MobileAds.BannerAdSize;
+  TestIds = MobileAds.TestIds;
+} catch (e) {
+  console.log("AdMob native module not found in this runtime environment.");
+}
 
 export default function AdBanner() {
   const user = useAuthStore((state) => state.user);
   const isPro = user?.subscriptionTier === "pro" || user?.isPro === true;
 
-  // 👑 Pro users ke liye ads show nahi honge
-  if (isPro) {
+  // Agar Pro user hai ya native module runtime mein load nahi hua (Expo Go)
+  if (isPro || !BannerAd) {
     return null;
   }
+
+  const adUnitId = __DEV__
+    ? TestIds.BANNER
+    : "ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy";
 
   return (
     <View style={styles.container}>
