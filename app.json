@@ -17,6 +17,7 @@
       "bundleIdentifier": "com.nutrimorph.app"
     },
     "android": {
+      "versionCode": 1,
       "softwareKeyboardLayoutMode": "resize",
       "usesCleartextTraffic": true,
       "package": "com.nutrimorph.app",
@@ -40,6 +41,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0F172A",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200
+        }
+      ],
       [
         "expo-camera",
         {
