@@ -7,9 +7,9 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash-logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0F172A"
+      "backgroundColor": "#020617"
     },
     "assetBundlePatterns": ["**/*"],
     "ios": {
@@ -44,8 +44,8 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0F172A",
-          "image": "./assets/splash-icon.png",
+          "backgroundColor": "#020617",
+          "image": "./assets/splash-logo.png",
           "imageWidth": 200
         }
       ],
