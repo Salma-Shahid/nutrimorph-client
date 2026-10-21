@@ -16,12 +16,14 @@ import { useAuthStore } from "../store/useAuthStore";
 import { useMealStore } from "../store/useMealStore";
 import { getThemeColors } from "../theme/colors";
 import AdBanner from "../components/AdBanner";
-import { saveDataToCache, getDataFromCache } from "../utils/cache"; // 🟢 Offline Cache Utility Import
+import { saveDataToCache, getDataFromCache } from "../utils/cache";
+import StreakHeader from "../components/StreakHeader";
 
 export default function DashboardScreen({ navigation }) {
   const user = useAuthStore((state) => state.user);
   const theme = useAuthStore((state) => state.theme);
   const colors = getThemeColors(theme);
+  const updateUserStats = useAuthStore((state) => state.updateUserStats);
 
   const {
     meals,
@@ -41,39 +43,39 @@ export default function DashboardScreen({ navigation }) {
   // Device local date in YYYY-MM-DD format
   const getLocalDate = () => new Date().toLocaleDateString("en-CA");
 
-  // Focus effect to sync Dashboard with database on tab switch with Offline Caching fallback
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
       const loadDashboardData = async () => {
         const todayDate = getLocalDate();
         try {
-          // 1. Try fetching fresh data from backend API
           await Promise.all([
             fetchTodayMeals(todayDate),
             fetchWaterIntake(todayDate),
             fetchWeeklySummary(),
           ]);
 
-          // 2. Cache successful fetches locally for offline use
-          await saveDataToCache(`meals_${todayDate}`, meals);
-          await saveDataToCache(`water_${todayDate}`, waterIntake);
-          await saveDataToCache(`weekly_summary`, {
-            weeklyHistory,
-            weeklyAiInsight,
-          });
+          if (isMounted) {
+            const currentMeals = useMealStore.getState().meals;
+            const currentWater = useMealStore.getState().waterIntake;
+            const currentWeekly = useMealStore.getState().weeklyHistory;
+            const currentInsight = useMealStore.getState().weeklyAiInsight;
+
+            await saveDataToCache(`meals_${todayDate}`, currentMeals);
+            await saveDataToCache(`water_${todayDate}`, currentWater);
+            await saveDataToCache(`weekly_summary`, {
+              weeklyHistory: currentWeekly,
+              weeklyAiInsight: currentInsight,
+            });
+          }
         } catch (error) {
           console.log(
             "⚠️ Network offline or failed. Loading Dashboard from local cache...",
           );
           if (isMounted) {
-            // 3. Fallback to cached data if network fails
-            const cachedMeals = await getDataFromCache(`meals_${todayDate}`);
-            const cachedWater = await getDataFromCache(`water_${todayDate}`);
-            const cachedWeekly = await getDataFromCache(`weekly_summary`);
-
-            // Note: If Zustand store doesn't support direct local setters,
-            // cached items act as offline safeguard.
+            await getDataFromCache(`meals_${todayDate}`);
+            await getDataFromCache(`water_${todayDate}`);
+            await getDataFromCache(`weekly_summary`);
           }
         }
       };
@@ -89,8 +91,15 @@ export default function DashboardScreen({ navigation }) {
   const handleWaterChange = async (newGlasses) => {
     if (newGlasses < 0) return;
     const todayDate = getLocalDate();
-    await updateWaterIntake(newGlasses, todayDate);
-    // Update local cache for water
+
+    // Backend API call response capture karein
+    const res = await updateWaterIntake(newGlasses, todayDate);
+
+    // Agar backend se unlockedBadges wapis mile hain toh store update kar dein
+    if (res && res.unlockedBadges) {
+      updateUserStats({ unlockedBadges: res.unlockedBadges });
+    }
+
     await saveDataToCache(`water_${todayDate}`, newGlasses);
   };
 
@@ -117,8 +126,11 @@ export default function DashboardScreen({ navigation }) {
     );
   };
 
-  const calorieGoal = user?.dailyCalorieGoal || 2000;
-  const remainingCal = Math.max(0, calorieGoal - (totalCalories || 0));
+  const calorieGoal =
+    user?.dailyCalorieTarget || user?.dailyCalorieGoal || 2000;
+  const currentEaten = totalCalories || 0;
+  const remainingCal = Math.max(0, calorieGoal - currentEaten);
+  const isExceeded = currentEaten > calorieGoal;
   const isPro = user?.subscriptionTier === "pro" || user?.isPro === true;
 
   return (
@@ -131,8 +143,36 @@ export default function DashboardScreen({ navigation }) {
               Welcome back,
             </Text>
             <Text style={[styles.userName, { color: colors.text }]}>
-              {user?.name || "User"} 👋
+              {user?.name || "User Name"} 👋
             </Text>
+          </View>
+          {/* 🔥 Streak & Weekly Calendar Header */}
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            {/* 🏆 Achievements Button Added Here */}
+            <TouchableOpacity
+              style={[
+                styles.badge,
+                {
+                  backgroundColor: colors.inputBg,
+                  borderWidth: 1,
+                  borderColor: "#10B981",
+                },
+              ]}
+              onPress={() => navigation.navigate("Achievements")}
+            >
+              <Ionicons
+                name="trophy"
+                size={14}
+                color="#10B981"
+                style={{ marginRight: 4 }}
+              />
+              <Text
+                style={{ color: "#10B981", fontSize: 11, fontWeight: "bold" }}
+              >
+                Badges
+              </Text>
+            </TouchableOpacity>
           </View>
           <View
             style={[
@@ -144,21 +184,44 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
+        <StreakHeader streakCount={user?.streakCount || 1} colors={colors} />
+
+        {/* 🚨 Calorie Deviation Alert Banner */}
+        {isExceeded && (
+          <View style={styles.alertCard}>
+            <Ionicons name="warning" size={22} color="#EF4444" />
+            <Text style={styles.alertText}>
+              Diet Deviation Alert: You have exceeded your daily goal by{" "}
+              {currentEaten - calorieGoal} kcal!
+            </Text>
+          </View>
+        )}
+
         {/* Calorie Progress Card */}
+        {/* 📊 Daily Calorie & Milestone Progress Card */}
         <View
           style={[
             styles.card,
-            { backgroundColor: colors.cardBg, borderColor: colors.border },
+            {
+              backgroundColor: colors.cardBg,
+              borderColor: isExceeded ? "#EF4444" : colors.border,
+            },
           ]}
         >
           <Text style={[styles.cardTitle, { color: colors.text }]}>
             Daily Calorie Summary
           </Text>
 
+          {/* Calorie Stats Row */}
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Text style={[styles.statNum, { color: "#10B981" }]}>
-                {totalCalories || 0}
+              <Text
+                style={[
+                  styles.statNum,
+                  { color: isExceeded ? "#EF4444" : "#10B981" },
+                ]}
+              >
+                {currentEaten}
               </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
                 Eaten
@@ -182,6 +245,105 @@ export default function DashboardScreen({ navigation }) {
             </View>
           </View>
 
+          {/* 📈 Integrated Milestone Weight Curve Chart */}
+          <View
+            style={{
+              backgroundColor: colors.inputBg || "#111827",
+              borderRadius: 14,
+              padding: 12,
+              marginVertical: 14,
+              borderWidth: 1,
+              borderColor: "#1F2937",
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                marginBottom: 10,
+              }}
+            >
+              <View>
+                <Text
+                  style={{ color: "#EF4444", fontSize: 11, fontWeight: "bold" }}
+                >
+                  Current Weight
+                </Text>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontSize: 13,
+                    fontWeight: "bold",
+                  }}
+                >
+                  {user?.weight || 80} Kg
+                </Text>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text
+                  style={{ color: "#10B981", fontSize: 11, fontWeight: "bold" }}
+                >
+                  Target Weight
+                </Text>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontSize: 13,
+                    fontWeight: "bold",
+                  }}
+                >
+                  {user?.targetWeight || 75} Kg
+                </Text>
+              </View>
+            </View>
+
+            {/* Simulated Curve Line */}
+            <View
+              style={{
+                width: "100%",
+                height: 2,
+                backgroundColor: "#10B981",
+                marginVertical: 12,
+                position: "relative",
+              }}
+            >
+              <View
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: 6,
+                  backgroundColor: "#EF4444",
+                  position: "absolute",
+                  left: "10%",
+                  top: -5,
+                }}
+              />
+              <View
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: 6,
+                  backgroundColor: "#10B981",
+                  position: "absolute",
+                  right: "10%",
+                  top: -5,
+                }}
+              />
+            </View>
+
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 10,
+                textAlign: "center",
+                marginTop: 2,
+              }}
+            >
+              🎯 Goal Progress: Keep logging daily meals to stay on track!
+            </Text>
+          </View>
+
+          {/* View Logged History Button */}
           <TouchableOpacity
             style={[styles.historyBtn, { backgroundColor: colors.inputBg }]}
             onPress={() => setShowHistoryModal(true)}
@@ -251,7 +413,6 @@ export default function DashboardScreen({ navigation }) {
             Weekly Calorie History & AI Insights
           </Text>
 
-          {/* AI Insight Badge / Card */}
           {weeklyAiInsight ? (
             <View
               style={{
@@ -470,6 +631,18 @@ const styles = StyleSheet.create({
   userName: { fontSize: 20, fontWeight: "bold" },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   badgeText: { color: "#FFF", fontSize: 11, fontWeight: "bold" },
+  alertCard: {
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    padding: 12,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    gap: 10,
+  },
+  alertText: { color: "#991B1B", fontSize: 13, fontWeight: "600", flex: 1 },
   card: { borderRadius: 16, padding: 18, borderWidth: 1, marginBottom: 16 },
   cardTitle: { fontSize: 16, fontWeight: "bold" },
   statsRow: {
@@ -544,7 +717,7 @@ const styles = StyleSheet.create({
   },
   modalHeader: {
     flexDirection: "row",
-    justifyContent: "space-linejoin" || "space-between",
+    justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
   },

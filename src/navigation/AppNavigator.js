@@ -8,6 +8,7 @@ import MealScannerScreen from "../screens/MealScannerScreen";
 import ChatBotScreen from "../screens/ChatBotScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import MealPlanScreen from "../screens/MealPlanScreen";
+import AchievementsScreen from "../screens/AchievementsScreen";
 
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
@@ -49,6 +50,11 @@ export default function AppNavigator() {
       <Tab.Screen name="Scan Meal" component={MealScannerScreen} />
       <Tab.Screen name="NutriBot" component={ChatBotScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen
+        name="Achievements"
+        component={AchievementsScreen}
+        options={{ headerShown: false }}
+      />
     </Tab.Navigator>
   );
 }
