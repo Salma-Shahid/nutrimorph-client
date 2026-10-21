@@ -85,6 +85,47 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
+  // 🟢 Onboarding Wizard Complete Handler (Hits /api/auth/onboarding)
+  completeOnboarding: async (onboardingData) => {
+    set({ isLoading: true, error: null });
+    try {
+      const token = get().token || (await AsyncStorage.getItem("token"));
+
+      if (!token) {
+        set({ isLoading: false });
+        return { success: false, message: "Authentication token missing." };
+      }
+
+      const res = await axios.post(`${API_URL}/onboarding`, onboardingData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.data?.success && res.data?.user) {
+        const updatedUser = res.data.user;
+        await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+
+        set({
+          user: updatedUser,
+          isLoading: false,
+          error: null,
+        });
+
+        return { success: true, user: updatedUser };
+      }
+
+      set({ isLoading: false });
+      return {
+        success: false,
+        message: res.data?.message || "Onboarding submission failed.",
+      };
+    } catch (err) {
+      const errorMsg =
+        err.response?.data?.message || "Failed to complete onboarding.";
+      set({ isLoading: false, error: errorMsg });
+      return { success: false, message: errorMsg };
+    }
+  },
+
   updateProfile: async (profileData) => {
     set({ isLoading: true, error: null });
     try {
@@ -98,10 +139,28 @@ export const useAuthStore = create((set, get) => ({
         );
       }
 
+      const token = get().token;
+
+      // 🟢 If Onboarding data is passed via updateProfile, route to /onboarding endpoint
+      if (profileData.isOnboardingCompleted) {
+        if (token) {
+          const res = await axios.post(`${API_URL}/onboarding`, profileData, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (res.data?.success && res.data?.user) {
+            const backendUser = res.data.user;
+            await AsyncStorage.setItem("user", JSON.stringify(backendUser));
+            set({ user: backendUser, isLoading: false });
+            return { success: true, user: backendUser };
+          }
+        }
+      }
+
+      // Standard profile update route fallback
       await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
       set({ user: updatedUser, isLoading: false });
 
-      const token = get().token;
       if (token) {
         await axios.put(`${API_URL}/profile`, profileData, {
           headers: { Authorization: `Bearer ${token}` },

@@ -20,7 +20,6 @@ import { calculateBMI } from "../utils/bmi";
 import WaterTracker from "../components/WaterTracker";
 import CalorieChart from "../components/CalorieChart";
 
-
 export default function HomeScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -38,6 +37,9 @@ export default function HomeScreen({ navigation }) {
     updateMeal,
     setSelectedDate,
   } = useMealStore();
+
+  // Recovery Coach Modal State
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
 
   // Date Formatter Utility (YYYY-MM-DD)
   const formatDate = (date) => {
@@ -190,9 +192,13 @@ export default function HomeScreen({ navigation }) {
 
   // Calorie & Macro Calculations
   const bmiData = calculateBMI(user?.weight, user?.height);
-  const dailyCalories = user?.dailyCalories || 2000;
+  const dailyCalories = user?.dailyCalorieGoal || user?.dailyCalories || 2000;
   const consumedCalories = todaySummary?.calories || 0;
   const remainingCalories = dailyCalories - consumedCalories;
+
+  // 🔴 Diet Deviation Threshold Check
+  const isDeviated = consumedCalories > dailyCalories;
+  const excessCalories = isDeviated ? consumedCalories - dailyCalories : 0;
 
   const protein = user?.macros?.protein || 150;
   const carbs = user?.macros?.carbs || 200;
@@ -285,6 +291,42 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
+        {/* 🚨 DIET DEVIATION RED ALERT CARD */}
+        {isDeviated && (
+          <View style={styles.deviationCard}>
+            <View style={styles.deviationHeader}>
+              <View style={styles.deviationBadge}>
+                <Ionicons name="warning-sharp" size={16} color="#FF3B30" />
+                <Text style={styles.deviationBadgeText}>Diet Breach Alert</Text>
+              </View>
+              <Text style={styles.excessText}>
+                +{excessCalories} kcal over limit
+              </Text>
+            </View>
+
+            <Text style={styles.deviationSubtext}>
+              You have exceeded your daily target calorie threshold. Don't
+              worry, consistency matters most!
+            </Text>
+
+            <TouchableOpacity
+              style={styles.recoveryCoachBtn}
+              onPress={() => setIsRecoveryModalOpen(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="sparkles"
+                size={16}
+                color="#FFF"
+                style={{ marginRight: 6 }}
+              />
+              <Text style={styles.recoveryCoachBtnText}>
+                AI Recovery Advice
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Calorie Goal Card */}
         <View style={styles.calorieCard}>
           <Text style={styles.cardTitle}>Daily Calorie Goal 🎯</Text>
@@ -308,7 +350,9 @@ export default function HomeScreen({ navigation }) {
               >
                 {remainingCalories}
               </Text>
-              <Text style={styles.statLabel}>Remaining</Text>
+              <Text style={styles.statLabel}>
+                {remainingCalories < 0 ? "Exceeded" : "Remaining"}
+              </Text>
             </View>
           </View>
         </View>
@@ -408,6 +452,54 @@ export default function HomeScreen({ navigation }) {
       >
         <Ionicons name="chatbubble-ellipses" size={28} color="#ffffff" />
       </TouchableOpacity>
+
+      {/* 🤖 AI RECOVERY COACH MODAL */}
+      <Modal
+        visible={isRecoveryModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsRecoveryModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>AI Recovery Coach 🩺</Text>
+            <Text style={{ color: "#AAA", fontSize: 13, marginBottom: 15 }}>
+              Here is your immediate recovery plan for today's calorie
+              overshoot:
+            </Text>
+
+            <View style={styles.coachCard}>
+              <Text style={styles.coachPoint}>
+                💧 Drink 500ml water to reduce bloat.
+              </Text>
+              <Text style={styles.coachPoint}>
+                🚶 20-minute light walk will boost digestion.
+              </Text>
+              <Text style={styles.coachPoint}>
+                🥗 Keep your next meal lean with high-protein greens.
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.modalBtn,
+                { backgroundColor: "#10B981", marginTop: 15 },
+              ]}
+              onPress={() => setIsRecoveryModalOpen(false)}
+            >
+              <Text
+                style={{
+                  color: "#fff",
+                  fontWeight: "bold",
+                  textAlign: "center",
+                }}
+              >
+                Got It, Let's Recover!
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Edit Meal Modal */}
       <Modal
@@ -568,6 +660,59 @@ const styles = StyleSheet.create({
   dateArrowBtn: { padding: 4 },
   dateArrowText: { color: "#4CAF50", fontSize: 16, fontWeight: "bold" },
   dateText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+
+  /* 🚨 Diet Deviation Card Styles */
+  deviationCard: {
+    backgroundColor: "#2C1214",
+    borderColor: "#FF3B30",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  deviationHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  deviationBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#3A1A1C",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  deviationBadgeText: { color: "#FF3B30", fontWeight: "bold", fontSize: 12 },
+  excessText: { color: "#FF3B30", fontWeight: "bold", fontSize: 12 },
+  deviationSubtext: {
+    color: "#D1D5DB",
+    fontSize: 12,
+    marginBottom: 12,
+    lineHeight: 18,
+  },
+  recoveryCoachBtn: {
+    backgroundColor: "#FF3B30",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  recoveryCoachBtnText: { color: "#FFF", fontWeight: "bold", fontSize: 13 },
+
+  coachCard: {
+    backgroundColor: "#161616",
+    padding: 14,
+    borderRadius: 10,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  coachPoint: { color: "#DDD", fontSize: 13, fontWeight: "500" },
 
   calorieCard: {
     backgroundColor: "#1e1e1e",

@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMealPlanStore } from "../store/useMealPlanStore";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
-import { saveDataToCache, getDataFromCache } from "../utils/cache"; // 🟢 Offline Cache Utility Import
+import { saveDataToCache, getDataFromCache } from "../utils/cache"; // 🟢 Offline Cache Utility
 
 export default function MealPlanScreen({ navigation }) {
   const user = useAuthStore((state) => state.user);
@@ -23,11 +23,16 @@ export default function MealPlanScreen({ navigation }) {
   const { activeMealPlan, isLoading, generateMealPlan, fetchActiveMealPlan } =
     useMealPlanStore();
 
-  const [goal, setGoal] = useState("weight_loss");
+  // 🟢 Onboarding Data Sync Defaults
+  const [goal, setGoal] = useState(
+    user?.goal || user?.fitnessGoal || "weight_loss",
+  );
   const [dietType, setDietType] = useState("Desi / Pakistani Standard");
   const [duration, setDuration] = useState(7);
   const [targetCalories, setTargetCalories] = useState(
-    user?.dailyCalorieGoal ? String(user.dailyCalorieGoal) : "2000",
+    user?.dailyCalorieGoal || user?.dailyCalories
+      ? String(user.dailyCalorieGoal || user.dailyCalories)
+      : "2000",
   );
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
 
@@ -41,6 +46,16 @@ export default function MealPlanScreen({ navigation }) {
   ];
 
   const durationOptions = [3, 5, 7, 15, 30];
+
+  // Sync user profile state updates when user updates onboarding profile
+  useEffect(() => {
+    if (user) {
+      if (user.goal || user.fitnessGoal) setGoal(user.goal || user.fitnessGoal);
+      if (user.dailyCalorieGoal || user.dailyCalories) {
+        setTargetCalories(String(user.dailyCalorieGoal || user.dailyCalories));
+      }
+    }
+  }, [user]);
 
   useEffect(() => {
     const loadMealPlan = async () => {
@@ -73,6 +88,7 @@ export default function MealPlanScreen({ navigation }) {
       dietType,
       duration: Number(duration),
       targetCalories: Number(targetCalories) || 2000,
+      preferredMealsCount: user?.preferredMealsCount || 4, // 🟢 Passes preferred meal count from onboarding
     });
 
     if (!res.success) {
