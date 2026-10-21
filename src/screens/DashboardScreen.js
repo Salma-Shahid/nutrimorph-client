@@ -92,10 +92,9 @@ export default function DashboardScreen({ navigation }) {
     if (newGlasses < 0) return;
     const todayDate = getLocalDate();
 
-    // Backend API call response capture karein
     const res = await updateWaterIntake(newGlasses, todayDate);
 
-    // Agar backend se unlockedBadges wapis mile hain toh store update kar dein
+    // Backend se aane wale unlockedBadges ko store mein update karein
     if (res && res.unlockedBadges) {
       updateUserStats({ unlockedBadges: res.unlockedBadges });
     }
