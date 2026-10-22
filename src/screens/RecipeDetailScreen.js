@@ -54,8 +54,11 @@ export default function RecipeDetailScreen({ route, navigation }) {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 140, flexGrow: 1 }}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.bg }]}
+      edges={["top", "left", "right"]}
+    >
+      <ScrollView contentContainerStyle={{ paddingBottom: 150, flexGrow: 1 }}>
         {/* Banner Image & Back Button */}
         <View style={{ position: "relative" }}>
           <Image
@@ -66,9 +69,10 @@ export default function RecipeDetailScreen({ route, navigation }) {
             }}
             style={styles.bannerImage}
           />
+          {/* Back Navigation Fix to Explore Screen */}
           <TouchableOpacity
             style={styles.backBtn}
-            onPress={() => navigation.goBack()}
+            onPress={() => navigation.navigate("Explore")}
           >
             <Ionicons name="arrow-back" size={22} color="#FFF" />
           </TouchableOpacity>
@@ -77,7 +81,8 @@ export default function RecipeDetailScreen({ route, navigation }) {
         {/* Recipe Body */}
         <View style={{ padding: 16 }}>
           <Text style={styles.categoryBadge}>
-            {recipe?.category || "High-Protein"}
+            {recipe?.category || "High-Protein"}{" "}
+            {recipe?.cuisine ? `• ${recipe.cuisine}` : ""}
           </Text>
           <Text style={[styles.title, { color: colors.text }]}>
             {recipe?.name || recipe?.title}
@@ -162,7 +167,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
           </Text>
           {recipe?.directions && recipe.directions.length > 0 ? (
             recipe.directions.map((step, idx) => (
-              <View key={idx} style={{ marginBottom: 10 }}>
+              <View key={idx} style={{ marginBottom: 12 }}>
                 <Text style={{ color: "#10B981", fontWeight: "bold" }}>
                   Step {idx + 1}
                 </Text>
@@ -179,7 +184,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
         </View>
       </ScrollView>
 
-      {/* Floating Add To Diary Bottom Bar */}
+      {/* Floating Add To Diary Bottom Bar (Fixed Overlap Issue) */}
       <View
         style={[
           styles.bottomBar,
@@ -239,11 +244,12 @@ const styles = StyleSheet.create({
   listText: { fontSize: 14, lineHeight: 20 },
   bottomBar: {
     position: "absolute",
-    bottom: 0,
+    bottom: 50,
     left: 0,
     right: 0,
-    padding: 16,
+    padding: 14,
     borderTopWidth: 1,
+    elevation: 10,
   },
   addBtn: {
     backgroundColor: "#10B981",
