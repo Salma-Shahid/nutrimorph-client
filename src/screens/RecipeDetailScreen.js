@@ -65,7 +65,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
             source={{
               uri:
                 recipe?.image ||
-                "https://media.istockphoto.com/id/908070288/photo/healthy-chicken-and-quinoa-bowl.webp?a=1&b=1&s=612x612&w=0&k=20&c=wmICc63b-y0AGhTIr_UbJOPH2yWNy1nKSug45BGSS9c=",
+                "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=600", // 🟢 Replaced with Unsplash link
             }}
             style={styles.bannerImage}
           />
@@ -184,7 +184,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
         </View>
       </ScrollView>
 
-      {/* Floating Add To Diary Bottom Bar (Fixed Overlap Issue) */}
+      {/* Floating Add To Diary Bottom Bar */}
       <View
         style={[
           styles.bottomBar,
