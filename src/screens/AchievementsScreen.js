@@ -16,8 +16,14 @@ export default function AchievementsScreen({ navigation }) {
   const theme = useAuthStore((state) => state.theme) || "dark";
   const colors = getThemeColors(theme);
 
+  // 🟢 Robustly parse unlockedBadges whether they are strings or objects with badgeId/id
   const unlockedBadges = Array.isArray(user.unlockedBadges)
-    ? user.unlockedBadges.map((b) => (typeof b === "string" ? b : b?.badgeId))
+    ? user.unlockedBadges
+        .map((b) => {
+          if (typeof b === "string") return b;
+          return b?.badgeId || b?.id || b?.badge;
+        })
+        .filter(Boolean)
     : [];
 
   const categories = [
@@ -65,10 +71,11 @@ export default function AchievementsScreen({ navigation }) {
 
               <View style={styles.gridContainer}>
                 {catBadges.map((badge) => {
-                  const isUnlocked = unlockedBadges.includes(badge.id);
+                  const badgeKey = badge.id || badge.badgeId;
+                  const isUnlocked = unlockedBadges.includes(badgeKey);
 
                   return (
-                    <View key={badge.id} style={styles.badgeItem}>
+                    <View key={badgeKey} style={styles.badgeItem}>
                       <View
                         style={[
                           styles.iconShield,

@@ -33,10 +33,10 @@ export default function AppNavigator() {
           let iconName = "grid-outline";
           if (route.name === "Dashboard") iconName = "grid-outline";
           else if (route.name === "Scan Meal") iconName = "scan-outline";
-          else if (route.name === "Meal Plan")
-            iconName = "restaurant-outline"; // 🟢 Added Icon for Meal Plan
+          else if (route.name === "Meal Plan") iconName = "restaurant-outline";
           else if (route.name === "NutriBot") iconName = "chatbubbles-outline";
           else if (route.name === "Profile") iconName = "person-outline";
+          else if (route.name === "Achievements") iconName = "trophy-outline"; // 🟢 Added Icon for Achievements
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
