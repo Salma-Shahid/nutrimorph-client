@@ -16,10 +16,16 @@ export default function StreakHeader({ streakCount = 1, colors }) {
       {/* Top Streak Row */}
       <View style={styles.streakRow}>
         <View style={styles.flameBadge}>
-          <Ionicons name="flame" size={20} color="#F59E0B" />
-          <Text style={styles.streakText}>{streakCount} Days Streak!</Text>
+          <Ionicons name="flame" size={18} color="#F59E0B" />
+          <Text style={styles.streakText}>
+            {streakCount} {streakCount === 1 ? "Day" : "Days"} Streak!
+          </Text>
         </View>
-        <Text style={[styles.subText, { color: colors.textSecondary }]}>
+
+        <Text
+          style={[styles.subText, { color: colors.textSecondary }]}
+          numberOfLines={2}
+        >
           Log daily meals to keep the flame alive
         </Text>
       </View>
@@ -28,7 +34,11 @@ export default function StreakHeader({ streakCount = 1, colors }) {
       <View style={styles.daysRow}>
         {days.map((day, index) => {
           const isToday = index === currentDayIndex;
-          const isPassedOrToday = index <= currentDayIndex;
+          // 🟢 Highlight completed days leading up to today based on streakCount
+          const isDone =
+            index <= currentDayIndex &&
+            index >=
+              currentDayIndex - Math.min(streakCount - 1, currentDayIndex);
 
           return (
             <View key={index} style={styles.dayItem}>
@@ -44,17 +54,13 @@ export default function StreakHeader({ streakCount = 1, colors }) {
                 style={[
                   styles.dot,
                   {
-                    backgroundColor: isPassedOrToday
-                      ? "#10B981"
-                      : colors.inputBg,
+                    backgroundColor: isDone ? "#10B981" : colors.inputBg,
                     borderColor: isToday ? "#10B981" : "transparent",
                     borderWidth: isToday ? 2 : 0,
                   },
                 ]}
               >
-                {isPassedOrToday && (
-                  <Ionicons name="checkmark" size={10} color="#FFF" />
-                )}
+                {isDone && <Ionicons name="checkmark" size={10} color="#FFF" />}
               </View>
             </View>
           );
@@ -76,23 +82,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 12,
+    gap: 10,
   },
   flameBadge: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(245, 158, 11, 0.15)",
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 20,
     gap: 4,
+    flexShrink: 0,
   },
   streakText: {
     color: "#F59E0B",
     fontWeight: "bold",
-    fontSize: 13,
+    fontSize: 12,
   },
   subText: {
+    flex: 1,
     fontSize: 11,
+    textAlign: "right",
+    lineHeight: 14,
   },
   daysRow: {
     flexDirection: "row",

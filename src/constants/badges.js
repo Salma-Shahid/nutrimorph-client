@@ -73,23 +73,23 @@ export const BADGES_DATA = [
     target: 10,
   },
 
-  // 3. Water Category
+  // 3. Water Category (🟢 Fixed IDs with dots to match Backend)
   {
-    id: "water_1_5l",
+    id: "water_1.5l",
     category: "Water (Hydration)",
     title: "1.5L of water per day",
     icon: "water",
     target: 1500,
   },
   {
-    id: "water_2_5l",
+    id: "water_2.5l",
     category: "Water (Hydration)",
     title: "2.5L of water per day",
     icon: "water",
     target: 2500,
   },
   {
-    id: "water_3_5l",
+    id: "water_3.5l",
     category: "Water (Hydration)",
     title: "3.5L of water per day",
     icon: "water",

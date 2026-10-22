@@ -19,6 +19,7 @@ import { useMealStore } from "../store/useMealStore";
 import { calculateBMI } from "../utils/bmi";
 import WaterTracker from "../components/WaterTracker";
 import CalorieChart from "../components/CalorieChart";
+import StreakHeader from "../components/StreakHeader"; // 🟢 Added StreakHeader import
 
 export default function HomeScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
@@ -227,6 +228,13 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.headerActions}>
             <TouchableOpacity
               style={styles.iconBtn}
+              onPress={() => navigation.navigate("Achievements")}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trophy" size={20} color="#10B981" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconBtn}
               onPress={() => navigation.navigate("ProfileScreen")}
               activeOpacity={0.7}
             >
@@ -240,6 +248,19 @@ export default function HomeScreen({ navigation }) {
               <Text style={styles.logoutText}>Logout</Text>
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* 🟢 Streak Header Component */}
+        <View style={{ paddingHorizontal: 20 }}>
+          <StreakHeader
+            streakCount={user?.streakCount || 1}
+            colors={{
+              cardBg: "#1e1e1e",
+              border: "#2a2a2a",
+              textSecondary: "#aaa",
+              inputBg: "#121212",
+            }}
+          />
         </View>
 
         {/* Dashboard Title & BMI */}
@@ -602,7 +623,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 10,
     marginTop: 10,
     paddingHorizontal: 20,
   },

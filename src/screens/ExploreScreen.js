@@ -1,147 +1,229 @@
 import React, { useState, useEffect } from "react";
 import {
-  StyleSheet,
-  Text,
   View,
+  Text,
+  StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
+  Image,
   FlatList,
+  ActivityIndicator,
   Alert,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuthStore, getThemeColors } from "../store/useAuthStore";
+import { useMealStore } from "../store/useMealStore";
 import axios from "axios";
-import { useAuthStore } from "../store/useAuthStore";
 
-const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app";
+const CATEGORIES = [
+  "All",
+  "Post-Workout",
+  "Pre-Workout",
+  "High-Protein",
+  "Immune Support",
+  "Pantry Staples",
+];
 
-export default function ExploreScreen() {
+export default function ExploreScreen({ navigation }) {
+  const theme = useAuthStore((state) => state.theme) || "dark";
+  const colors = getThemeColors(theme);
+  const token = useAuthStore((state) => state.token);
+  const updateUserStats = useAuthStore((state) => state.updateUserStats);
+  const fetchTodayMeals = useMealStore((state) => state.fetchTodayMeals);
+
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const token = useAuthStore((state) => state.token);
 
-  const categories = [
-    "All",
-    "Pre-Workout",
-    "Post-Workout",
-    "High-Protein",
-    "Weight Loss",
-  ];
-
-  const fetchRecipes = async (category) => {
+  // Fetch Categorized Recipes from Backend
+  const loadRecipes = async (category) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const url =
-        category === "All"
-          ? `${BASE_URL}/api/recipes`
-          : `${BASE_URL}/api/recipes?category=${category}`;
+      const BASE_URL =
+        process.env.EXPO_PUBLIC_API_URL ||
+        "https://nutrimorph-backend.vercel.app";
+      const catQuery =
+        category !== "All" ? `?category=${encodeURIComponent(category)}` : "";
 
-      const res = await axios.get(url, {
+      const res = await axios.get(`${BASE_URL}/api/recipes${catQuery}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (res.data?.success) {
-        setRecipes(res.data.recipes);
+        setRecipes(res.data.recipes || res.data.data || []);
       }
-      setLoading(false);
     } catch (err) {
+      console.log("Error loading recipes:", err.message);
+    } finally {
       setLoading(false);
-      console.error("Fetch Recipes Error:", err.message);
     }
   };
 
   useEffect(() => {
-    fetchRecipes(selectedCategory);
+    loadRecipes(selectedCategory);
   }, [selectedCategory]);
 
-  const handleAddToDiary = async (recipeId, recipeTitle) => {
+  // Direct "Add To Diary" Action with Real-time Store Sync
+  const handleAddToDiary = async (recipe) => {
     try {
+      const BASE_URL =
+        process.env.EXPO_PUBLIC_API_URL ||
+        "https://nutrimorph-backend.vercel.app";
+      const todayDate = new Date().toLocaleDateString("en-CA");
+
       const res = await axios.post(
         `${BASE_URL}/api/recipes/add-to-diary`,
-        { recipeId, mealType: "Lunch" },
+        { recipeId: recipe._id || recipe.id, date: todayDate },
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
       if (res.data?.success) {
-        Alert.alert("Success 🎉", res.data.message);
+        Alert.alert(
+          "Success 🎯",
+          `"${recipe.name || recipe.title}" added to today's diary!`,
+        );
+
+        // Sync Streak & Today's Meals
+        if (res.data.streakCount) {
+          updateUserStats({ streakCount: res.data.streakCount });
+        }
+        if (fetchTodayMeals) {
+          fetchTodayMeals(todayDate);
+        }
       }
     } catch (err) {
-      Alert.alert("Error", "Failed to add recipe to diary.");
+      Alert.alert("Error", "Could not add recipe to diary.");
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.headerTitle}>Explore Recipes 🥗</Text>
-      <Text style={styles.headerSubtitle}>
-        Fuel your body with smart AI-recommended meals
-      </Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          Explore & Recipe Library 🥗
+        </Text>
+      </View>
 
-      {/* Category Filter Horizontal Scroll */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoryContainer}
-      >
-        {categories.map((cat) => (
-          <TouchableOpacity
-            key={cat}
-            style={[
-              styles.catChip,
-              selectedCategory === cat && styles.selectedCatChip,
-            ]}
-            onPress={() => setSelectedCategory(cat)}
-          >
-            <Text
-              style={[
-                styles.catText,
-                selectedCategory === cat && styles.selectedCatText,
-              ]}
-            >
-              {cat}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* Horizontal Category Pill Selector */}
+      <View style={{ height: 48, marginBottom: 12 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+        >
+          {CATEGORIES.map((cat) => {
+            const isSelected = selectedCategory === cat;
+            return (
+              <TouchableOpacity
+                key={cat}
+                style={[
+                  styles.categoryPill,
+                  {
+                    backgroundColor: isSelected ? "#10B981" : colors.cardBg,
+                    borderColor: isSelected ? "#10B981" : colors.border,
+                  },
+                ]}
+                onPress={() => setSelectedCategory(cat)}
+              >
+                <Text
+                  style={{
+                    color: isSelected ? "#FFF" : colors.textSecondary,
+                    fontWeight: "bold",
+                    fontSize: 13,
+                  }}
+                >
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
-      {/* Recipe List */}
+      {/* Recipe Cards List */}
       {loading ? (
-        <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color="#4CAF50" />
+        <ActivityIndicator
+          color="#10B981"
+          size="large"
+          style={{ marginTop: 40 }}
+        />
+      ) : recipes.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons
+            name="restaurant-outline"
+            size={48}
+            color={colors.textSecondary}
+          />
+          <Text style={{ color: colors.textSecondary, marginTop: 10 }}>
+            No recipes found in this category.
+          </Text>
         </View>
       ) : (
         <FlatList
           data={recipes}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.listContent}
+          keyExtractor={(item, index) => item._id || item.id || String(index)}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 80 }}
           renderItem={({ item }) => (
-            <View style={styles.recipeCard}>
-              <View style={styles.recipeHeader}>
-                <Text style={styles.recipeTitle}>{item.title}</Text>
-                <Text style={styles.calorieBadge}>{item.calories} kcal</Text>
+            <TouchableOpacity
+              style={[
+                styles.recipeCard,
+                { backgroundColor: colors.cardBg, borderColor: colors.border },
+              ]}
+              onPress={() =>
+                navigation.navigate("RecipeDetailScreen", { recipe: item })
+              }
+              activeOpacity={0.9}
+            >
+              <Image
+                source={{
+                  uri:
+                    item.image ||
+                    "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=600",
+                }}
+                style={styles.recipeImage}
+              />
+              <View style={styles.cardContent}>
+                <View style={styles.badgeRow}>
+                  <Text style={styles.categoryBadge}>
+                    {item.category || "High-Protein"}
+                  </Text>
+                  <Text style={{ color: "#10B981", fontWeight: "bold" }}>
+                    {item.calories} kcal
+                  </Text>
+                </View>
+
+                <Text style={[styles.recipeTitle, { color: colors.text }]}>
+                  {item.name || item.title}
+                </Text>
+
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                    marginBottom: 12,
+                  }}
+                >
+                  P: {item.protein || 0}g | C: {item.carbs || 0}g | F:{" "}
+                  {item.fats || 0}g
+                </Text>
+
+                {/* Direct "Add To Diary" Button */}
+                <TouchableOpacity
+                  style={styles.addToDiaryBtn}
+                  onPress={() => handleAddToDiary(item)}
+                >
+                  <Ionicons
+                    name="add-circle"
+                    size={18}
+                    color="#FFF"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={styles.addToDiaryText}>Add To Diary</Text>
+                </TouchableOpacity>
               </View>
-
-              <Text style={styles.recipeCategory}>
-                {item.category} • ⏱️ {item.prepTime}
-              </Text>
-
-              {/* Macros Breakdown */}
-              <View style={styles.macrosRow}>
-                <Text style={styles.macroText}>Protein: {item.protein}g</Text>
-                <Text style={styles.macroText}>Carbs: {item.carbs}g</Text>
-                <Text style={styles.macroText}>Fats: {item.fats}g</Text>
-              </View>
-
-              {/* Add to Diary Button */}
-              <TouchableOpacity
-                style={styles.addBtn}
-                onPress={() => handleAddToDiary(item._id, item.title)}
-              >
-                <Text style={styles.addBtnText}>+ Add to Diary</Text>
-              </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
           )}
         />
       )}
@@ -150,69 +232,49 @@ export default function ExploreScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#121212",
+  container: { flex: 1 },
+  header: { paddingHorizontal: 16, paddingVertical: 14 },
+  headerTitle: { fontSize: 20, fontWeight: "bold" },
+  categoryPill: {
     paddingHorizontal: 16,
-    paddingTop: 10,
-  },
-  headerTitle: { fontSize: 24, fontWeight: "bold", color: "#4CAF50" },
-  headerSubtitle: { fontSize: 13, color: "#AAA", marginBottom: 15 },
-  categoryContainer: { maxHeight: 50, marginBottom: 15 },
-  catChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: "#1E1E1E",
+    paddingVertical: 8,
     borderRadius: 20,
-    marginRight: 10,
     borderWidth: 1,
-    borderColor: "#333",
-    height: 40,
+    height: 36,
+    justifyContent: "center",
   },
-  selectedCatChip: { backgroundColor: "#1B382B", borderColor: "#4CAF50" },
-  catText: { color: "#AAA", fontWeight: "600" },
-  selectedCatText: { color: "#4CAF50" },
-  loaderContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  listContent: { paddingBottom: 30 },
   recipeCard: {
-    backgroundColor: "#1E1E1E",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 15,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#333",
+    marginBottom: 16,
+    overflow: "hidden",
   },
-  recipeHeader: {
+  recipeImage: { width: "100%", height: 160 },
+  cardContent: { padding: 14 },
+  badgeRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 6,
   },
-  recipeTitle: { fontSize: 18, fontWeight: "bold", color: "#FFF", flex: 1 },
-  calorieBadge: {
-    backgroundColor: "#253B2B",
-    color: "#4CAF50",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    fontSize: 12,
+  categoryBadge: {
+    backgroundColor: "rgba(16, 185, 129, 0.15)",
+    color: "#10B981",
+    fontSize: 11,
     fontWeight: "bold",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  recipeCategory: { color: "#888", fontSize: 12, marginBottom: 12 },
-  macrosRow: {
+  recipeTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 4 },
+  addToDiaryBtn: {
+    backgroundColor: "#10B981",
     flexDirection: "row",
-    justifyContent: "space-between",
-    backgroundColor: "#161616",
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 14,
-  },
-  macroText: { color: "#CCC", fontSize: 12, fontWeight: "500" },
-  addBtn: {
-    backgroundColor: "#4CAF50",
-    padding: 12,
-    borderRadius: 8,
     alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
   },
-  addBtnText: { color: "#FFF", fontWeight: "bold", fontSize: 14 },
+  addToDiaryText: { color: "#FFF", fontWeight: "bold", fontSize: 13 },
+  emptyState: { alignItems: "center", marginTop: 60 },
 });

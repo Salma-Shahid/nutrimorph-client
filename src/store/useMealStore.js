@@ -136,28 +136,28 @@ export const useMealStore = create((set, get) => ({
     }
   },
 
-  updateWaterIntake: async (glasses, dateParam) => {
+  // updateWaterIntake action ke andar:
+  updateWaterIntake: async (glasses, date) => {
     try {
-      const token = await getToken();
-      const targetDate =
-        dateParam || get().selectedDate || getTodayDateString();
-
-      const res = await axios.post(
-        WATER_API_URL,
-        { date: targetDate, glasses },
+      const token = useAuthStore.getState().token;
+      const response = await axios.post(
+        `${BASE_URL}/api/water`,
+        { glasses, date },
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
-      if (res.data?.success) {
-        set({ waterIntake: res.data.data?.glasses ?? glasses });
-        return { success: true };
+      if (response.data.success) {
+        set({ waterIntake: glasses });
+
+        // 🟢 Update Auth Store User's Unlocked Badges in Real-Time!
+        if (response.data.unlockedBadges) {
+          useAuthStore.getState().updateUserStats({
+            unlockedBadges: response.data.unlockedBadges,
+          });
+        }
       }
     } catch (error) {
-      console.error("Water update error:", error.message);
-      return {
-        success: false,
-        message: error?.response?.data?.message || "Failed to update water",
-      };
+      console.error("Error updating water intake:", error);
     }
   },
 

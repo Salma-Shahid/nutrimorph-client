@@ -73,6 +73,8 @@ export default function AchievementsScreen({ navigation }) {
                 {catBadges.map((badge) => {
                   const badgeKey = badge.id || badge.badgeId;
                   const isUnlocked = unlockedBadges.includes(badgeKey);
+                  // Check if it's a water badge to give it a custom vibrant cyan glow
+                  const isWaterBadge = cat.includes("Water");
 
                   return (
                     <View key={badgeKey} style={styles.badgeItem}>
@@ -80,7 +82,9 @@ export default function AchievementsScreen({ navigation }) {
                         style={[
                           styles.iconShield,
                           isUnlocked
-                            ? styles.unlockedShield
+                            ? isWaterBadge
+                              ? styles.waterUnlockedShield // 💧 Vibrant Cyan for Water
+                              : styles.unlockedShield // Default Green for others
                             : [
                                 styles.lockedShield,
                                 {
@@ -94,7 +98,11 @@ export default function AchievementsScreen({ navigation }) {
                           name={badge.icon || "star"}
                           size={28}
                           color={
-                            isUnlocked ? colors.primary : colors.textSecondary
+                            isUnlocked
+                              ? isWaterBadge
+                                ? "#38BDF8" // Bright Cyan Blue
+                                : colors.primary
+                              : colors.textSecondary
                           }
                         />
                         {!isUnlocked && (
@@ -188,6 +196,17 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(16, 185, 129, 0.15)",
     borderWidth: 2,
     borderColor: "#10B981",
+  },
+  // 💧 Water Badges Custom Cyan Glow Styling
+  waterUnlockedShield: {
+    backgroundColor: "rgba(56, 189, 248, 0.2)",
+    borderWidth: 2,
+    borderColor: "#38BDF8",
+    shadowColor: "#38BDF8",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 5,
   },
   lockedShield: {
     borderWidth: 1,
