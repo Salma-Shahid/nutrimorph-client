@@ -16,6 +16,7 @@ import { useAuthStore, getThemeColors } from "../store/useAuthStore";
 import { useMealStore } from "../store/useMealStore";
 import axios from "axios";
 
+// Pantry Staples removed from categories list
 const CATEGORIES = [
   "All",
   "Post-Workout",
@@ -161,7 +162,7 @@ export default function ExploreScreen({ navigation }) {
         <FlatList
           data={recipes}
           keyExtractor={(item, index) => item._id || item.id || String(index)}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 80 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[
@@ -175,11 +176,11 @@ export default function ExploreScreen({ navigation }) {
             >
               <Image
                 source={{
-                  uri:
-                    item.image ||
-                    "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=600",
+                  // Cloudinary URL primary, removed external unsplash placeholder fallback
+                  uri: item.image,
                 }}
                 style={styles.recipeImage}
+                resizeMode="cover"
               />
               <View style={styles.cardContent}>
                 <View style={styles.badgeRow}>
@@ -246,7 +247,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     overflow: "hidden",
   },
-  recipeImage: { width: "100%", height: 160 },
+  // Added resizeMode support and proper aspect ratio fitting
+  recipeImage: {
+    width: "100%",
+    height: 180,
+    backgroundColor: "#222",
+  },
   cardContent: { padding: 14 },
   badgeRow: {
     flexDirection: "row",
