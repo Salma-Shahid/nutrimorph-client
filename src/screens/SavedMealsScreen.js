@@ -15,7 +15,7 @@ import axios from "axios";
 import { useMealStore } from "../store/useMealStore";
 import { useAuthStore } from "../store/useAuthStore";
 
-const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app"}/api`;
+const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app"}/api`;
 
 export default function SavedMealsScreen({ navigation }) {
   const { token: storeToken } = useAuthStore();

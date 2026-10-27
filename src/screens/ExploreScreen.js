@@ -22,7 +22,6 @@ const CATEGORIES = [
   "Pre-Workout",
   "High-Protein",
   "Immune Support",
-  "Pantry Staples",
 ];
 
 export default function ExploreScreen({ navigation }) {
@@ -41,8 +40,7 @@ export default function ExploreScreen({ navigation }) {
     setLoading(true);
     try {
       const BASE_URL =
-        process.env.EXPO_PUBLIC_API_URL ||
-        "https://nutrimorph-backend.vercel.app";
+        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
       const catQuery =
         category !== "All" ? `?category=${encodeURIComponent(category)}` : "";
 
@@ -68,8 +66,7 @@ export default function ExploreScreen({ navigation }) {
   const handleAddToDiary = async (recipe) => {
     try {
       const BASE_URL =
-        process.env.EXPO_PUBLIC_API_URL ||
-        "https://nutrimorph-backend.vercel.app";
+        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
       const todayDate = new Date().toLocaleDateString("en-CA");
 
       const res = await axios.post(

@@ -5,7 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Live Vercel Production Base URL & Endpoint Configuration
 const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app";
+  process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
 const API_URL = `${BASE_URL}/api/meal-plans`;
 
 // Helper to get token from auth store or async storage

@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 
 const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app";
+  process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
 const API_URL = `${BASE_URL}/api/auth`;
 
 export const useAuthStore = create((set, get) => ({

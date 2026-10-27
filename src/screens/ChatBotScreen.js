@@ -114,7 +114,7 @@ const renderMessageItem = (item, colors) => {
   return <DefaultMessageBubble item={item} colors={colors} />;
 };
 
-const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app"}/api`;
+const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app"}/api`;
 
 const ChatBotScreen = () => {
   const { user, theme } = useAuthStore();
@@ -159,8 +159,7 @@ const ChatBotScreen = () => {
       if (!token) return;
 
       const rawUrl =
-        process.env.EXPO_PUBLIC_API_URL ||
-        "https://nutrimorph-backend.vercel.app";
+        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
       const cleanBase = rawUrl.replace(/\/api\/?$/, "").replace(/\/$/, "");
       const targetUrl = `${cleanBase}/api/chat/history`;
 

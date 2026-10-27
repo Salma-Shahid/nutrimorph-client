@@ -25,8 +25,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
   const handleAddToDiary = async () => {
     try {
       const BASE_URL =
-        process.env.EXPO_PUBLIC_API_URL ||
-        "https://nutrimorph-backend.vercel.app";
+        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
       const todayDate = new Date().toLocaleDateString("en-CA");
 
       const res = await axios.post(

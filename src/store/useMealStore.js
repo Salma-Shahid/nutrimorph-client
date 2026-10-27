@@ -5,7 +5,7 @@ import { useAuthStore } from "./useAuthStore";
 
 // Live Vercel Production Base URL & Endpoint Configurations
 const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || "https://nutrimorph-backend.vercel.app";
+  process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
 const API_URL = `${BASE_URL}/api/meals`;
 const WATER_API_URL = `${BASE_URL}/api/water`;
 const SAVED_MEALS_API_URL = `${BASE_URL}/api/saved-meals`;
