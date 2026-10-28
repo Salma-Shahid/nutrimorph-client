@@ -18,12 +18,14 @@ import { getThemeColors } from "../theme/colors";
 import AdBanner from "../components/AdBanner";
 import { saveDataToCache, getDataFromCache } from "../utils/cache";
 import StreakHeader from "../components/StreakHeader";
+import axios from "axios";
 
 export default function DashboardScreen({ navigation }) {
   const user = useAuthStore((state) => state.user);
   const theme = useAuthStore((state) => state.theme);
   const colors = getThemeColors(theme);
   const updateUserStats = useAuthStore((state) => state.updateUserStats);
+  const token = useAuthStore((state) => state.token);
 
   const {
     meals,
@@ -39,6 +41,8 @@ export default function DashboardScreen({ navigation }) {
   } = useMealStore();
 
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [aiRecoveryTip, setAiRecoveryTip] = useState(null);
 
   // Device local date in YYYY-MM-DD format
   const getLocalDate = () => new Date().toLocaleDateString("en-CA");
@@ -92,10 +96,7 @@ export default function DashboardScreen({ navigation }) {
     if (newGlasses < 0) return;
     const todayDate = getLocalDate();
 
-    // Backend call
     const res = await updateWaterIntake(newGlasses, todayDate);
-
-    // Agar backend ne unlockedBadges bheje hain toh store update karein
     const badges = res?.unlockedBadges || res?.data?.unlockedBadges;
     if (badges) {
       updateUserStats({ unlockedBadges: badges });
@@ -127,6 +128,33 @@ export default function DashboardScreen({ navigation }) {
     );
   };
 
+  // AI Recovery Assistant Handler when diet limit is exceeded
+  const handleFetchAiRecovery = async () => {
+    setRecoveryLoading(true);
+    try {
+      const BASE_URL =
+        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
+      const res = await axios.post(
+        `${BASE_URL}/api/ai/recovery-guidance`,
+        { consumedCalories: currentEaten, targetCalories: calorieGoal },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (res.data?.success) {
+        setAiRecoveryTip(
+          res.data.advice ||
+            "Focus on high-protein, low-calorie foods and hydrate with 500ml water for the rest of the day.",
+        );
+      }
+    } catch (err) {
+      // Fallback smart suggestion if offline or endpoint developing
+      setAiRecoveryTip(
+        "💡 Rescue Tip: Keep your next meal light with leafy greens and lean protein. Drink an extra 2 glasses of water to stabilize metabolism.",
+      );
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
+
   const calorieGoal =
     user?.dailyCalorieTarget || user?.dailyCalorieGoal || 2000;
   const currentEaten = totalCalories || 0;
@@ -147,10 +175,8 @@ export default function DashboardScreen({ navigation }) {
               {user?.name || "User Name"} 👋
             </Text>
           </View>
-          {/* 🔥 Streak & Weekly Calendar Header */}
 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            {/* 🏆 Achievements Button Added Here */}
             <TouchableOpacity
               style={[
                 styles.badge,
@@ -187,19 +213,65 @@ export default function DashboardScreen({ navigation }) {
 
         <StreakHeader streakCount={user?.streakCount || 1} colors={colors} />
 
-        {/* 🚨 Calorie Deviation Alert Banner */}
+        {/* 🚨 Calorie Deviation Alert & AI Recovery Assistant Trigger */}
         {isExceeded && (
           <View style={styles.alertCard}>
             <Ionicons name="warning" size={22} color="#EF4444" />
-            <Text style={styles.alertText}>
-              Diet Deviation Alert: You have exceeded your daily goal by{" "}
-              {currentEaten - calorieGoal} kcal!
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <Text style={styles.alertText}>
+                Diet Deviation Alert: Exceeded goal by{" "}
+                {currentEaten - calorieGoal} kcal!
+              </Text>
+              <TouchableOpacity
+                style={styles.recoveryBtn}
+                onPress={handleFetchAiRecovery}
+                disabled={recoveryLoading}
+              >
+                <Ionicons
+                  name="sparkles"
+                  size={14}
+                  color="#FFF"
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={styles.recoveryBtnText}>
+                  {recoveryLoading
+                    ? "Generating AI Rescue..."
+                    : "Ask AI Recovery Assistant 🤖"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* AI Recovery Tip Card Display */}
+        {aiRecoveryTip && (
+          <View style={styles.aiRecoveryCard}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 4,
+              }}
+            >
+              <Ionicons
+                name="shield-checkmark"
+                size={16}
+                color="#10B981"
+                style={{ marginRight: 6 }}
+              />
+              <Text
+                style={{ color: "#10B981", fontWeight: "bold", fontSize: 13 }}
+              >
+                NutriMorph AI Recovery Plan
+              </Text>
+            </View>
+            <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>
+              {aiRecoveryTip}
             </Text>
           </View>
         )}
 
         {/* Calorie Progress Card */}
-        {/* 📊 Daily Calorie & Milestone Progress Card */}
         <View
           style={[
             styles.card,
@@ -213,7 +285,6 @@ export default function DashboardScreen({ navigation }) {
             Daily Calorie Summary
           </Text>
 
-          {/* Calorie Stats Row */}
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text
@@ -244,104 +315,6 @@ export default function DashboardScreen({ navigation }) {
                 Goal
               </Text>
             </View>
-          </View>
-
-          {/* 📈 Integrated Milestone Weight Curve Chart */}
-          <View
-            style={{
-              backgroundColor: colors.inputBg || "#111827",
-              borderRadius: 14,
-              padding: 12,
-              marginVertical: 14,
-              borderWidth: 1,
-              borderColor: "#1F2937",
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                marginBottom: 10,
-              }}
-            >
-              <View>
-                <Text
-                  style={{ color: "#EF4444", fontSize: 11, fontWeight: "bold" }}
-                >
-                  Current Weight
-                </Text>
-                <Text
-                  style={{
-                    color: colors.text,
-                    fontSize: 13,
-                    fontWeight: "bold",
-                  }}
-                >
-                  {user?.weight || 80} Kg
-                </Text>
-              </View>
-              <View style={{ alignItems: "flex-end" }}>
-                <Text
-                  style={{ color: "#10B981", fontSize: 11, fontWeight: "bold" }}
-                >
-                  Target Weight
-                </Text>
-                <Text
-                  style={{
-                    color: colors.text,
-                    fontSize: 13,
-                    fontWeight: "bold",
-                  }}
-                >
-                  {user?.targetWeight || 75} Kg
-                </Text>
-              </View>
-            </View>
-
-            {/* Simulated Curve Line */}
-            <View
-              style={{
-                width: "100%",
-                height: 2,
-                backgroundColor: "#10B981",
-                marginVertical: 12,
-                position: "relative",
-              }}
-            >
-              <View
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 6,
-                  backgroundColor: "#EF4444",
-                  position: "absolute",
-                  left: "10%",
-                  top: -5,
-                }}
-              />
-              <View
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 6,
-                  backgroundColor: "#10B981",
-                  position: "absolute",
-                  right: "10%",
-                  top: -5,
-                }}
-              />
-            </View>
-
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontSize: 10,
-                textAlign: "center",
-                marginTop: 2,
-              }}
-            >
-              🎯 Goal Progress: Keep logging daily meals to stay on track!
-            </Text>
           </View>
 
           {/* View Logged History Button */}
@@ -401,77 +374,6 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        {/* 📊 Weekly Record & AI Insight Card */}
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: colors.cardBg, borderColor: colors.border },
-          ]}
-        >
-          <Text
-            style={[styles.cardTitle, { color: colors.text, marginBottom: 12 }]}
-          >
-            Weekly Calorie History & AI Insights
-          </Text>
-
-          {weeklyAiInsight ? (
-            <View
-              style={{
-                backgroundColor: colors.inputBg,
-                padding: 12,
-                borderRadius: 10,
-                marginBottom: 14,
-                borderWidth: 1,
-                borderColor: "#10B981",
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: 4,
-                }}
-              >
-                <Ionicons
-                  name="sparkles"
-                  size={16}
-                  color="#10B981"
-                  style={{ marginRight: 6 }}
-                />
-                <Text
-                  style={{ color: "#10B981", fontWeight: "bold", fontSize: 13 }}
-                >
-                  Gemini AI Coach
-                </Text>
-              </View>
-              <Text
-                style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}
-              >
-                {weeklyAiInsight}
-              </Text>
-            </View>
-          ) : null}
-
-          {!weeklyHistory || weeklyHistory.length === 0 ? (
-            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-              No weekly data available yet.
-            </Text>
-          ) : (
-            <View style={{ gap: 8 }}>
-              {weeklyHistory.slice(-7).map((item) => (
-                <View key={item._id} style={styles.weeklyRow}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-                    {item._id}
-                  </Text>
-                  <Text style={{ color: "#10B981", fontWeight: "bold" }}>
-                    {item.calories} kcal
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-
         {/* Action Buttons */}
         <View style={styles.actionRow}>
           <TouchableOpacity
@@ -490,35 +392,9 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.actionCardText}>Scan Food</Text>
           </TouchableOpacity>
         </View>
-
-        {/* 🥗 AI Meal Plan Button */}
-        <TouchableOpacity
-          style={[
-            styles.card,
-            {
-              backgroundColor: "#8B5CF6",
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 16,
-              marginTop: 10,
-            },
-          ]}
-          onPress={() => navigation.navigate("Meal Plan")}
-        >
-          <Ionicons
-            name="restaurant-outline"
-            size={22}
-            color="#FFF"
-            style={{ marginRight: 8 }}
-          />
-          <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 15 }}>
-            View AI Meal Plan
-          </Text>
-        </TouchableOpacity>
       </ScrollView>
 
-      {/* 📜 Meal History & Delete Modal */}
+      {/* 📜 Meal History Modal */}
       <Modal
         visible={showHistoryModal}
         animationType="slide"
@@ -639,11 +515,34 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     marginBottom: 16,
-    gap: 10,
   },
-  alertText: { color: "#991B1B", fontSize: 13, fontWeight: "600", flex: 1 },
+  alertText: {
+    color: "#991B1B",
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  recoveryBtn: {
+    backgroundColor: "#EF4444",
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  recoveryBtnText: { color: "#FFF", fontSize: 12, fontWeight: "bold" },
+  aiRecoveryCard: {
+    backgroundColor: "#111827",
+    borderWidth: 1,
+    borderColor: "#10B981",
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
   card: { borderRadius: 16, padding: 18, borderWidth: 1, marginBottom: 16 },
   cardTitle: { fontSize: 16, fontWeight: "bold" },
   statsRow: {
@@ -687,15 +586,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   waterCountText: { fontSize: 16, fontWeight: "bold" },
-  weeklyRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    width: "100%",
-    paddingVertical: 6,
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#334155",
-  },
   actionRow: { flexDirection: "row", justifyContent: "space-between" },
   actionCard: {
     width: "48%",
