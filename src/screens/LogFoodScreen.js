@@ -15,6 +15,8 @@ import { useMealStore } from "../store/useMealStore";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 
+const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Late-night"];
+
 export default function LogFoodScreen({ navigation, route }) {
   const initialData = route.params?.initialData || {};
   const { logMeal, analyzeTextMeal, isLoading } = useMealStore();
@@ -34,6 +36,9 @@ export default function LogFoodScreen({ navigation, route }) {
   const [fats, setFats] = useState(
     initialData.fats ? String(initialData.fats) : "",
   );
+
+  // 🟢 Meal Type State Added
+  const [mealType, setMealType] = useState("Lunch");
 
   const [aiLoading, setAiLoading] = useState(false);
 
@@ -73,6 +78,7 @@ export default function LogFoodScreen({ navigation, route }) {
       protein: Number(protein) || 0,
       carbs: Number(carbs) || 0,
       fats: Number(fats) || 0,
+      mealType: mealType, // 🟢 Passed mealType to store action
     });
 
     if (res?.success) {
@@ -105,7 +111,7 @@ export default function LogFoodScreen({ navigation, route }) {
           </Text>
         </View>
 
-        {/* Input Fields */}
+        {/* Food Name Input */}
         <Text style={[styles.label, { color: colors.textSecondary }]}>
           Food Name
         </Text>
@@ -144,6 +150,43 @@ export default function LogFoodScreen({ navigation, route }) {
             </View>
           )}
         </TouchableOpacity>
+
+        {/* 🟢 Meal Type Selector Section */}
+        <Text style={[styles.label, { color: colors.textSecondary }]}>
+          Meal Type
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, marginBottom: 16 }}
+        >
+          {MEAL_TYPES.map((type) => {
+            const isSelected = mealType === type;
+            return (
+              <TouchableOpacity
+                key={type}
+                style={[
+                  styles.mealTypeChip,
+                  {
+                    backgroundColor: isSelected ? "#10B981" : colors.inputBg,
+                    borderColor: isSelected ? "#10B981" : colors.border,
+                  },
+                ]}
+                onPress={() => setMealType(type)}
+              >
+                <Text
+                  style={{
+                    color: isSelected ? "#FFF" : colors.textSecondary,
+                    fontWeight: "bold",
+                    fontSize: 12,
+                  }}
+                >
+                  {type}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         <Text style={[styles.label, { color: colors.textSecondary }]}>
           Calories (kcal)
@@ -265,6 +308,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     borderWidth: 1,
     marginBottom: 14,
+  },
+  mealTypeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: "center",
+    alignItems: "center",
   },
   row: {
     flexDirection: "row",

@@ -8,6 +8,7 @@ import {
   Image,
   FlatList,
   ActivityIndicator,
+  Modal,
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,7 +17,6 @@ import { useAuthStore, getThemeColors } from "../store/useAuthStore";
 import { useMealStore } from "../store/useMealStore";
 import axios from "axios";
 
-// Pantry Staples removed from categories list
 const CATEGORIES = [
   "All",
   "Post-Workout",
@@ -24,6 +24,8 @@ const CATEGORIES = [
   "High-Protein",
   "Immune Support",
 ];
+
+const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Late-night"];
 
 export default function ExploreScreen({ navigation }) {
   const theme = useAuthStore((state) => state.theme) || "dark";
@@ -35,6 +37,12 @@ export default function ExploreScreen({ navigation }) {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // 🟢 Meal Type Modal States
+  const [showMealModal, setShowMealModal] = useState(false);
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [chosenMealType, setChosenMealType] = useState("Lunch");
+  const [submitting, setSubmitting] = useState(false);
 
   // Fetch Categorized Recipes from Backend
   const loadRecipes = async (category) => {
@@ -63,8 +71,17 @@ export default function ExploreScreen({ navigation }) {
     loadRecipes(selectedCategory);
   }, [selectedCategory]);
 
-  // Direct "Add To Diary" Action with Real-time Store Sync
-  const handleAddToDiary = async (recipe) => {
+  // Trigger Modal on "Add To Diary"
+  const handleOpenMealModal = (recipe) => {
+    setSelectedRecipe(recipe);
+    setChosenMealType("Lunch"); // default reset
+    setShowMealModal(true);
+  };
+
+  // Confirm & Send to Backend with mealType
+  const handleConfirmAddToDiary = async () => {
+    if (!selectedRecipe) return;
+    setSubmitting(true);
     try {
       const BASE_URL =
         process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
@@ -72,15 +89,26 @@ export default function ExploreScreen({ navigation }) {
 
       const res = await axios.post(
         `${BASE_URL}/api/recipes/add-to-diary`,
-        { recipeId: recipe._id || recipe.id, date: todayDate },
+        {
+          recipeId: selectedRecipe._id || selectedRecipe.id,
+          name: selectedRecipe.name || selectedRecipe.title,
+          calories: selectedRecipe.calories,
+          protein: selectedRecipe.protein,
+          carbs: selectedRecipe.carbs,
+          fats: selectedRecipe.fats,
+          date: todayDate,
+          mealType: chosenMealType, // 🟢 Passed here
+        },
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
       if (res.data?.success) {
         Alert.alert(
           "Success 🎯",
-          `"${recipe.name || recipe.title}" added to today's diary!`,
+          `"${selectedRecipe.name || selectedRecipe.title}" added to ${chosenMealType}!`,
         );
+
+        setShowMealModal(false);
 
         // Sync Streak & Today's Meals
         if (res.data.streakCount) {
@@ -92,6 +120,8 @@ export default function ExploreScreen({ navigation }) {
       }
     } catch (err) {
       Alert.alert("Error", "Could not add recipe to diary.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -175,10 +205,7 @@ export default function ExploreScreen({ navigation }) {
               activeOpacity={0.9}
             >
               <Image
-                source={{
-                  // Cloudinary URL primary, removed external unsplash placeholder fallback
-                  uri: item.image,
-                }}
+                source={{ uri: item.image }}
                 style={styles.recipeImage}
                 resizeMode="cover"
               />
@@ -207,10 +234,10 @@ export default function ExploreScreen({ navigation }) {
                   {item.fats || 0}g
                 </Text>
 
-                {/* Direct "Add To Diary" Button */}
+                {/* Direct "Add To Diary" Button triggers Modal */}
                 <TouchableOpacity
                   style={styles.addToDiaryBtn}
-                  onPress={() => handleAddToDiary(item)}
+                  onPress={() => handleOpenMealModal(item)}
                 >
                   <Ionicons
                     name="add-circle"
@@ -225,6 +252,101 @@ export default function ExploreScreen({ navigation }) {
           )}
         />
       )}
+
+      {/* 🟢 Meal Type Selection Modal */}
+      <Modal
+        visible={showMealModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowMealModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Select Meal Type 🍽️
+              </Text>
+              <TouchableOpacity onPress={() => setShowMealModal(false)}>
+                <Ionicons
+                  name="close-circle"
+                  size={26}
+                  color={colors.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 13,
+                marginBottom: 16,
+              }}
+            >
+              Choose which meal time this entry belongs to for smart AI
+              tracking:
+            </Text>
+
+            {/* Meal Type Pills */}
+            <View style={{ gap: 10, marginBottom: 20 }}>
+              {MEAL_TYPES.map((type) => {
+                const isSelected = chosenMealType === type;
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.mealTypeOption,
+                      {
+                        backgroundColor: isSelected
+                          ? "#10B981"
+                          : colors.inputData || "#1F2937",
+                        borderColor: isSelected ? "#10B981" : colors.border,
+                      },
+                    ]}
+                    onPress={() => setChosenMealType(type)}
+                  >
+                    <Text
+                      style={{
+                        color: isSelected ? "#FFF" : colors.text,
+                        fontWeight: "bold",
+                        fontSize: 14,
+                      }}
+                    >
+                      {type}
+                    </Text>
+                    {isSelected && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={18}
+                        color="#FFF"
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Confirm Button */}
+            <TouchableOpacity
+              style={[styles.confirmBtn, { opacity: submitting ? 0.7 : 1 }]}
+              onPress={handleConfirmAddToDiary}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.confirmBtnText}>
+                  Confirm & Add to Diary
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -247,7 +369,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     overflow: "hidden",
   },
-  // Added resizeMode support and proper aspect ratio fitting
   recipeImage: {
     width: "100%",
     height: 180,
@@ -280,4 +401,37 @@ const styles = StyleSheet.create({
   },
   addToDiaryText: { color: "#FFF", fontWeight: "bold", fontSize: 13 },
   emptyState: { alignItems: "center", marginTop: 60 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalContent: {
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  modalTitle: { fontSize: 18, fontWeight: "bold" },
+  mealTypeOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  confirmBtn: {
+    backgroundColor: "#10B981",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  confirmBtnText: { color: "#FFF", fontWeight: "bold", fontSize: 15 },
 });
