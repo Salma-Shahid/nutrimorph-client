@@ -133,7 +133,7 @@ export default function DashboardScreen({ navigation }) {
       const BASE_URL =
         process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
       const res = await axios.post(
-        `${BASE_URL}/api/ai/recovery-guidance`,
+        `${BASE_URL}/api/meals/recovery-guidance`,
         { consumedCalories: currentEaten, targetCalories: calorieGoal },
         { headers: { Authorization: `Bearer ${token}` } },
       );
