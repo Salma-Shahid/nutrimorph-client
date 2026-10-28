@@ -44,8 +44,48 @@ export default function DashboardScreen({ navigation }) {
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [aiRecoveryTip, setAiRecoveryTip] = useState(null);
 
+  // 🟢 Exercise & Steps State
+  const [stepCount, setStepCount] = useState(0);
+  const [caloriesBurned, setCaloriesBurned] = useState(0);
+
   // Device local date in YYYY-MM-DD format
   const getLocalDate = () => new Date().toLocaleDateString("en-CA");
+
+  // Fetch Exercise & Steps from backend
+  const fetchExerciseData = async (date) => {
+    try {
+      const BASE_URL =
+        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
+      const res = await axios.get(`${BASE_URL}/api/exercise?date=${date}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.data?.success) {
+        setStepCount(res.data.data.steps || 0);
+        setCaloriesBurned(res.data.data.caloriesBurned || 0);
+      }
+    } catch (error) {
+      console.log("Error fetching exercise data:", error.message);
+    }
+  };
+
+  // Add Steps Handler
+  const handleAddSteps = async () => {
+    const todayDate = getLocalDate();
+    try {
+      const BASE_URL =
+        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
+      const res = await axios.post(
+        `${BASE_URL}/api/exercise`,
+        { date: todayDate, steps: 500 }, // Adds 500 steps on click for demo/tracking
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (res.data?.success) {
+        setStepCount(res.data.data.steps);
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to update steps");
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -57,6 +97,7 @@ export default function DashboardScreen({ navigation }) {
             fetchTodayMeals(todayDate),
             fetchWaterIntake(todayDate),
             fetchWeeklySummary(),
+            fetchExerciseData(todayDate),
           ]);
 
           if (isMounted) {
@@ -107,21 +148,16 @@ export default function DashboardScreen({ navigation }) {
 
   const handleDeleteMeal = async (mealId, mealName) => {
     try {
-      console.log("Attempting to delete meal with ID:", mealId);
-      const res = await deleteMeal(mealId); // deleteMeal from useMealStore
-      console.log("Delete response:", res);
-
+      const res = await deleteMeal(mealId);
       if (res?.success) {
         Alert.alert("Success", `"${mealName}" deleted successfully!`);
-        // Refresh today meals/summary
         if (fetchTodayMeals) {
-          fetchTodayMeals(selectedDate);
+          fetchTodayMeals(getLocalDate());
         }
       } else {
         Alert.alert("Error", res?.message || "Could not delete meal.");
       }
     } catch (error) {
-      console.error("Delete handler error:", error);
       Alert.alert("Error", "An unexpected error occurred while deleting.");
     }
   };
@@ -139,12 +175,12 @@ export default function DashboardScreen({ navigation }) {
       );
       if (res.data?.success) {
         setAiRecoveryTip(
-          res.data.advice ||
+          res.data.data?.guidance ||
+            res.data.advice ||
             "Focus on high-protein, low-calorie foods and hydrate with 500ml water for the rest of the day.",
         );
       }
     } catch (err) {
-      // Fallback smart suggestion if offline or endpoint developing
       setAiRecoveryTip(
         "💡 Rescue Tip: Keep your next meal light with leafy greens and lean protein. Drink an extra 2 glasses of water to stabilize metabolism.",
       );
@@ -269,6 +305,216 @@ export default function DashboardScreen({ navigation }) {
           </View>
         )}
 
+        {/* 💧 Water Tracker & 🏋️‍♂️ Log Exercise Row */}
+        <View style={styles.rowContainer}>
+          {/* Water Tracker Card */}
+          <View
+            style={[
+              styles.halfCard,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Ionicons name="water" size={20} color="#3B82F6" />
+              <Text
+                style={[
+                  styles.cardTitle,
+                  { color: colors.text, marginLeft: 6 },
+                ]}
+              >
+                Water Tracker
+              </Text>
+            </View>
+            <Text
+              style={{
+                color: "#3B82F6",
+                fontWeight: "bold",
+                marginVertical: 6,
+              }}
+            >
+              {(waterIntake || 0) * 250} / 2000 ml
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <TouchableOpacity
+                style={styles.smallWaterBtn}
+                onPress={() => handleWaterChange((waterIntake || 0) - 1)}
+              >
+                <Ionicons name="remove" size={16} color="#FFF" />
+              </TouchableOpacity>
+              <Text style={{ color: colors.text, fontWeight: "bold" }}>
+                {waterIntake || 0} Glasses
+              </Text>
+              <TouchableOpacity
+                style={[styles.smallWaterBtn, { backgroundColor: "#3B82F6" }]}
+                onPress={() => handleWaterChange((waterIntake || 0) + 1)}
+              >
+                <Ionicons name="add" size={16} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Exercise Card */}
+          <View
+            style={[
+              styles.halfCard,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Ionicons name="fitness" size={20} color="#EF4444" />
+              <Text
+                style={[
+                  styles.cardTitle,
+                  { color: colors.text, marginLeft: 6 },
+                ]}
+              >
+                Log Exercise
+              </Text>
+            </View>
+            <Text
+              style={{
+                color: "#EF4444",
+                fontWeight: "bold",
+                marginVertical: 6,
+              }}
+            >
+              {caloriesBurned} Calories Burned
+            </Text>
+            <TouchableOpacity
+              style={styles.exerciseActionBtn}
+              onPress={() =>
+                Alert.alert(
+                  "Exercise Log",
+                  "Exercise tracking modal/screen active.",
+                )
+              }
+            >
+              <Ionicons
+                name="add"
+                size={14}
+                color="#FFF"
+                style={{ marginRight: 4 }}
+              />
+              <Text style={{ color: "#FFF", fontSize: 12, fontWeight: "bold" }}>
+                Add Exercise
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 👟 Step Tracking Card */}
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.cardBg, borderColor: colors.border },
+          ]}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Ionicons name="footsteps" size={22} color="#10B981" />
+              <Text
+                style={[
+                  styles.cardTitle,
+                  { color: colors.text, marginLeft: 8 },
+                ]}
+              >
+                Steps Tracking
+              </Text>
+            </View>
+            <Text style={{ color: "#10B981", fontWeight: "bold" }}>
+              {stepCount} / 10,000 steps
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", marginTop: 12, gap: 10 }}>
+            <TouchableOpacity
+              style={[
+                styles.stepActionBtn,
+                {
+                  backgroundColor: colors.inputBg,
+                  borderWidth: 1,
+                  borderColor: "#10B981",
+                },
+              ]}
+              onPress={() =>
+                Alert.alert(
+                  "Connect Device",
+                  "Google Fit / Apple Health sync ready.",
+                )
+              }
+            >
+              <Text
+                style={{ color: "#10B981", fontWeight: "bold", fontSize: 12 }}
+              >
+                🤖 Connect Device
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.stepActionBtn, { backgroundColor: "#10B981" }]}
+              onPress={handleAddSteps}
+            >
+              <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 12 }}>
+                + Add Steps
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 📈 Weight Loss Progress Graph Card (CaloVision Style Reference) */}
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.cardBg, borderColor: colors.border },
+          ]}
+        >
+          <Text style={[styles.cardTitle, { color: colors.text }]}>
+            Track your Loss
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontSize: 12,
+              marginBottom: 10,
+            }}
+          >
+            Log Weight & monitor your target trajectory! 📉
+          </Text>
+          <View style={styles.graphPlaceholder}>
+            <View style={styles.targetLineBadge}>
+              <Text style={{ color: "#FFF", fontSize: 11, fontWeight: "bold" }}>
+                Target: {user?.targetWeight || 75} KG
+              </Text>
+            </View>
+            <Ionicons
+              name="analytics"
+              size={48}
+              color="#10B981"
+              style={{ opacity: 0.8, marginVertical: 10 }}
+            />
+          </View>
+          <TouchableOpacity
+            style={styles.weighInBtn}
+            onPress={() =>
+              Alert.alert("Weigh-in", "Weight logging popup enabled.")
+            }
+          >
+            <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 14 }}>
+              Weigh-in
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Calorie Progress Card */}
         <View
           style={[
@@ -325,51 +571,6 @@ export default function DashboardScreen({ navigation }) {
               View Logged History ({meals?.length || 0})
             </Text>
           </TouchableOpacity>
-        </View>
-
-        {/* 💧 Water Tracker Card */}
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: colors.cardBg, borderColor: colors.border },
-          ]}
-        >
-          <View style={styles.waterHeader}>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Ionicons name="water" size={22} color="#3B82F6" />
-              <Text
-                style={[
-                  styles.cardTitle,
-                  { color: colors.text, marginLeft: 8 },
-                ]}
-              >
-                Water Tracker
-              </Text>
-            </View>
-            <Text style={{ color: "#3B82F6", fontWeight: "bold" }}>
-              {(waterIntake || 0) * 250} ml / 2000 ml
-            </Text>
-          </View>
-
-          <View style={styles.waterControls}>
-            <TouchableOpacity
-              style={styles.waterBtn}
-              onPress={() => handleWaterChange((waterIntake || 0) - 1)}
-            >
-              <Ionicons name="remove" size={20} color="#FFF" />
-            </TouchableOpacity>
-
-            <Text style={[styles.waterCountText, { color: colors.text }]}>
-              {waterIntake || 0} Glasses 🥛
-            </Text>
-
-            <TouchableOpacity
-              style={[styles.waterBtn, { backgroundColor: "#3B82F6" }]}
-              onPress={() => handleWaterChange((waterIntake || 0) + 1)}
-            >
-              <Ionicons name="add" size={20} color="#FFF" />
-            </TouchableOpacity>
-          </View>
         </View>
 
         {/* Action Buttons */}
@@ -470,15 +671,10 @@ export default function DashboardScreen({ navigation }) {
                         {item.calories} kcal
                       </Text>
                       <TouchableOpacity
-                        style={{ padding: 12, zIndex: 99, cursor: "pointer" }}
-                        onPress={() => {
-                          console.log(
-                            "Delete button clicked for ID:",
-                            item._id || item.id,
-                          );
-                          handleDeleteMeal(item._id || item.id, item.name);
-                        }}
-                        activeOpacity={0.7}
+                        style={{ padding: 12 }}
+                        onPress={() =>
+                          handleDeleteMeal(item._id || item.id, item.name)
+                        }
                       >
                         <Ionicons
                           name="trash-outline"
@@ -547,8 +743,64 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
   },
+  rowContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  halfCard: {
+    width: "48%",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+  },
+  smallWaterBtn: {
+    backgroundColor: "#64748B",
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  exerciseActionBtn: {
+    backgroundColor: "#EF4444",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  stepActionBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  graphPlaceholder: {
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 10,
+    marginVertical: 8,
+  },
+  targetLineBadge: {
+    backgroundColor: "#10B981",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignSelf: "flex-start",
+  },
+  weighInBtn: {
+    backgroundColor: "#10B981",
+    alignItems: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 4,
+  },
   card: { borderRadius: 16, padding: 18, borderWidth: 1, marginBottom: 16 },
-  cardTitle: { fontSize: 16, fontWeight: "bold" },
+  cardTitle: { fontSize: 15, fontWeight: "bold" },
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -568,28 +820,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   historyBtnText: { fontWeight: "600", marginLeft: 8, fontSize: 13 },
-  waterHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    width: "100%",
-    marginBottom: 14,
-  },
-  waterControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    width: "100%",
-  },
-  waterBtn: {
-    backgroundColor: "#64748B",
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  waterCountText: { fontSize: 16, fontWeight: "bold" },
   actionRow: { flexDirection: "row", justifyContent: "space-between" },
   actionCard: {
     width: "48%",
