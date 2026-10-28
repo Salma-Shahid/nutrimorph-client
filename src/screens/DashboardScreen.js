@@ -105,27 +105,25 @@ export default function DashboardScreen({ navigation }) {
     await saveDataToCache(`water_${todayDate}`, newGlasses);
   };
 
-  const handleDeleteMeal = (mealId, mealName) => {
-    Alert.alert(
-      "Delete Meal",
-      `Are you sure you want to delete "${mealName}"?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            const res = await deleteMeal(mealId);
-            if (!res.success) {
-              Alert.alert("Error", res.message || "Could not delete meal.");
-            } else {
-              const todayDate = getLocalDate();
-              fetchTodayMeals(todayDate);
-            }
-          },
-        },
-      ],
-    );
+  const handleDeleteMeal = async (mealId, mealName) => {
+    try {
+      console.log("Attempting to delete meal with ID:", mealId);
+      const res = await deleteMeal(mealId); // deleteMeal from useMealStore
+      console.log("Delete response:", res);
+
+      if (res?.success) {
+        Alert.alert("Success", `"${mealName}" deleted successfully!`);
+        // Refresh today meals/summary
+        if (fetchTodayMeals) {
+          fetchTodayMeals(selectedDate);
+        }
+      } else {
+        Alert.alert("Error", res?.message || "Could not delete meal.");
+      }
+    } catch (error) {
+      console.error("Delete handler error:", error);
+      Alert.alert("Error", "An unexpected error occurred while deleting.");
+    }
   };
 
   // AI Recovery Assistant Handler when diet limit is exceeded
@@ -472,9 +470,15 @@ export default function DashboardScreen({ navigation }) {
                         {item.calories} kcal
                       </Text>
                       <TouchableOpacity
-                        onPress={() =>
-                          handleDeleteMeal(item._id || item.id, item.name)
-                        }
+                        style={{ padding: 12, zIndex: 99, cursor: "pointer" }}
+                        onPress={() => {
+                          console.log(
+                            "Delete button clicked for ID:",
+                            item._id || item.id,
+                          );
+                          handleDeleteMeal(item._id || item.id, item.name);
+                        }}
+                        activeOpacity={0.7}
                       >
                         <Ionicons
                           name="trash-outline"
