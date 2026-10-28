@@ -98,7 +98,6 @@ export const useMealStore = create((set, get) => ({
       });
 
       if (res.data?.success) {
-        // Backend now returns an object containing weeklyHistory array and aiInsight
         const responseData = res.data.data;
         set({
           weeklyHistory: responseData.weeklyHistory || [],
@@ -136,12 +135,11 @@ export const useMealStore = create((set, get) => ({
     }
   },
 
-  // updateWaterIntake action ke andar:
   updateWaterIntake: async (glasses, date) => {
     try {
-      const token = useAuthStore.getState().token;
+      const token = await getToken();
       const response = await axios.post(
-        `${BASE_URL}/api/water`,
+        `${WATER_API_URL}`,
         { glasses, date },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -149,13 +147,14 @@ export const useMealStore = create((set, get) => ({
       if (response.data.success) {
         set({ waterIntake: glasses });
 
-        // 🟢 Update Auth Store User's Unlocked Badges in Real-Time!
+        // Update Auth Store User's Unlocked Badges in Real-Time
         if (response.data.unlockedBadges) {
           useAuthStore.getState().updateUserStats({
             unlockedBadges: response.data.unlockedBadges,
           });
         }
       }
+      return response.data;
     } catch (error) {
       console.error("Error updating water intake:", error);
     }
@@ -276,24 +275,53 @@ export const useMealStore = create((set, get) => ({
     }
   },
 
-  // 7. Delete Meal
+  // 7. Delete Meal (With Instant Optimistic UI Update & Re-fetch Sync)
   deleteMeal: async (mealId) => {
     try {
-      const token = await getToken(); // Fixed typo here (added space)
+      const token = await getToken();
+      const targetDate = get().selectedDate || getTodayDateString();
+
+      // 🟢 Step A: Optimistically remove from state for instant UI update
+      const currentMeals = get().meals;
+      const filteredMeals = currentMeals.filter(
+        (m) => (m._id || m.id) !== mealId,
+      );
+      const newTotalCalories = filteredMeals.reduce(
+        (sum, item) => sum + (Number(item.calories) || 0),
+        0,
+      );
+
+      set({
+        meals: filteredMeals,
+        todayMeals: filteredMeals,
+        totalCalories: newTotalCalories,
+      });
+
+      // 🟢 Step B: Call backend delete API
       const res = await axios.delete(`${API_URL}/${mealId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (res.data?.success) {
-        await get().fetchDailySummary();
+      if (res.status === 200 || res.data?.success) {
+        // Sync summary in background
+        await get().fetchDailySummary(targetDate);
         return { success: true };
       } else {
+        // Revert summary if failed
+        await get().fetchDailySummary(targetDate);
         return {
           success: false,
           message: res.data?.message || "Delete failed",
         };
       }
     } catch (error) {
+      console.error(
+        "Delete meal error:",
+        error?.response?.data || error.message,
+      );
+      // Revert back on error
+      const targetDate = get().selectedDate || getTodayDateString();
+      await get().fetchDailySummary(targetDate);
       return {
         success: false,
         message: error.response?.data?.message || "Server request failed",
