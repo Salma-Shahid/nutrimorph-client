@@ -245,7 +245,7 @@ export default function ExploreScreen({ navigation }) {
                     color="#FFF"
                     style={{ marginRight: 6 }}
                   />
-                  <Text style={styles.addToDiaryText}>Add To Diary</Text>
+                  <Text style={styles.addToDiaryText}>Add To Log</Text>
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
@@ -340,7 +340,7 @@ export default function ExploreScreen({ navigation }) {
                 <ActivityIndicator color="#FFF" />
               ) : (
                 <Text style={styles.confirmBtnText}>
-                  Confirm & Add to Diary
+                  Confirm & Add to Log
                 </Text>
               )}
             </TouchableOpacity>
