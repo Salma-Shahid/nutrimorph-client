@@ -75,44 +75,54 @@ export default function SavedMealsScreen({ navigation }) {
 
   const handleDelete = async (item) => {
     const mealId = item._id || item.id;
-    Alert.alert(
-      "Delete Recipe",
-      "Are you sure you want to delete this saved recipe?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const token = await getAuthToken();
-              const res = await axios.delete(
-                `${API_BASE}/saved-meals/${mealId}`,
-                {
-                  headers: { Authorization: `Bearer ${token}` },
-                },
-              );
 
-              if (res.data?.success) {
-                setSavedMeals((prev) =>
-                  prev.filter((m) => (m._id || m.id) !== mealId),
-                );
-                Alert.alert("Success", "Saved recipe deleted successfully!");
-              } else {
-                Alert.alert("Error", "Failed to delete saved recipe");
-              }
-            } catch (error) {
-              Alert.alert(
-                "Error",
-                error.response?.data?.message ||
-                  error.message ||
-                  "Failed to delete saved recipe",
-              );
-            }
+    // Web aur Mobile dono ke liye safe confirmation
+    const confirmDelete = async () => {
+      try {
+        const token = await getAuthToken();
+        const res = await axios.delete(`${API_BASE}/saved-meals/${mealId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (res.data?.success) {
+          setSavedMeals((prev) =>
+            prev.filter((m) => (m._id || m.id) !== mealId),
+          );
+          Alert.alert("Success", "Saved recipe deleted successfully!");
+        } else {
+          Alert.alert("Error", "Failed to delete saved recipe");
+        }
+      } catch (error) {
+        Alert.alert(
+          "Error",
+          error.response?.data?.message ||
+            error.message ||
+            "Failed to delete saved recipe",
+        );
+      }
+    };
+
+    // Platform check: Agar browser (web) hai toh window.confirm use ho ga, warna mobile par Alert.alert
+    if (typeof window !== "undefined" && window.confirm) {
+      if (
+        window.confirm("Are you sure you want to delete this saved recipe?")
+      ) {
+        confirmDelete();
+      }
+    } else {
+      Alert.alert(
+        "Delete Recipe",
+        "Are you sure you want to delete this saved recipe?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: confirmDelete,
           },
-        },
-      ],
-    );
+        ],
+      );
+    }
   };
 
   const renderItem = ({ item }) => (

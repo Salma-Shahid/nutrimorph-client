@@ -37,9 +37,7 @@ export default function LogFoodScreen({ navigation, route }) {
     initialData.fats ? String(initialData.fats) : "",
   );
 
-  // 🟢 Meal Type State Added
   const [mealType, setMealType] = useState("Lunch");
-
   const [aiLoading, setAiLoading] = useState(false);
 
   // AI Auto-Fill Handler
@@ -78,7 +76,7 @@ export default function LogFoodScreen({ navigation, route }) {
       protein: Number(protein) || 0,
       carbs: Number(carbs) || 0,
       fats: Number(fats) || 0,
-      mealType: mealType, // 🟢 Passed mealType to store action
+      mealType: mealType,
     });
 
     if (res?.success) {
@@ -95,7 +93,7 @@ export default function LogFoodScreen({ navigation, route }) {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header with Back Button */}
+        {/* Header with Glass Back Button */}
         <View style={styles.header}>
           <TouchableOpacity
             style={[
@@ -132,7 +130,7 @@ export default function LogFoodScreen({ navigation, route }) {
 
         {/* AI Auto-Fill Action Button */}
         <TouchableOpacity
-          style={styles.aiButton}
+          style={[styles.aiButton, { backgroundColor: colors.primary }]}
           onPress={handleAiAutoFill}
           disabled={aiLoading}
         >
@@ -151,7 +149,7 @@ export default function LogFoodScreen({ navigation, route }) {
           )}
         </TouchableOpacity>
 
-        {/* 🟢 Meal Type Selector Section */}
+        {/* Meal Type Selector Section */}
         <Text style={[styles.label, { color: colors.textSecondary }]}>
           Meal Type
         </Text>
@@ -168,8 +166,10 @@ export default function LogFoodScreen({ navigation, route }) {
                 style={[
                   styles.mealTypeChip,
                   {
-                    backgroundColor: isSelected ? "#10B981" : colors.inputBg,
-                    borderColor: isSelected ? "#10B981" : colors.border,
+                    backgroundColor: isSelected
+                      ? colors.primary
+                      : colors.inputBg,
+                    borderColor: isSelected ? colors.primary : colors.border,
                   },
                 ]}
                 onPress={() => setMealType(type)}
@@ -271,7 +271,7 @@ export default function LogFoodScreen({ navigation, route }) {
         />
 
         <TouchableOpacity
-          style={styles.saveButton}
+          style={[styles.saveButton, { backgroundColor: colors.primary }]}
           onPress={handleSave}
           disabled={isLoading}
         >
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     padding: 8,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     marginRight: 12,
   },
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, fontWeight: "600", marginBottom: 6 },
   input: {
     padding: 14,
-    borderRadius: 10,
+    borderRadius: 12,
     fontSize: 15,
     borderWidth: 1,
     marginBottom: 14,
@@ -326,11 +326,15 @@ const styles = StyleSheet.create({
     width: "48%",
   },
   aiButton: {
-    backgroundColor: "#2563EB",
-    padding: 13,
-    borderRadius: 10,
+    padding: 14,
+    borderRadius: 12,
     alignItems: "center",
     marginBottom: 16,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   aiBtnRow: {
     flexDirection: "row",
@@ -338,11 +342,15 @@ const styles = StyleSheet.create({
   },
   aiBtnText: { color: "#fff", fontSize: 14, fontWeight: "bold" },
   saveButton: {
-    backgroundColor: "#10B981",
-    padding: 15,
-    borderRadius: 10,
+    padding: 16,
+    borderRadius: 12,
     alignItems: "center",
     marginTop: 10,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
   },
   btnText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
 });
