@@ -38,14 +38,18 @@ export default function AchievementsScreen({ navigation }) {
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
+          style={[
+            styles.backBtn,
+            { backgroundColor: colors.cardBg, borderColor: colors.border },
+          ]}
           onPress={() => navigation && navigation.goBack && navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={20} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Achievements
+          Achievements 🏆
         </Text>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 36 }} />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16 }}>
@@ -84,7 +88,13 @@ export default function AchievementsScreen({ navigation }) {
                           isUnlocked
                             ? isWaterBadge
                               ? styles.waterUnlockedShield // 💧 Vibrant Cyan for Water
-                              : styles.unlockedShield // Default Green for others
+                              : [
+                                  styles.unlockedShield,
+                                  {
+                                    backgroundColor: colors.glassGlow,
+                                    borderColor: colors.primary,
+                                  },
+                                ] // Default Emerald Glass for others
                             : [
                                 styles.lockedShield,
                                 {
@@ -96,7 +106,7 @@ export default function AchievementsScreen({ navigation }) {
                       >
                         <Ionicons
                           name={badge.icon || "star"}
-                          size={28}
+                          size={26}
                           color={
                             isUnlocked
                               ? isWaterBadge
@@ -109,7 +119,10 @@ export default function AchievementsScreen({ navigation }) {
                           <View
                             style={[
                               styles.lockBadge,
-                              { backgroundColor: colors.cardBg },
+                              {
+                                backgroundColor: colors.cardBg,
+                                borderColor: colors.border,
+                              },
                             ]}
                           >
                             <Ionicons
@@ -157,6 +170,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: 1,
   },
+  backBtn: {
+    padding: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
   headerTitle: {
     fontSize: 20,
     fontWeight: "bold",
@@ -166,6 +184,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
   },
   categoryTitle: {
     fontSize: 15,
@@ -193,31 +216,35 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   unlockedShield: {
-    backgroundColor: "rgba(16, 185, 129, 0.15)",
     borderWidth: 2,
-    borderColor: "#10B981",
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
   },
   // 💧 Water Badges Custom Cyan Glow Styling
   waterUnlockedShield: {
-    backgroundColor: "rgba(56, 189, 248, 0.2)",
+    backgroundColor: "rgba(56, 189, 248, 0.15)",
     borderWidth: 2,
     borderColor: "#38BDF8",
     shadowColor: "#38BDF8",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.6,
+    shadowOpacity: 0.4,
     shadowRadius: 6,
     elevation: 5,
   },
   lockedShield: {
     borderWidth: 1,
-    opacity: 0.7,
+    opacity: 0.6,
   },
   lockBadge: {
     position: "absolute",
     bottom: -2,
     right: -2,
-    padding: 2,
+    padding: 3,
     borderRadius: 8,
+    borderWidth: 1,
   },
   badgeTitle: {
     fontSize: 10,

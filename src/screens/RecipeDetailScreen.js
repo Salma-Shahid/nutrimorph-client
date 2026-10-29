@@ -10,8 +10,9 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuthStore, getThemeColors } from "../store/useAuthStore";
+import { useAuthStore } from "../store/useAuthStore";
 import { useMealStore } from "../store/useMealStore";
+import { getThemeColors } from "../theme/colors";
 import axios from "axios";
 
 export default function RecipeDetailScreen({ route, navigation }) {
@@ -64,11 +65,10 @@ export default function RecipeDetailScreen({ route, navigation }) {
             source={{
               uri:
                 recipe?.image ||
-                "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=600", // 🟢 Replaced with Unsplash link
+                "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=600",
             }}
             style={styles.bannerImage}
           />
-          {/* Back Navigation Fix to Explore Screen */}
           <TouchableOpacity
             style={styles.backBtn}
             onPress={() => navigation.navigate("Explore")}
@@ -79,10 +79,18 @@ export default function RecipeDetailScreen({ route, navigation }) {
 
         {/* Recipe Body */}
         <View style={{ padding: 16 }}>
-          <Text style={styles.categoryBadge}>
-            {recipe?.category || "High-Protein"}{" "}
-            {recipe?.cuisine ? `• ${recipe.cuisine}` : ""}
-          </Text>
+          <View
+            style={[
+              styles.badgeContainer,
+              { backgroundColor: colors.glassGlow },
+            ]}
+          >
+            <Text style={[styles.categoryBadge, { color: colors.primary }]}>
+              {recipe?.category || "High-Protein"}{" "}
+              {recipe?.cuisine ? `• ${recipe.cuisine}` : ""}
+            </Text>
+          </View>
+
           <Text style={[styles.title, { color: colors.text }]}>
             {recipe?.name || recipe?.title}
           </Text>
@@ -96,7 +104,11 @@ export default function RecipeDetailScreen({ route, navigation }) {
           >
             <View style={styles.macroCol}>
               <Text
-                style={{ color: "#10B981", fontWeight: "bold", fontSize: 16 }}
+                style={{
+                  color: colors.primary,
+                  fontWeight: "bold",
+                  fontSize: 16,
+                }}
               >
                 {recipe?.calories || 0}
               </Text>
@@ -143,7 +155,11 @@ export default function RecipeDetailScreen({ route, navigation }) {
           {recipe?.ingredients && recipe.ingredients.length > 0 ? (
             recipe.ingredients.map((item, idx) => (
               <View key={idx} style={styles.listRow}>
-                <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                <Ionicons
+                  name="checkmark-circle"
+                  size={16}
+                  color={colors.primary}
+                />
                 <Text style={[styles.listText, { color: colors.text }]}>
                   {item}
                 </Text>
@@ -167,7 +183,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
           {recipe?.directions && recipe.directions.length > 0 ? (
             recipe.directions.map((step, idx) => (
               <View key={idx} style={{ marginBottom: 12 }}>
-                <Text style={{ color: "#10B981", fontWeight: "bold" }}>
+                <Text style={{ color: colors.primary, fontWeight: "bold" }}>
                   Step {idx + 1}
                 </Text>
                 <Text style={[styles.listText, { color: colors.text }]}>
@@ -190,7 +206,10 @@ export default function RecipeDetailScreen({ route, navigation }) {
           { backgroundColor: colors.cardBg, borderTopColor: colors.border },
         ]}
       >
-        <TouchableOpacity style={styles.addBtn} onPress={handleAddToDiary}>
+        <TouchableOpacity
+          style={[styles.addBtn, { backgroundColor: colors.primary }]}
+          onPress={handleAddToDiary}
+        >
           <Ionicons
             name="add-circle"
             size={20}
@@ -208,7 +227,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  bannerImage: { width: "100%", height: 220 },
+  bannerImage: { width: "100%", height: 220, backgroundColor: "#222" },
   backBtn: {
     position: "absolute",
     top: 16,
@@ -217,20 +236,30 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
   },
+  badgeContainer: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
   categoryBadge: {
-    color: "#10B981",
     fontWeight: "bold",
     fontSize: 12,
-    marginBottom: 4,
   },
   title: { fontSize: 22, fontWeight: "bold", marginBottom: 14 },
   macrosCard: {
     flexDirection: "row",
     justifyContent: "space-around",
     padding: 14,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   macroCol: { alignItems: "center" },
   sectionHeading: { fontSize: 17, fontWeight: "bold", marginBottom: 10 },
@@ -243,19 +272,23 @@ const styles = StyleSheet.create({
   listText: { fontSize: 14, lineHeight: 20 },
   bottomBar: {
     position: "absolute",
-    bottom: 50,
+    bottom: 0,
     left: 0,
     right: 0,
-    padding: 14,
+    padding: 16,
     borderTopWidth: 1,
     elevation: 10,
   },
   addBtn: {
-    backgroundColor: "#10B981",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 12,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
 });

@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import Markdown from "react-native-markdown-display";
+import { Ionicons } from "@expo/vector-icons";
 
 import ChatMessageItemModule from "./ChatMessageItem";
 import { useAuthStore } from "../store/useAuthStore";
@@ -33,7 +34,13 @@ const DefaultMessageBubble = ({ item, colors }) => {
 
   if (isUser) {
     return (
-      <View style={[bubbleStyles.container, bubbleStyles.userContainer]}>
+      <View
+        style={[
+          bubbleStyles.container,
+          bubbleStyles.userContainer,
+          { backgroundColor: colors.primary },
+        ]}
+      >
         <Text style={[bubbleStyles.text, { color: "#FFFFFF" }]}>
           {messageText}
         </Text>
@@ -49,14 +56,14 @@ const DefaultMessageBubble = ({ item, colors }) => {
       lineHeight: 22,
     },
     heading3: {
-      color: "#10B981",
+      color: colors.primary,
       fontSize: 16,
       fontWeight: "bold",
       marginTop: 8,
       marginBottom: 4,
     },
     heading4: {
-      color: "#10B981",
+      color: colors.primary,
       fontSize: 15,
       fontWeight: "bold",
       marginTop: 6,
@@ -90,7 +97,7 @@ const DefaultMessageBubble = ({ item, colors }) => {
         bubbleStyles.botContainer,
         {
           backgroundColor: colors.cardBg,
-          borderColor: colors.border || "#334155",
+          borderColor: colors.border,
           borderWidth: 1,
         },
       ]}
@@ -116,7 +123,7 @@ const renderMessageItem = (item, colors) => {
 
 const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app"}/api`;
 
-const ChatBotScreen = () => {
+const ChatBotScreen = ({ navigation }) => {
   const { user, theme } = useAuthStore();
   const colors = getThemeColors(theme);
 
@@ -295,19 +302,31 @@ const ChatBotScreen = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
-        {/* Header */}
+        {/* Header with Glass Back Button */}
         <View
           style={[
             screenStyles.header,
             {
               backgroundColor: colors.cardBg,
-              borderBottomColor: colors.border || "#334155",
+              borderBottomColor: colors.border,
             },
           ]}
         >
+          {navigation && (
+            <TouchableOpacity
+              style={[
+                screenStyles.backBtn,
+                { backgroundColor: colors.inputBg, borderColor: colors.border },
+              ]}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={20} color={colors.text} />
+            </TouchableOpacity>
+          )}
           <Text style={[screenStyles.headerTitle, { color: colors.text }]}>
-            NutriBot Assistant
+            NutriBot Assistant 🤖
           </Text>
+          <View style={{ width: 36 }} />
         </View>
 
         {/* Chat History / Loader */}
@@ -345,7 +364,7 @@ const ChatBotScreen = () => {
             screenStyles.inputContainer,
             {
               backgroundColor: colors.cardBg,
-              borderTopColor: colors.border || "#334155",
+              borderTopColor: colors.border,
             },
           ]}
         >
@@ -355,10 +374,12 @@ const ChatBotScreen = () => {
               {
                 backgroundColor: colors.inputBg,
                 color: colors.text,
+                borderColor: colors.border,
+                borderWidth: 1,
               },
             ]}
             placeholder="Ask about diet, macros, or recipes..."
-            placeholderTextColor={colors.textSecondary || "#94A3B8"}
+            placeholderTextColor={colors.textSecondary}
             value={inputText}
             onChangeText={setInputText}
             onSubmitEditing={handleSend}
@@ -367,12 +388,13 @@ const ChatBotScreen = () => {
           <TouchableOpacity
             style={[
               screenStyles.sendButton,
+              { backgroundColor: colors.primary },
               (!inputText.trim() || loading) && { opacity: 0.5 },
             ]}
             onPress={handleSend}
             disabled={!inputText.trim() || loading}
           >
-            <Text style={screenStyles.sendText}>Send</Text>
+            <Ionicons name="send" size={16} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -386,9 +408,13 @@ const bubbleStyles = StyleSheet.create({
     borderRadius: 16,
     marginVertical: 6,
     maxWidth: "82%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   userContainer: {
-    backgroundColor: "#10B981",
     alignSelf: "flex-end",
     borderBottomRightRadius: 4,
   },
@@ -410,10 +436,17 @@ const screenStyles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    flexDirection: "row",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     alignItems: "center",
+    justifyContent: "space-between",
+  },
+  backBtn: {
+    padding: 8,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   headerTitle: {
     fontSize: 18,
@@ -435,29 +468,31 @@ const screenStyles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: "row",
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: Platform.OS === "android" ? 14 : 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === "android" ? 14 : 12,
     alignItems: "center",
     borderTopWidth: 1,
   },
   input: {
     flex: 1,
-    borderRadius: 20,
+    borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginRight: 8,
+    paddingVertical: 12,
+    marginRight: 10,
     fontSize: 14,
   },
   sendButton: {
-    backgroundColor: "#10B981",
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  sendText: {
-    color: "#FFFFFF",
-    fontWeight: "bold",
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
 });
 

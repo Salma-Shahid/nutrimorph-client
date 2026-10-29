@@ -25,7 +25,7 @@ export default function NotificationSettings() {
       if (token || Device.isDevice) {
         await scheduleWaterReminder();
         Alert.alert(
-          "Success",
+          "Success 💧",
           "Water reminder notifications enabled successfully!",
         );
       }
@@ -52,7 +52,11 @@ export default function NotificationSettings() {
       </Text>
       <View style={styles.row}>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Ionicons name="notifications-outline" size={20} color="#10B981" />
+          <Ionicons
+            name="notifications-outline"
+            size={20}
+            color={colors.primary}
+          />
           <Text
             style={[styles.titleText, { color: colors.text, marginLeft: 10 }]}
           >
@@ -63,7 +67,7 @@ export default function NotificationSettings() {
         <Switch
           value={isNotificationsEnabled}
           onValueChange={handleToggleNotifications}
-          trackColor={{ false: "#CBD5E1", true: "#10B981" }}
+          trackColor={{ false: "#CBD5E1", true: colors.primary }}
           thumbColor={isNotificationsEnabled ? "#FFF" : "#F4F4F5"}
         />
       </View>
@@ -73,9 +77,14 @@ export default function NotificationSettings() {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 18,
     marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   label: {
     fontSize: 12,

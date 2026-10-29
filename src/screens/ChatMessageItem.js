@@ -63,9 +63,16 @@ const FormattedText = ({ text, style, boldStyle, headerStyle }) => {
   );
 };
 
-const renderMessage = (item) => {
-  const isUser = item?.sender === "user";
-  const messageText = item?.text || "";
+const renderMessage = (item, colors) => {
+  const isUser = item?.sender === "user" || item?.role === "user";
+  const messageText = item?.text || item?.message || item?.content || "";
+
+  // Fallback colors if not passed
+  const primaryColor = colors?.primary || "#10B981";
+  const cardBgColor = colors?.cardBg || "#1E293B";
+  const borderColor = colors?.border || "rgba(16, 185, 129, 0.25)";
+  const textColor = colors?.text || "#F8FAFC";
+  const textSecondary = colors?.textSecondary || "#94A3B8";
 
   return (
     <View
@@ -77,14 +84,32 @@ const renderMessage = (item) => {
       <View
         style={[
           styles.messageBubble,
-          isUser ? styles.userBubble : styles.botBubble,
+          isUser
+            ? [styles.userBubble, { backgroundColor: primaryColor }]
+            : [
+                styles.botBubble,
+                {
+                  backgroundColor: cardBgColor,
+                  borderColor: borderColor,
+                },
+              ],
         ]}
       >
         <FormattedText
           text={messageText}
-          style={isUser ? styles.userText : styles.botText}
-          boldStyle={isUser ? styles.userBoldText : styles.boldHighlight}
-          headerStyle={isUser ? styles.userHeader : styles.headerText}
+          style={
+            isUser ? styles.userText : [styles.botText, { color: textColor }]
+          }
+          boldStyle={
+            isUser
+              ? styles.userBoldText
+              : [styles.boldHighlight, { color: primaryColor }]
+          }
+          headerStyle={
+            isUser
+              ? styles.userHeader
+              : [styles.headerText, { color: primaryColor }]
+          }
         />
       </View>
     </View>
@@ -108,16 +133,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 18,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   userBubble: {
-    backgroundColor: "#10B981", // Emerald Green
     borderBottomRightRadius: 4,
   },
   botBubble: {
-    backgroundColor: "#1E293B", // Slate Card
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: "#334155",
   },
   userText: {
     color: "#FFFFFF",
@@ -135,16 +162,13 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   botText: {
-    color: "#F1F5F9",
     fontSize: 15,
     lineHeight: 22,
   },
   boldHighlight: {
-    color: "#34D399",
     fontWeight: "bold",
   },
   headerText: {
-    color: "#34D399", // Emerald Accent for Bot Headers
     fontWeight: "bold",
     fontSize: 16,
     lineHeight: 24,

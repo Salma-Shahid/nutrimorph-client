@@ -45,14 +45,14 @@ export default function DashboardScreen({ navigation }) {
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [aiRecoveryTip, setAiRecoveryTip] = useState(null);
 
-  // 🟢 Modals & Interactive States
+  // Modals & Interactive States
   const [showWeighModal, setShowWeighModal] = useState(false);
   const [newWeight, setNewWeight] = useState("");
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [exerciseName, setExerciseName] = useState("");
   const [caloriesInput, setCaloriesInput] = useState("");
 
-  // 🟢 Exercise & Steps State
+  // Exercise & Steps State
   const [stepCount, setStepCount] = useState(0);
   const [caloriesBurned, setCaloriesBurned] = useState(0);
 
@@ -98,7 +98,7 @@ export default function DashboardScreen({ navigation }) {
   // Save Exercise Handler (Backend Connected)
   const handleSaveExercise = async () => {
     if (!caloriesInput) {
-      if (typeof alert !== "undefined") alert("Please enter calories burned!");
+      Alert.alert("Error", "Please enter calories burned!");
       return;
     }
     const todayDate = getLocalDate();
@@ -119,26 +119,19 @@ export default function DashboardScreen({ navigation }) {
         setShowExerciseModal(false);
         setCaloriesInput("");
         setExerciseName("");
-        if (typeof alert !== "undefined")
-          alert("Exercise logged successfully!");
+        Alert.alert("Success", "Exercise logged successfully!");
       }
     } catch (err) {
-      if (typeof alert !== "undefined") alert("Failed to log exercise");
+      Alert.alert("Error", "Failed to log exercise");
     }
   };
 
   // Connect Device Handler
   const handleConnectDevice = () => {
-    if (typeof alert !== "undefined") {
-      alert(
-        "Device Sync: Google Fit / Apple Health connected successfully! Steps will sync automatically.",
-      );
-    } else {
-      Alert.alert(
-        "Device Sync",
-        "Google Fit / Apple Health connected successfully! Steps will sync automatically.",
-      );
-    }
+    Alert.alert(
+      "Device Sync",
+      "Google Fit / Apple Health connected successfully! Steps will sync automatically.",
+    );
   };
 
   useFocusEffect(
@@ -264,14 +257,14 @@ export default function DashboardScreen({ navigation }) {
             </Text>
           </View>
 
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <TouchableOpacity
               style={[
                 styles.badge,
                 {
-                  backgroundColor: colors.inputBg,
+                  backgroundColor: colors.cardBg,
                   borderWidth: 1,
-                  borderColor: "#10B981",
+                  borderColor: colors.border,
                 },
               ]}
               onPress={() => navigation.navigate("Achievements")}
@@ -279,39 +272,49 @@ export default function DashboardScreen({ navigation }) {
               <Ionicons
                 name="trophy"
                 size={14}
-                color="#10B981"
+                color={colors.primary}
                 style={{ marginRight: 4 }}
               />
               <Text
-                style={{ color: "#10B981", fontSize: 11, fontWeight: "bold" }}
+                style={{
+                  color: colors.primary,
+                  fontSize: 11,
+                  fontWeight: "bold",
+                }}
               >
                 Badges
               </Text>
             </TouchableOpacity>
-          </View>
-          <View
-            style={[
-              styles.badge,
-              { backgroundColor: isPro ? "#F59E0B" : "#10B981" },
-            ]}
-          >
-            <Text style={styles.badgeText}>{isPro ? "PRO 👑" : "FREE"}</Text>
+
+            <View
+              style={[
+                styles.badge,
+                { backgroundColor: isPro ? "#F59E0B" : colors.primary },
+              ]}
+            >
+              <Text style={styles.badgeText}>{isPro ? "PRO 👑" : "FREE"}</Text>
+            </View>
           </View>
         </View>
 
         <StreakHeader streakCount={user?.streakCount || 1} colors={colors} />
 
-        {/* 🚨 Calorie Deviation Alert & AI Recovery Assistant Trigger */}
+        {/* Calorie Deviation Alert & AI Recovery Assistant Trigger */}
         {isExceeded && (
-          <View style={styles.alertCard}>
+          <View
+            style={[
+              styles.alertCard,
+              { backgroundColor: colors.cardBg, borderColor: "#EF4444" },
+            ]}
+          >
             <Ionicons name="warning" size={22} color="#EF4444" />
             <View style={{ flex: 1, marginLeft: 8 }}>
-              <Text style={styles.alertText}>
+              <Text style={[styles.alertText, { color: colors.text }]}>
                 Diet Deviation Alert: Exceeded goal by{" "}
                 {currentEaten - calorieGoal} kcal!
               </Text>
               <TouchableOpacity
-                style={styles.recoveryBtn}
+                style={[styles.recoveryBtn, { backgroundColor: "#EF4444" }]}
                 onPress={handleFetchAiRecovery}
                 disabled={recoveryLoading}
               >
@@ -333,22 +336,31 @@ export default function DashboardScreen({ navigation }) {
 
         {/* AI Recovery Tip Card Display */}
         {aiRecoveryTip && (
-          <View style={styles.aiRecoveryCard}>
+          <View
+            style={[
+              styles.aiRecoveryCard,
+              { backgroundColor: colors.cardBg, borderColor: colors.primary },
+            ]}
+          >
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                marginBottom: 4,
+                marginBottom: 6,
               }}
             >
               <Ionicons
                 name="shield-checkmark"
                 size={16}
-                color="#10B981"
+                color={colors.primary}
                 style={{ marginRight: 6 }}
               />
               <Text
-                style={{ color: "#10B981", fontWeight: "bold", fontSize: 13 }}
+                style={{
+                  color: colors.primary,
+                  fontWeight: "bold",
+                  fontSize: 13,
+                }}
               >
                 NutriMorph AI Recovery Plan
               </Text>
@@ -359,7 +371,7 @@ export default function DashboardScreen({ navigation }) {
           </View>
         )}
 
-        {/* 💧 Water Tracker & 🏋️‍♂️ Log Exercise Row */}
+        {/* Water Tracker & Log Exercise Row */}
         <View style={styles.rowContainer}>
           {/* Water Tracker Card */}
           <View
@@ -369,7 +381,7 @@ export default function DashboardScreen({ navigation }) {
             ]}
           >
             <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Ionicons name="water" size={20} color="#3B82F6" />
+              <Ionicons name="water" size={20} color="#38BDF8" />
               <Text
                 style={[
                   styles.cardTitle,
@@ -381,7 +393,7 @@ export default function DashboardScreen({ navigation }) {
             </View>
             <Text
               style={{
-                color: "#3B82F6",
+                color: "#38BDF8",
                 fontWeight: "bold",
                 marginVertical: 6,
               }}
@@ -396,16 +408,23 @@ export default function DashboardScreen({ navigation }) {
               }}
             >
               <TouchableOpacity
-                style={styles.smallWaterBtn}
+                style={[
+                  styles.smallWaterBtn,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  },
+                ]}
                 onPress={() => handleWaterChange((waterIntake || 0) - 1)}
               >
-                <Ionicons name="remove" size={16} color="#FFF" />
+                <Ionicons name="remove" size={16} color={colors.text} />
               </TouchableOpacity>
               <Text style={{ color: colors.text, fontWeight: "bold" }}>
                 {waterIntake || 0} Glasses
               </Text>
               <TouchableOpacity
-                style={[styles.smallWaterBtn, { backgroundColor: "#3B82F6" }]}
+                style={[styles.smallWaterBtn, { backgroundColor: "#38BDF8" }]}
                 onPress={() => handleWaterChange((waterIntake || 0) + 1)}
               >
                 <Ionicons name="add" size={16} color="#FFF" />
@@ -457,7 +476,7 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        {/* 👟 Step Tracking Card */}
+        {/* Step Tracking Card */}
         <View
           style={[
             styles.card,
@@ -472,7 +491,7 @@ export default function DashboardScreen({ navigation }) {
             }}
           >
             <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Ionicons name="footsteps" size={22} color="#10B981" />
+              <Ionicons name="footsteps" size={22} color={colors.primary} />
               <Text
                 style={[
                   styles.cardTitle,
@@ -482,7 +501,7 @@ export default function DashboardScreen({ navigation }) {
                 Steps Tracking
               </Text>
             </View>
-            <Text style={{ color: "#10B981", fontWeight: "bold" }}>
+            <Text style={{ color: colors.primary, fontWeight: "bold" }}>
               {stepCount} / 10,000 steps
             </Text>
           </View>
@@ -493,19 +512,22 @@ export default function DashboardScreen({ navigation }) {
                 {
                   backgroundColor: colors.inputBg,
                   borderWidth: 1,
-                  borderColor: "#10B981",
+                  borderColor: colors.border,
                 },
               ]}
               onPress={handleConnectDevice}
             >
               <Text
-                style={{ color: "#10B981", fontWeight: "bold", fontSize: 12 }}
+                style={{ color: colors.text, fontWeight: "bold", fontSize: 12 }}
               >
                 🤖 Connect Device
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.stepActionBtn, { backgroundColor: "#10B981" }]}
+              style={[
+                styles.stepActionBtn,
+                { backgroundColor: colors.primary },
+              ]}
               onPress={handleAddSteps}
             >
               <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 12 }}>
@@ -515,7 +537,7 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        {/* 📈 Weight Loss Progress Graph Card */}
+        {/* Weight Loss Progress Graph Card */}
         <View
           style={[
             styles.card,
@@ -534,8 +556,18 @@ export default function DashboardScreen({ navigation }) {
           >
             Log Weight & monitor your target trajectory! 📉
           </Text>
-          <View style={styles.graphPlaceholder}>
-            <View style={styles.targetLineBadge}>
+          <View
+            style={[
+              styles.graphPlaceholder,
+              { backgroundColor: colors.glassGlow },
+            ]}
+          >
+            <View
+              style={[
+                styles.targetLineBadge,
+                { backgroundColor: colors.primary },
+              ]}
+            >
               <Text style={{ color: "#FFF", fontSize: 11, fontWeight: "bold" }}>
                 Target: {user?.targetWeight || 75} KG
               </Text>
@@ -543,12 +575,12 @@ export default function DashboardScreen({ navigation }) {
             <Ionicons
               name="analytics"
               size={48}
-              color="#10B981"
+              color={colors.primary}
               style={{ opacity: 0.8, marginVertical: 10 }}
             />
           </View>
           <TouchableOpacity
-            style={styles.weighInBtn}
+            style={[styles.weighInBtn, { backgroundColor: colors.primary }]}
             onPress={() => setShowWeighModal(true)}
           >
             <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 14 }}>
@@ -576,7 +608,7 @@ export default function DashboardScreen({ navigation }) {
               <Text
                 style={[
                   styles.statNum,
-                  { color: isExceeded ? "#EF4444" : "#10B981" },
+                  { color: isExceeded ? "#EF4444" : colors.primary },
                 ]}
               >
                 {currentEaten}
@@ -605,10 +637,17 @@ export default function DashboardScreen({ navigation }) {
 
           {/* View Logged History Button */}
           <TouchableOpacity
-            style={[styles.historyBtn, { backgroundColor: colors.inputBg }]}
+            style={[
+              styles.historyBtn,
+              {
+                backgroundColor: colors.inputBg,
+                borderColor: colors.border,
+                borderWidth: 1,
+              },
+            ]}
             onPress={() => setShowHistoryModal(true)}
           >
-            <Ionicons name="time-outline" size={18} color="#10B981" />
+            <Ionicons name="time-outline" size={18} color={colors.primary} />
             <Text style={[styles.historyBtnText, { color: colors.text }]}>
               View Logged History ({meals?.length || 0})
             </Text>
@@ -618,7 +657,7 @@ export default function DashboardScreen({ navigation }) {
         {/* Action Buttons */}
         <View style={styles.actionRow}>
           <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: "#10B981" }]}
+            style={[styles.actionCard, { backgroundColor: colors.primary }]}
             onPress={() => navigation.navigate("LogFoodScreen")}
           >
             <Ionicons name="add-circle-outline" size={24} color="#FFF" />
@@ -635,7 +674,7 @@ export default function DashboardScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* 🏋️‍♂️ Exercise Logging Modal */}
+      {/* Exercise Logging Modal */}
       <Modal
         visible={showExerciseModal}
         animationType="slide"
@@ -654,13 +693,14 @@ export default function DashboardScreen({ navigation }) {
             </Text>
 
             <TextInput
-              style={{
-                backgroundColor: colors.inputBg,
-                color: colors.text,
-                padding: 12,
-                borderRadius: 8,
-                marginVertical: 10,
-              }}
+              style={[
+                styles.modalInput,
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
               placeholder="Exercise Name (e.g. Running, Gym)"
               placeholderTextColor={colors.textSecondary}
               value={exerciseName}
@@ -668,13 +708,14 @@ export default function DashboardScreen({ navigation }) {
             />
 
             <TextInput
-              style={{
-                backgroundColor: colors.inputBg,
-                color: colors.text,
-                padding: 12,
-                borderRadius: 8,
-                marginBottom: 15,
-              }}
+              style={[
+                styles.modalInput,
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
               placeholder="Calories Burned (e.g. 250)"
               placeholderTextColor={colors.textSecondary}
               keyboardType="numeric"
@@ -688,7 +729,11 @@ export default function DashboardScreen({ navigation }) {
               <TouchableOpacity
                 style={[
                   styles.stepActionBtn,
-                  { backgroundColor: colors.inputBg },
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  },
                 ]}
                 onPress={() => setShowExerciseModal(false)}
               >
@@ -712,7 +757,7 @@ export default function DashboardScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* ⚖️ Weigh-in Modal */}
+      {/* Weigh-in Modal */}
       <Modal
         visible={showWeighModal}
         animationType="slide"
@@ -730,13 +775,14 @@ export default function DashboardScreen({ navigation }) {
               Log Your Current Weight
             </Text>
             <TextInput
-              style={{
-                backgroundColor: colors.inputBg,
-                color: colors.text,
-                padding: 12,
-                borderRadius: 8,
-                marginVertical: 15,
-              }}
+              style={[
+                styles.modalInput,
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
               placeholder="Enter weight in KG (e.g. 74.5)"
               placeholderTextColor={colors.textSecondary}
               keyboardType="numeric"
@@ -749,7 +795,11 @@ export default function DashboardScreen({ navigation }) {
               <TouchableOpacity
                 style={[
                   styles.stepActionBtn,
-                  { backgroundColor: colors.inputBg },
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  },
                 ]}
                 onPress={() => setShowWeighModal(false)}
               >
@@ -760,17 +810,13 @@ export default function DashboardScreen({ navigation }) {
               <TouchableOpacity
                 style={[
                   styles.stepActionBtn,
-                  { backgroundColor: "#10B981", marginLeft: 10 },
+                  { backgroundColor: colors.primary, marginLeft: 10 },
                 ]}
                 onPress={() => {
-                  if (typeof alert !== "undefined") {
-                    alert(`Weight successfully updated to ${newWeight} KG!`);
-                  } else {
-                    Alert.alert(
-                      "Success",
-                      `Weight successfully updated to ${newWeight} KG!`,
-                    );
-                  }
+                  Alert.alert(
+                    "Success",
+                    `Weight successfully updated to ${newWeight} KG!`,
+                  );
                   setShowWeighModal(false);
                   setNewWeight("");
                 }}
@@ -784,7 +830,7 @@ export default function DashboardScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* 📜 Meal History Modal */}
+      {/* Meal History Modal */}
       <Modal
         visible={showHistoryModal}
         animationType="slide"
@@ -854,7 +900,7 @@ export default function DashboardScreen({ navigation }) {
                     >
                       <Text
                         style={{
-                          color: "#10B981",
+                          color: colors.primary,
                           fontWeight: "bold",
                           marginRight: 12,
                         }}
@@ -862,7 +908,7 @@ export default function DashboardScreen({ navigation }) {
                         {item.calories} kcal
                       </Text>
                       <TouchableOpacity
-                        style={{ padding: 12 }}
+                        style={{ padding: 6 }}
                         onPress={() =>
                           handleDeleteMeal(item._id || item.id, item.name)
                         }
@@ -897,42 +943,52 @@ const styles = StyleSheet.create({
   },
   greeting: { fontSize: 13, fontWeight: "500" },
   userName: { fontSize: 20, fontWeight: "bold" },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  badge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
   badgeText: { color: "#FFF", fontSize: 11, fontWeight: "bold" },
   alertCard: {
-    backgroundColor: "#FEF2F2",
     borderWidth: 1,
-    borderColor: "#FCA5A5",
-    padding: 12,
-    borderRadius: 12,
+    padding: 14,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "flex-start",
     marginBottom: 16,
+    shadowColor: "#EF4444",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
   alertText: {
-    color: "#991B1B",
     fontSize: 13,
     fontWeight: "600",
     marginBottom: 6,
   },
   recoveryBtn: {
-    backgroundColor: "#EF4444",
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
     marginTop: 4,
   },
   recoveryBtnText: { color: "#FFF", fontSize: 12, fontWeight: "bold" },
   aiRecoveryCard: {
-    backgroundColor: "#111827",
     borderWidth: 1,
-    borderColor: "#10B981",
     padding: 14,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 16,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   rowContainer: {
     flexDirection: "row",
@@ -944,12 +1000,16 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   smallWaterBtn: {
-    backgroundColor: "#64748B",
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -960,92 +1020,107 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 6,
     borderRadius: 8,
-    marginTop: 4,
+    marginTop: 6,
   },
   stepActionBtn: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 10,
+    borderRadius: 10,
     alignItems: "center",
+    justifyContent: "center",
   },
   graphPlaceholder: {
-    backgroundColor: "rgba(16, 185, 129, 0.1)",
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    padding: 10,
+    padding: 12,
     marginVertical: 8,
   },
   targetLineBadge: {
-    backgroundColor: "#10B981",
     paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 10,
     alignSelf: "flex-start",
   },
   weighInBtn: {
-    backgroundColor: "#10B981",
     alignItems: "center",
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginTop: 4,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 6,
   },
   card: { borderRadius: 16, padding: 18, borderWidth: 1, marginBottom: 16 },
   cardTitle: { fontSize: 15, fontWeight: "bold" },
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-around",
-    alignItems: "center",
-    width: "100%",
-    marginVertical: 16,
+    marginVertical: 14,
   },
-  statItem: { flex: 1, alignItems: "center" },
+  statItem: { alignItems: "center" },
   statNum: { fontSize: 20, fontWeight: "bold" },
-  statLabel: { fontSize: 12, marginTop: 4 },
+  statLabel: { fontSize: 12, marginTop: 2 },
   historyBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: 12,
-    borderRadius: 10,
-    marginTop: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 4,
+    gap: 8,
   },
-  historyBtnText: { fontWeight: "600", marginLeft: 8, fontSize: 13 },
-  actionRow: { flexDirection: "row", justifyContent: "space-between" },
+  historyBtnText: { fontWeight: "bold", fontSize: 13 },
+  actionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
   actionCard: {
     width: "48%",
     padding: 16,
-    borderRadius: 14,
+    borderRadius: 16,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  actionCardText: { color: "#FFF", fontWeight: "bold", marginTop: 8 },
+  actionCardText: { color: "#FFF", fontWeight: "bold", fontSize: 15 },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
     justifyContent: "center",
     padding: 20,
   },
   modalContent: {
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
-    maxHeight: "80%",
     borderWidth: 1,
+    maxHeight: "80%",
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  modalTitle: { fontSize: 18, fontWeight: "bold" },
+  modalTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 10 },
+  modalInput: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 14,
+    fontSize: 15,
+  },
   historyItem: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     marginBottom: 10,
   },
-  mealName: { fontWeight: "bold", fontSize: 14, marginBottom: 2 },
+  mealName: { fontSize: 15, fontWeight: "bold", marginBottom: 2 },
 });

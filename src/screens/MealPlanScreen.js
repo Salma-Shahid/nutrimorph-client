@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMealPlanStore } from "../store/useMealPlanStore";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
-import { saveDataToCache, getDataFromCache } from "../utils/cache"; // 🟢 Offline Cache Utility
+import { saveDataToCache, getDataFromCache } from "../utils/cache";
 
 export default function MealPlanScreen({ navigation }) {
   const user = useAuthStore((state) => state.user);
@@ -23,7 +23,6 @@ export default function MealPlanScreen({ navigation }) {
   const { activeMealPlan, isLoading, generateMealPlan, fetchActiveMealPlan } =
     useMealPlanStore();
 
-  // 🟢 Onboarding Data Sync Defaults
   const [goal, setGoal] = useState(
     user?.goal || user?.fitnessGoal || "weight_loss",
   );
@@ -47,7 +46,6 @@ export default function MealPlanScreen({ navigation }) {
 
   const durationOptions = [3, 5, 7, 15, 30];
 
-  // Sync user profile state updates when user updates onboarding profile
   useEffect(() => {
     if (user) {
       if (user.goal || user.fitnessGoal) setGoal(user.goal || user.fitnessGoal);
@@ -60,11 +58,9 @@ export default function MealPlanScreen({ navigation }) {
   useEffect(() => {
     const loadMealPlan = async () => {
       try {
-        // 1. Fetch fresh plan from API
         await fetchActiveMealPlan();
       } catch (error) {
         console.log("⚠️ Network offline. Checking for cached meal plan...");
-        // 2. Fallback to cached meal plan if offline
         const cachedPlan = await getDataFromCache("active_meal_plan");
         if (cachedPlan) {
           useMealPlanStore.setState({ activeMealPlan: cachedPlan });
@@ -75,7 +71,6 @@ export default function MealPlanScreen({ navigation }) {
     loadMealPlan();
   }, []);
 
-  // Save active meal plan to cache whenever it updates
   useEffect(() => {
     if (activeMealPlan) {
       saveDataToCache("active_meal_plan", activeMealPlan);
@@ -88,7 +83,7 @@ export default function MealPlanScreen({ navigation }) {
       dietType,
       duration: Number(duration),
       targetCalories: Number(targetCalories) || 2000,
-      preferredMealsCount: user?.preferredMealsCount || 4, // 🟢 Passes preferred meal count from onboarding
+      preferredMealsCount: user?.preferredMealsCount || 4,
     });
 
     if (!res.success) {
@@ -155,7 +150,9 @@ export default function MealPlanScreen({ navigation }) {
                   styles.optionChip,
                   {
                     backgroundColor:
-                      goal === item.id ? "#10B981" : colors.inputBg,
+                      goal === item.id ? colors.primary : colors.inputBg,
+                    borderColor: colors.border,
+                    borderWidth: 1,
                   },
                 ]}
                 onPress={() => setGoal(item.id)}
@@ -194,7 +191,7 @@ export default function MealPlanScreen({ navigation }) {
                   styles.dietChip,
                   {
                     backgroundColor:
-                      duration === days ? "#10B981" : colors.inputBg,
+                      duration === days ? colors.primary : colors.inputBg,
                     borderColor: colors.border,
                   },
                 ]}
@@ -234,7 +231,7 @@ export default function MealPlanScreen({ navigation }) {
                   styles.dietChip,
                   {
                     backgroundColor:
-                      dietType === type ? "#10B981" : colors.inputBg,
+                      dietType === type ? colors.primary : colors.inputBg,
                     borderColor: colors.border,
                   },
                 ]}
@@ -255,7 +252,7 @@ export default function MealPlanScreen({ navigation }) {
 
           {/* Dynamic Generate Button */}
           <TouchableOpacity
-            style={styles.generateBtn}
+            style={[styles.generateBtn, { backgroundColor: colors.primary }]}
             onPress={handleGenerate}
             disabled={isLoading}
           >
@@ -299,7 +296,11 @@ export default function MealPlanScreen({ navigation }) {
                   Your Active Plan ({activeMealPlan.days.length} Days)
                 </Text>
                 <Text
-                  style={{ color: "#10B981", fontWeight: "bold", fontSize: 12 }}
+                  style={{
+                    color: colors.primary,
+                    fontWeight: "bold",
+                    fontSize: 12,
+                  }}
                 >
                   {activeMealPlan.targetCalories} kcal/day
                 </Text>
@@ -319,8 +320,10 @@ export default function MealPlanScreen({ navigation }) {
                       {
                         backgroundColor:
                           selectedDayIndex === index
-                            ? "#10B981"
+                            ? colors.primary
                             : colors.inputBg,
+                        borderWidth: 1,
+                        borderColor: colors.border,
                       },
                     ]}
                     onPress={() => setSelectedDayIndex(index)}
@@ -356,7 +359,10 @@ export default function MealPlanScreen({ navigation }) {
                       >
                         <View style={{ flex: 1 }}>
                           <Text
-                            style={[styles.mealTypeTitle, { color: "#10B981" }]}
+                            style={[
+                              styles.mealTypeTitle,
+                              { color: colors.primary },
+                            ]}
                           >
                             {mealType.toUpperCase()}
                           </Text>
@@ -378,7 +384,7 @@ export default function MealPlanScreen({ navigation }) {
                         </View>
                         <Text
                           style={{
-                            color: colors.text,
+                            color: colors.primary,
                             fontWeight: "bold",
                             fontSize: 13,
                           }}
@@ -400,10 +406,20 @@ export default function MealPlanScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { padding: 20, paddingBottom: 40 },
-  header: { marginBottom: 20 },
+  header: { marginBottom: 20, paddingHorizontal: 4 },
   headerTitle: { fontSize: 22, fontWeight: "bold" },
   headerSubtitle: { fontSize: 13, marginTop: 2 },
-  card: { borderRadius: 16, padding: 18, borderWidth: 1, marginBottom: 16 },
+  card: {
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    marginBottom: 16,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
   cardTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 12 },
   label: { fontSize: 12, fontWeight: "600", marginBottom: 6 },
   optionsRow: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
@@ -421,13 +437,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   generateBtn: {
-    backgroundColor: "#10B981",
     flexDirection: "row",
     height: 48,
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 6,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   generateBtnText: { color: "#FFF", fontWeight: "bold", fontSize: 15 },
   dayTab: {
@@ -441,7 +461,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
   },
   mealTypeTitle: { fontSize: 11, fontWeight: "bold", marginBottom: 2 },

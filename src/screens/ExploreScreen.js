@@ -38,7 +38,7 @@ export default function ExploreScreen({ navigation }) {
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // 🟢 Meal Type Modal States
+  // Meal Type Modal States
   const [showMealModal, setShowMealModal] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [chosenMealType, setChosenMealType] = useState("Lunch");
@@ -97,7 +97,7 @@ export default function ExploreScreen({ navigation }) {
           carbs: selectedRecipe.carbs,
           fats: selectedRecipe.fats,
           date: todayDate,
-          mealType: chosenMealType, // 🟢 Passed here
+          mealType: chosenMealType,
         },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -149,8 +149,10 @@ export default function ExploreScreen({ navigation }) {
                 style={[
                   styles.categoryPill,
                   {
-                    backgroundColor: isSelected ? "#10B981" : colors.cardBg,
-                    borderColor: isSelected ? "#10B981" : colors.border,
+                    backgroundColor: isSelected
+                      ? colors.primary
+                      : colors.cardBg,
+                    borderColor: isSelected ? colors.primary : colors.border,
                   },
                 ]}
                 onPress={() => setSelectedCategory(cat)}
@@ -173,7 +175,7 @@ export default function ExploreScreen({ navigation }) {
       {/* Recipe Cards List */}
       {loading ? (
         <ActivityIndicator
-          color="#10B981"
+          color={colors.primary}
           size="large"
           style={{ marginTop: 40 }}
         />
@@ -211,10 +213,18 @@ export default function ExploreScreen({ navigation }) {
               />
               <View style={styles.cardContent}>
                 <View style={styles.badgeRow}>
-                  <Text style={styles.categoryBadge}>
+                  <Text
+                    style={[
+                      styles.categoryBadge,
+                      {
+                        backgroundColor: colors.glassGlow,
+                        color: colors.primary,
+                      },
+                    ]}
+                  >
                     {item.category || "High-Protein"}
                   </Text>
-                  <Text style={{ color: "#10B981", fontWeight: "bold" }}>
+                  <Text style={{ color: colors.primary, fontWeight: "bold" }}>
                     {item.calories} kcal
                   </Text>
                 </View>
@@ -236,7 +246,10 @@ export default function ExploreScreen({ navigation }) {
 
                 {/* Direct "Add To Diary" Button triggers Modal */}
                 <TouchableOpacity
-                  style={styles.addToDiaryBtn}
+                  style={[
+                    styles.addToDiaryBtn,
+                    { backgroundColor: colors.primary },
+                  ]}
                   onPress={() => handleOpenMealModal(item)}
                 >
                   <Ionicons
@@ -253,7 +266,7 @@ export default function ExploreScreen({ navigation }) {
         />
       )}
 
-      {/* 🟢 Meal Type Selection Modal */}
+      {/* Meal Type Selection Modal */}
       <Modal
         visible={showMealModal}
         transparent={true}
@@ -302,9 +315,11 @@ export default function ExploreScreen({ navigation }) {
                       styles.mealTypeOption,
                       {
                         backgroundColor: isSelected
-                          ? "#10B981"
-                          : colors.inputData || "#1F2937",
-                        borderColor: isSelected ? "#10B981" : colors.border,
+                          ? colors.primary
+                          : colors.inputBg,
+                        borderColor: isSelected
+                          ? colors.primary
+                          : colors.border,
                       },
                     ]}
                     onPress={() => setChosenMealType(type)}
@@ -332,16 +347,20 @@ export default function ExploreScreen({ navigation }) {
 
             {/* Confirm Button */}
             <TouchableOpacity
-              style={[styles.confirmBtn, { opacity: submitting ? 0.7 : 1 }]}
+              style={[
+                styles.confirmBtn,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: submitting ? 0.7 : 1,
+                },
+              ]}
               onPress={handleConfirmAddToDiary}
               disabled={submitting}
             >
               {submitting ? (
                 <ActivityIndicator color="#FFF" />
               ) : (
-                <Text style={styles.confirmBtnText}>
-                  Confirm & Add to Log
-                </Text>
+                <Text style={styles.confirmBtnText}>Confirm & Add to Log</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -368,6 +387,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 16,
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   recipeImage: {
     width: "100%",
@@ -382,8 +406,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   categoryBadge: {
-    backgroundColor: "rgba(16, 185, 129, 0.15)",
-    color: "#10B981",
     fontSize: 11,
     fontWeight: "bold",
     paddingHorizontal: 8,
@@ -392,12 +414,16 @@ const styles = StyleSheet.create({
   },
   recipeTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 4 },
   addToDiaryBtn: {
-    backgroundColor: "#10B981",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 10,
     borderRadius: 10,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   addToDiaryText: { color: "#FFF", fontWeight: "bold", fontSize: 13 },
   emptyState: { alignItems: "center", marginTop: 60 },
@@ -408,7 +434,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
     borderWidth: 1,
   },
@@ -428,10 +454,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   confirmBtn: {
-    backgroundColor: "#10B981",
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   confirmBtnText: { color: "#FFF", fontWeight: "bold", fontSize: 15 },
 });

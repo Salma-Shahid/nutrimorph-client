@@ -127,7 +127,7 @@ export default function MealScannerScreen({ navigation }) {
         const data = res.data.data || res.data;
         const nameLower = (data.name || data.foodName || "").toLowerCase();
 
-        // Strict Non-Food Detection: Do not open modal or allow logging if non-food item
+        // Strict Non-Food Detection
         const isNonFood =
           data.isFood === false ||
           data.isFood === "false" ||
@@ -175,7 +175,7 @@ export default function MealScannerScreen({ navigation }) {
     }
   };
 
-  // 2. Barcode Product Lookup using Open Food Facts API (Fixed 404 & Lock)
+  // 2. Barcode Product Lookup using Open Food Facts API
   const fetchProductByBarcode = async (barcode) => {
     setShowBarcodeScanner(false);
     setAnalyzing(true);
@@ -325,7 +325,9 @@ export default function MealScannerScreen({ navigation }) {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={[styles.title, { color: colors.text }]}>AI Scan Meal</Text>
+        <Text style={[styles.title, { color: colors.text }]}>
+          AI Scan Meal 📸
+        </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           Take or upload a food photo, or scan a packaged product barcode.
         </Text>
@@ -372,7 +374,7 @@ export default function MealScannerScreen({ navigation }) {
           </TouchableOpacity>
         )}
 
-        {/* Picker Actions: Camera, Gallery, Saved Recipes, Barcode (2x2 Grid Layout) */}
+        {/* Picker Actions Grid */}
         <View style={styles.actionGrid}>
           <TouchableOpacity
             style={[
@@ -381,7 +383,7 @@ export default function MealScannerScreen({ navigation }) {
             ]}
             onPress={() => pickImage(true)}
           >
-            <Ionicons name="camera" size={18} color="#10B981" />
+            <Ionicons name="camera" size={18} color={colors.primary} />
             <Text style={[styles.gridBtnText, { color: colors.text }]}>
               Camera
             </Text>
@@ -394,7 +396,7 @@ export default function MealScannerScreen({ navigation }) {
             ]}
             onPress={() => pickImage(false)}
           >
-            <Ionicons name="images" size={18} color="#10B981" />
+            <Ionicons name="images" size={18} color={colors.primary} />
             <Text style={[styles.gridBtnText, { color: colors.text }]}>
               Gallery
             </Text>
@@ -431,6 +433,7 @@ export default function MealScannerScreen({ navigation }) {
         <TouchableOpacity
           style={[
             styles.analyzeBtn,
+            { backgroundColor: colors.primary },
             (!imageBase64 || analyzing) && { opacity: 0.6 },
           ]}
           onPress={handleAnalyzePhoto}
@@ -474,13 +477,27 @@ export default function MealScannerScreen({ navigation }) {
       {/* Confirmation & Editing Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.cardBg }]}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+          >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>
-                Confirm Nutrition
+                Confirm Nutrition 🥗
               </Text>
-              <View style={styles.confidenceBadge}>
-                <Text style={styles.confidenceText}>{confidence}</Text>
+              <View
+                style={[
+                  styles.confidenceBadge,
+                  { backgroundColor: colors.glassGlow },
+                ]}
+              >
+                <Text
+                  style={[styles.confidenceText, { color: colors.primary }]}
+                >
+                  {confidence}
+                </Text>
               </View>
             </View>
 
@@ -587,7 +604,7 @@ export default function MealScannerScreen({ navigation }) {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.confirmBtn}
+                style={[styles.confirmBtn, { backgroundColor: colors.primary }]}
                 onPress={handleConfirmAndSave}
                 disabled={savingMeal}
               >
@@ -650,15 +667,24 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   gridBtnText: { fontWeight: "bold", marginLeft: 6, fontSize: 13 },
   analyzeBtn: {
-    backgroundColor: "#10B981",
     padding: 16,
     borderRadius: 12,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   analyzeBtnText: { color: "#FFF", fontWeight: "bold", fontSize: 16 },
   closeBarcodeBtn: {
@@ -675,7 +701,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 20,
   },
-  modalCard: { borderRadius: 16, padding: 20 },
+  modalCard: {
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
+  },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -684,17 +719,16 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 18, fontWeight: "bold" },
   confidenceBadge: {
-    backgroundColor: "rgba(16, 185, 129, 0.15)",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
-  confidenceText: { color: "#10B981", fontSize: 11, fontWeight: "bold" },
+  confidenceText: { fontSize: 11, fontWeight: "bold" },
   label: { fontSize: 12, fontWeight: "600", marginBottom: 4 },
   input: {
     borderWidth: 1,
-    borderRadius: 8,
-    padding: 10,
+    borderRadius: 12,
+    padding: 12,
     marginBottom: 12,
     fontSize: 14,
   },
@@ -708,9 +742,13 @@ const styles = StyleSheet.create({
   },
   cancelBtn: { padding: 12, marginRight: 12 },
   confirmBtn: {
-    backgroundColor: "#10B981",
     paddingHorizontal: 18,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 12,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
 });

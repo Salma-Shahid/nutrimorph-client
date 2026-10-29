@@ -1,10 +1,15 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { useAuthStore } from "../store/useAuthStore";
+import { getThemeColors } from "../theme/colors";
 
 export default function CalorieChart({
   targetCalories = 2000,
   historyData = [],
 }) {
+  const { theme } = useAuthStore();
+  const colors = getThemeColors(theme);
+
   // Default days list agar data array empty ho
   const defaultDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -20,10 +25,22 @@ export default function CalorieChart({
   const maxCal = Math.max(...chartData.map((d) => d.calories), targetCalories);
 
   return (
-    <View style={styles.card}>
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.cardBg,
+          borderColor: colors.border,
+        },
+      ]}
+    >
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Weekly Calorie Trend 📈</Text>
-        <Text style={styles.targetText}>Target: {targetCalories} kcal</Text>
+        <Text style={[styles.title, { color: colors.text }]}>
+          Weekly Calorie Trend 📈
+        </Text>
+        <Text style={[styles.targetText, { color: colors.textSecondary }]}>
+          Target: {targetCalories} kcal
+        </Text>
       </View>
 
       <View style={styles.chartContainer}>
@@ -33,21 +50,33 @@ export default function CalorieChart({
 
           return (
             <View key={index} style={styles.barCol}>
-              <Text style={styles.calText}>{item.calories}</Text>
+              <Text style={[styles.calText, { color: colors.textSecondary }]}>
+                {item.calories}
+              </Text>
 
-              <View style={styles.barTrack}>
+              <View
+                style={[
+                  styles.barTrack,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
                 <View
                   style={[
                     styles.barFill,
                     {
                       height: `${barHeight}%`,
-                      backgroundColor: isOverGoal ? "#ff4d4d" : "#4CAF50",
+                      backgroundColor: isOverGoal ? "#EF4444" : colors.primary,
                     },
                   ]}
                 />
               </View>
 
-              <Text style={styles.dayLabel}>{item.day}</Text>
+              <Text style={[styles.dayLabel, { color: colors.text }]}>
+                {item.day}
+              </Text>
             </View>
           );
         })}
@@ -58,12 +87,15 @@ export default function CalorieChart({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#1e1e1e",
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: "#2a2a2a",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   headerRow: {
     flexDirection: "row",
@@ -71,8 +103,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  title: { color: "#fff", fontSize: 16, fontWeight: "bold" },
-  targetText: { color: "#888", fontSize: 12 },
+  title: { fontSize: 16, fontWeight: "bold" },
+  targetText: { fontSize: 12, fontWeight: "600" },
   chartContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -81,15 +113,15 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   barCol: { alignItems: "center", flex: 1 },
-  calText: { color: "#aaa", fontSize: 9, marginBottom: 4 },
+  calText: { fontSize: 9, marginBottom: 4, fontWeight: "600" },
   barTrack: {
     width: 12,
     height: 80,
-    backgroundColor: "#2a2a2a",
     borderRadius: 6,
     justifyContent: "flex-end",
     overflow: "hidden",
+    borderWidth: 1,
   },
   barFill: { width: "100%", borderRadius: 6 },
-  dayLabel: { color: "#888", fontSize: 11, marginTop: 6, fontWeight: "600" },
+  dayLabel: { fontSize: 11, marginTop: 6, fontWeight: "600" },
 });

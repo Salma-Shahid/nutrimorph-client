@@ -1,10 +1,15 @@
 import React, { useEffect, useRef } from "react";
-import { View, Animated, Image, StyleSheet, Easing } from "react-native";
+import { View, Text, Animated, StyleSheet, Easing } from "react-native";
+import { useAuthStore } from "../store/useAuthStore";
+import { getThemeColors } from "../theme/colors";
 
 /**
  * Animated Custom App Logo Loader with Breathing & Glowing Effect
  */
 const CustomAppLoader = ({ size = 60, text = "NutriBot is thinking..." }) => {
+  const { theme } = useAuthStore();
+  const colors = getThemeColors(theme);
+
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(0.4)).current;
 
@@ -52,6 +57,8 @@ const CustomAppLoader = ({ size = 60, text = "NutriBot is thinking..." }) => {
             width: size + 24,
             height: size + 24,
             borderRadius: (size + 24) / 2,
+            backgroundColor: colors.glassGlow || "rgba(16, 185, 129, 0.35)",
+            shadowColor: colors.primary,
             transform: [{ scale: scaleAnim }],
             opacity: opacityAnim,
           },
@@ -60,18 +67,25 @@ const CustomAppLoader = ({ size = 60, text = "NutriBot is thinking..." }) => {
 
       {/* Animated App Icon */}
       <Animated.Image
-        source={require("../../assets/icon.png")} // Change to your app logo/icon path
+        source={require("../../assets/icon.png")}
         style={[
           styles.logo,
           {
             width: size,
             height: size,
             borderRadius: size / 4,
+            shadowColor: colors.primary,
             transform: [{ scale: scaleAnim }],
           },
         ]}
         resizeMode="contain"
       />
+
+      {text ? (
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+          {text}
+        </Text>
+      ) : null}
     </View>
   );
 };
@@ -80,22 +94,25 @@ const styles = StyleSheet.create({
   container: {
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 16,
   },
   glowRing: {
     position: "absolute",
-    backgroundColor: "rgba(16, 185, 129, 0.35)", // NutriMorph theme green glow
-    shadowColor: "#10B981",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 15,
     elevation: 8,
   },
   logo: {
-    shadowColor: "#10B981",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: 0.3,
   },
 });
 

@@ -11,13 +11,16 @@ import {
   Platform,
   ScrollView,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../store/useAuthStore";
+import { getThemeColors } from "../theme/colors";
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const { login, isLoading, error } = useAuthStore();
+  const { login, isLoading, error, theme } = useAuthStore();
+  const colors = getThemeColors(theme || "dark");
 
   const handleLogin = async () => {
     const trimmedEmail = email.trim();
@@ -36,22 +39,47 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={[styles.safeArea, { backgroundColor: colors.bg }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[
+          styles.container,
+          { backgroundColor: colors.bg },
+        ]}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>NutriMorph</Text>
-        <Text style={styles.subtitle}>Welcome Back!</Text>
+        <View style={styles.headerContainer}>
+          <View
+            style={[
+              styles.logoIconContainer,
+              {
+                backgroundColor: colors.glassGlow,
+                borderColor: colors.primary,
+              },
+            ]}
+          >
+            <Ionicons name="leaf" size={40} color={colors.primary} />
+          </View>
+          <Text style={[styles.title, { color: colors.text }]}>NutriMorph</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            Welcome Back! Please login to continue.
+          </Text>
+        </View>
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.inputBg,
+              color: colors.text,
+              borderColor: colors.border,
+            },
+          ]}
           placeholder="Email Address"
-          placeholderTextColor="#888"
+          placeholderTextColor={colors.textSecondary}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -60,16 +88,27 @@ export default function LoginScreen({ navigation }) {
         />
 
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.inputBg,
+              color: colors.text,
+              borderColor: colors.border,
+            },
+          ]}
           placeholder="Password"
-          placeholderTextColor="#888"
+          placeholderTextColor={colors.textSecondary}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
         />
 
         <TouchableOpacity
-          style={[styles.button, isLoading && { opacity: 0.7 }]}
+          style={[
+            styles.button,
+            { backgroundColor: colors.primary },
+            isLoading && { opacity: 0.7 },
+          ]}
           onPress={handleLogin}
           disabled={isLoading}
         >
@@ -80,9 +119,15 @@ export default function LoginScreen({ navigation }) {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate("Signup")}>
-          <Text style={styles.linkText}>
-            Account nahi hai? <Text style={styles.linkBold}>Signup karein</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Signup")}
+          style={styles.linkContainer}
+        >
+          <Text style={[styles.linkText, { color: colors.textSecondary }]}>
+            Account nahi hai?{" "}
+            <Text style={[styles.linkBold, { color: colors.primary }]}>
+              Signup karein
+            </Text>
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -91,41 +136,61 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 24,
     paddingVertical: 32,
-    backgroundColor: "#121212",
+  },
+  headerContainer: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  logoIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   title: {
     fontSize: 32,
     fontWeight: "bold",
-    color: "#4CAF50",
     textAlign: "center",
+    letterSpacing: 0.5,
   },
   subtitle: {
-    fontSize: 16,
-    color: "#aaa",
+    fontSize: 14,
     textAlign: "center",
-    marginBottom: 32,
+    marginTop: 4,
   },
   input: {
-    backgroundColor: "#1e1e1e",
-    color: "#fff",
-    borderRadius: 8,
-    padding: 14,
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 16,
-    fontSize: 16,
+    fontSize: 15,
     borderWidth: 1,
-    borderColor: "#333",
   },
   button: {
-    backgroundColor: "#4CAF50",
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 16,
     alignItems: "center",
     marginTop: 8,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   buttonText: {
     color: "#fff",
@@ -136,14 +201,17 @@ const styles = StyleSheet.create({
     color: "#ff5252",
     textAlign: "center",
     marginBottom: 16,
+    fontWeight: "600",
+  },
+  linkContainer: {
+    alignItems: "center",
+    marginTop: 24,
   },
   linkText: {
-    color: "#aaa",
     textAlign: "center",
-    marginTop: 20,
+    fontSize: 14,
   },
   linkBold: {
-    color: "#4CAF50",
     fontWeight: "bold",
   },
 });

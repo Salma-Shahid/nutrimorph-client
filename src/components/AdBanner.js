@@ -1,6 +1,7 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import { useAuthStore } from "../store/useAuthStore";
+import { getThemeColors } from "../theme/colors";
 
 let BannerAd, BannerAdSize, TestIds;
 try {
@@ -13,7 +14,8 @@ try {
 }
 
 export default function AdBanner() {
-  const user = useAuthStore((state) => state.user);
+  const { user, theme } = useAuthStore();
+  const colors = getThemeColors(theme);
   const isPro = user?.subscriptionTier === "pro" || user?.isPro === true;
 
   // Agar Pro user hai ya native module runtime mein load nahi hua (Expo Go)
@@ -26,7 +28,15 @@ export default function AdBanner() {
     : "ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy";
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.cardBg,
+          borderTopColor: colors.border,
+        },
+      ]}
+    >
       <BannerAd
         unitId={adUnitId}
         size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
@@ -46,9 +56,7 @@ const styles = StyleSheet.create({
   container: {
     width: "100%",
     alignItems: "center",
-    backgroundColor: "#1E293B",
     borderTopWidth: 1,
-    borderTopColor: "#334155",
     paddingVertical: 4,
   },
 });

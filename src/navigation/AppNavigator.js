@@ -9,8 +9,8 @@ import ChatBotScreen from "../screens/ChatBotScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import MealPlanScreen from "../screens/MealPlanScreen";
 import AchievementsScreen from "../screens/AchievementsScreen";
-import ExploreScreen from "../screens/ExploreScreen"; // 🟢 Added
-import RecipeDetailScreen from "../screens/RecipeDetailScreen"; // 🟢 Added
+import ExploreScreen from "../screens/ExploreScreen";
+import RecipeDetailScreen from "../screens/RecipeDetailScreen";
 
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
@@ -32,15 +32,14 @@ export default function AppNavigator() {
           paddingBottom: 8,
           paddingTop: 8,
         },
-        tabBarActiveTintColor: "#10B981",
-        tabBarInactiveTintColor: "#64748B",
+        tabBarActiveTintColor: colors?.primary || "#10B981",
+        tabBarInactiveTintColor: colors?.textSecondary || "#64748B",
         tabBarIcon: ({ color, size }) => {
           let iconName = "grid-outline";
           if (route.name === "Dashboard") iconName = "grid-outline";
           else if (route.name === "Meal Plan") iconName = "restaurant-outline";
           else if (route.name === "Scan Meal") iconName = "scan-outline";
-          else if (route.name === "Explore")
-            iconName = "compass-outline"; // 🟢 Icon for Explore
+          else if (route.name === "Explore") iconName = "compass-outline";
           else if (route.name === "NutriBot") iconName = "chatbubbles-outline";
           else if (route.name === "Profile") iconName = "person-outline";
           else if (route.name === "Achievements") iconName = "trophy-outline";
@@ -64,12 +63,12 @@ export default function AppNavigator() {
         options={{ headerShown: false }}
       />
 
-      {/* 🟢 Detail Screen hidden from Bottom Tab Bar */}
+      {/* Detail Screen hidden from Bottom Tab Bar */}
       <Tab.Screen
         name="RecipeDetailScreen"
         component={RecipeDetailScreen}
         options={{
-          tabBarButton: () => null, // Bottom bar par icon button hide kar dega
+          tabBarButton: () => null,
         }}
       />
     </Tab.Navigator>

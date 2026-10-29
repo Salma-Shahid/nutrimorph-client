@@ -8,9 +8,11 @@ import {
   ActivityIndicator,
   View,
   ScrollView,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useMealStore } from "../store/useMealStore";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
@@ -38,7 +40,22 @@ export default function LogFoodScreen({ navigation, route }) {
   );
 
   const [mealType, setMealType] = useState("Lunch");
+  const [imageUri, setImageUri] = useState(initialData.image || null);
   const [aiLoading, setAiLoading] = useState(false);
+
+  // 🟢 Image Picker Handler
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setImageUri(result.assets[0].uri);
+    }
+  };
 
   // AI Auto-Fill Handler
   const handleAiAutoFill = async () => {
@@ -70,14 +87,28 @@ export default function LogFoodScreen({ navigation, route }) {
       return;
     }
 
-    const res = await logMeal({
-      name: name.trim(),
-      calories: Number(calories),
-      protein: Number(protein) || 0,
-      carbs: Number(carbs) || 0,
-      fats: Number(fats) || 0,
-      mealType: mealType,
-    });
+    // FormData use hoga agar image bhi bhejni ho backend par
+    const formData = new FormData();
+    formData.append("name", name.trim());
+    formData.append("calories", Number(calories));
+    formData.append("protein", Number(protein) || 0);
+    formData.append("carbs", Number(carbs) || 0);
+    formData.append("fats", Number(fats) || 0);
+    formData.append("mealType", mealType);
+
+    if (imageUri) {
+      const filename = imageUri.split("/").pop();
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+      formData.append("image", {
+        uri: imageUri,
+        name: filename || "meal.jpg",
+        type,
+      });
+    }
+
+    const res = await logMeal(formData, true); // True indicating multipart/form-data if store supports it
 
     if (res?.success) {
       Alert.alert("Success 🎉", "Meal is successfully logged!");
@@ -108,6 +139,35 @@ export default function LogFoodScreen({ navigation, route }) {
             Log Food Item 📝
           </Text>
         </View>
+
+        {/* 🟢 Meal Image Picker Section */}
+        <TouchableOpacity
+          style={[
+            styles.imagePickerCard,
+            { backgroundColor: colors.cardBg, borderColor: colors.border },
+          ]}
+          onPress={pickImage}
+        >
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.previewImage} />
+          ) : (
+            <View style={styles.imagePlaceholder}>
+              <Ionicons
+                name="camera-outline"
+                size={28}
+                color={colors.primary}
+              />
+              <Text
+                style={[
+                  styles.imagePickerText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Tap to attach meal photo 📸
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
 
         {/* Food Name Input */}
         <Text style={[styles.label, { color: colors.textSecondary }]}>
@@ -301,6 +361,30 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   title: { fontSize: 22, fontWeight: "bold" },
+  imagePickerCard: {
+    height: 130,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+    overflow: "hidden",
+  },
+  imagePlaceholder: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  imagePickerText: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 6,
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
   label: { fontSize: 13, fontWeight: "600", marginBottom: 6 },
   input: {
     padding: 14,

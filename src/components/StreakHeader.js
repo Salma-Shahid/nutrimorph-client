@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function StreakHeader({ streakCount = 1, colors }) {
@@ -10,7 +10,10 @@ export default function StreakHeader({ streakCount = 1, colors }) {
     <View
       style={[
         styles.container,
-        { backgroundColor: colors.cardBg, borderColor: colors.border },
+        {
+          backgroundColor: colors.cardBg,
+          borderColor: colors.border,
+        },
       ]}
     >
       {/* Top Streak Row */}
@@ -26,7 +29,7 @@ export default function StreakHeader({ streakCount = 1, colors }) {
           style={[styles.subText, { color: colors.textSecondary }]}
           numberOfLines={2}
         >
-          Log daily meals to keep the flame alive
+          Log daily meals to keep the flame alive 🔥
         </Text>
       </View>
 
@@ -34,7 +37,6 @@ export default function StreakHeader({ streakCount = 1, colors }) {
       <View style={styles.daysRow}>
         {days.map((day, index) => {
           const isToday = index === currentDayIndex;
-          // 🟢 Highlight completed days leading up to today based on streakCount
           const isDone =
             index <= currentDayIndex &&
             index >=
@@ -45,7 +47,9 @@ export default function StreakHeader({ streakCount = 1, colors }) {
               <Text
                 style={[
                   styles.dayText,
-                  { color: isToday ? "#10B981" : colors.textSecondary },
+                  {
+                    color: isToday ? colors.primary : colors.textSecondary,
+                  },
                 ]}
               >
                 {day}
@@ -54,9 +58,9 @@ export default function StreakHeader({ streakCount = 1, colors }) {
                 style={[
                   styles.dot,
                   {
-                    backgroundColor: isDone ? "#10B981" : colors.inputBg,
-                    borderColor: isToday ? "#10B981" : "transparent",
-                    borderWidth: isToday ? 2 : 0,
+                    backgroundColor: isDone ? colors.primary : colors.inputBg,
+                    borderColor: isToday ? colors.primary : "transparent",
+                    borderWidth: isToday ? 2 : 1,
                   },
                 ]}
               >
@@ -72,26 +76,31 @@ export default function StreakHeader({ streakCount = 1, colors }) {
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 20,
+    padding: 16,
     marginBottom: 16,
     borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   streakRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
+    marginBottom: 14,
     gap: 10,
   },
   flameBadge: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(245, 158, 11, 0.15)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
-    gap: 4,
+    gap: 6,
     flexShrink: 0,
   },
   streakText: {
@@ -119,9 +128,9 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   dot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
   },

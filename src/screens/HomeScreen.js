@@ -19,14 +19,17 @@ import { useMealStore } from "../store/useMealStore";
 import { calculateBMI } from "../utils/bmi";
 import WaterTracker from "../components/WaterTracker";
 import CalorieChart from "../components/CalorieChart";
-import StreakHeader from "../components/StreakHeader"; // 🟢 Added StreakHeader import
+import StreakHeader from "../components/StreakHeader";
+import { getThemeColors } from "../theme/colors";
 
 export default function HomeScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
 
   // Store Hooks
-  const { user, logout } = useAuthStore();
+  const { user, logout, theme } = useAuthStore();
+  const colors = getThemeColors(theme);
+
   const {
     todaySummary,
     todayMeals,
@@ -197,7 +200,7 @@ export default function HomeScreen({ navigation }) {
   const consumedCalories = todaySummary?.calories || 0;
   const remainingCalories = dailyCalories - consumedCalories;
 
-  // 🔴 Diet Deviation Threshold Check
+  // Diet Deviation Threshold Check
   const isDeviated = consumedCalories > dailyCalories;
   const excessCalories = isDeviated ? consumedCalories - dailyCalories : 0;
 
@@ -206,7 +209,9 @@ export default function HomeScreen({ navigation }) {
   const fats = user?.macros?.fats || 65;
 
   return (
-    <SafeAreaView style={styles.safeContainer}>
+    <SafeAreaView
+      style={[styles.safeContainer, { backgroundColor: colors.bg }]}
+    >
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 90 }}
@@ -214,34 +219,47 @@ export default function HomeScreen({ navigation }) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={["#10B981"]}
-            tintColor="#10B981"
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
       >
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Welcome back 👋</Text>
-            <Text style={styles.userName}>{user?.name || "User"}</Text>
+            <Text style={[styles.greeting, { color: colors.textSecondary }]}>
+              Welcome back 👋
+            </Text>
+            <Text style={[styles.userName, { color: colors.text }]}>
+              {user?.name || "User"}
+            </Text>
           </View>
           <View style={styles.headerActions}>
             <TouchableOpacity
-              style={styles.iconBtn}
+              style={[
+                styles.iconBtn,
+                { backgroundColor: colors.cardBg, borderColor: colors.border },
+              ]}
               onPress={() => navigation.navigate("Achievements")}
               activeOpacity={0.7}
             >
-              <Ionicons name="trophy" size={20} color="#10B981" />
+              <Ionicons name="trophy" size={20} color={colors.primary} />
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.iconBtn}
+              style={[
+                styles.iconBtn,
+                { backgroundColor: colors.cardBg, borderColor: colors.border },
+              ]}
               onPress={() => navigation.navigate("ProfileScreen")}
               activeOpacity={0.7}
             >
               <Text style={{ fontSize: 20 }}>⚙️</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.logoutBtn}
+              style={[
+                styles.logoutBtn,
+                { backgroundColor: colors.cardBg, borderColor: "#ff4d4d" },
+              ]}
               onPress={logout}
               activeOpacity={0.7}
             >
@@ -250,22 +268,16 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
-        {/* 🟢 Streak Header Component */}
+        {/* Streak Header Component */}
         <View style={{ paddingHorizontal: 20 }}>
-          <StreakHeader
-            streakCount={user?.streakCount || 1}
-            colors={{
-              cardBg: "#1e1e1e",
-              border: "#2a2a2a",
-              textSecondary: "#aaa",
-              inputBg: "#121212",
-            }}
-          />
+          <StreakHeader streakCount={user?.streakCount || 1} colors={colors} />
         </View>
 
         {/* Dashboard Title & BMI */}
         <View style={styles.goalHeaderRow}>
-          <Text style={styles.sectionTitle}>Dashboard Summary</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Dashboard Summary
+          </Text>
           {bmiData && (
             <View
               style={[
@@ -284,16 +296,23 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         {/* Date Selector Strip */}
-        <View style={styles.dateSelector}>
+        <View
+          style={[
+            styles.dateSelector,
+            { backgroundColor: colors.cardBg, borderColor: colors.border },
+          ]}
+        >
           <TouchableOpacity
             onPress={handlePrevDay}
             style={styles.dateArrowBtn}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={styles.dateArrowText}>◀</Text>
+            <Text style={[styles.dateArrowText, { color: colors.primary }]}>
+              ◀
+            </Text>
           </TouchableOpacity>
 
-          <Text style={styles.dateText}>
+          <Text style={[styles.dateText, { color: colors.text }]}>
             {isToday ? "Today, " : ""}
             {currentDate.toLocaleDateString("en-US", {
               month: "short",
@@ -308,15 +327,24 @@ export default function HomeScreen({ navigation }) {
             style={[styles.dateArrowBtn, isToday && { opacity: 0.3 }]}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={styles.dateArrowText}>▶</Text>
+            <Text style={[styles.dateArrowText, { color: colors.primary }]}>
+              ▶
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* 🚨 DIET DEVIATION RED ALERT CARD */}
         {isDeviated && (
-          <View style={styles.deviationCard}>
+          <View
+            style={[styles.deviationCard, { backgroundColor: colors.cardBg }]}
+          >
             <View style={styles.deviationHeader}>
-              <View style={styles.deviationBadge}>
+              <View
+                style={[
+                  styles.deviationBadge,
+                  { backgroundColor: colors.inputBg },
+                ]}
+              >
                 <Ionicons name="warning-sharp" size={16} color="#FF3B30" />
                 <Text style={styles.deviationBadgeText}>Diet Breach Alert</Text>
               </View>
@@ -325,7 +353,9 @@ export default function HomeScreen({ navigation }) {
               </Text>
             </View>
 
-            <Text style={styles.deviationSubtext}>
+            <Text
+              style={[styles.deviationSubtext, { color: colors.textSecondary }]}
+            >
               You have exceeded your daily target calorie threshold. Don't
               worry, consistency matters most!
             </Text>
@@ -349,29 +379,54 @@ export default function HomeScreen({ navigation }) {
         )}
 
         {/* Calorie Goal Card */}
-        <View style={styles.calorieCard}>
-          <Text style={styles.cardTitle}>Daily Calorie Goal 🎯</Text>
+        <View
+          style={[
+            styles.calorieCard,
+            { backgroundColor: colors.cardBg, borderColor: colors.border },
+          ]}
+        >
+          <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>
+            Daily Calorie Goal 🎯
+          </Text>
           <View style={styles.calorieRow}>
             <View style={styles.calorieStat}>
-              <Text style={styles.statNumber}>{dailyCalories}</Text>
-              <Text style={styles.statLabel}>Target</Text>
+              <Text style={[styles.statNumber, { color: colors.text }]}>
+                {dailyCalories}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                Target
+              </Text>
             </View>
-            <View style={styles.calorieDivider} />
+            <View
+              style={[
+                styles.calorieDivider,
+                { backgroundColor: colors.border },
+              ]}
+            />
             <View style={styles.calorieStat}>
-              <Text style={styles.statNumber}>{consumedCalories}</Text>
-              <Text style={styles.statLabel}>Eaten</Text>
+              <Text style={[styles.statNumber, { color: colors.text }]}>
+                {consumedCalories}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                Eaten
+              </Text>
             </View>
-            <View style={styles.calorieDivider} />
+            <View
+              style={[
+                styles.calorieDivider,
+                { backgroundColor: colors.border },
+              ]}
+            />
             <View style={styles.calorieStat}>
               <Text
                 style={[
                   styles.statNumber,
-                  { color: remainingCalories < 0 ? "#ff4d4d" : "#4CAF50" },
+                  { color: remainingCalories < 0 ? "#ff4d4d" : colors.primary },
                 ]}
               >
                 {remainingCalories}
               </Text>
-              <Text style={styles.statLabel}>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
                 {remainingCalories < 0 ? "Exceeded" : "Remaining"}
               </Text>
             </View>
@@ -379,46 +434,91 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         {/* Macros Breakdown */}
-        <Text style={styles.sectionTitle}>Macros Target 📊</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Macros Target 📊
+        </Text>
         <View style={styles.macrosRow}>
-          <View style={styles.macroCard}>
+          <View
+            style={[
+              styles.macroCard,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+          >
             <Text style={styles.macroEmoji}>🥩</Text>
-            <Text style={styles.macroVal}>{protein}g</Text>
-            <Text style={styles.macroLabel}>Protein</Text>
+            <Text style={[styles.macroVal, { color: colors.text }]}>
+              {protein}g
+            </Text>
+            <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>
+              Protein
+            </Text>
           </View>
-          <View style={styles.macroCard}>
+          <View
+            style={[
+              styles.macroCard,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+          >
             <Text style={styles.macroEmoji}>🍞</Text>
-            <Text style={styles.macroVal}>{carbs}g</Text>
-            <Text style={styles.macroLabel}>Carbs</Text>
+            <Text style={[styles.macroVal, { color: colors.text }]}>
+              {carbs}g
+            </Text>
+            <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>
+              Carbs
+            </Text>
           </View>
-          <View style={styles.macroCard}>
+          <View
+            style={[
+              styles.macroCard,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+          >
             <Text style={styles.macroEmoji}>🥑</Text>
-            <Text style={styles.macroVal}>{fats}g</Text>
-            <Text style={styles.macroLabel}>Fats</Text>
+            <Text style={[styles.macroVal, { color: colors.text }]}>
+              {fats}g
+            </Text>
+            <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>
+              Fats
+            </Text>
           </View>
         </View>
 
         {/* Quick Actions */}
-        <Text style={styles.sectionTitle}>Quick Actions 🚀</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Quick Actions 🚀
+        </Text>
         <View style={styles.actionsGrid}>
           <TouchableOpacity
-            style={styles.actionCard}
+            style={[
+              styles.actionCard,
+              { backgroundColor: colors.cardBg, borderColor: colors.primary },
+            ]}
             onPress={() => navigation.navigate("MealScannerScreen")}
             activeOpacity={0.8}
           >
             <Text style={styles.actionIcon}>📸</Text>
-            <Text style={styles.actionTitle}>Scan Meal</Text>
-            <Text style={styles.actionSub}>AI Vision Scanner</Text>
+            <Text style={[styles.actionTitle, { color: colors.text }]}>
+              Scan Meal
+            </Text>
+            <Text style={[styles.actionSub, { color: colors.primary }]}>
+              AI Vision Scanner
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.actionCard}
+            style={[
+              styles.actionCard,
+              { backgroundColor: colors.cardBg, borderColor: colors.primary },
+            ]}
             onPress={() => navigation.navigate("LogFoodScreen")}
             activeOpacity={0.8}
           >
             <Text style={styles.actionIcon}>📝</Text>
-            <Text style={styles.actionTitle}>Log Food</Text>
-            <Text style={styles.actionSub}>Manual Entry</Text>
+            <Text style={[styles.actionTitle, { color: colors.text }]}>
+              Log Food
+            </Text>
+            <Text style={[styles.actionSub, { color: colors.primary }]}>
+              Manual Entry
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -430,13 +530,25 @@ export default function HomeScreen({ navigation }) {
         />
 
         {/* Logged Meals List */}
-        <Text style={styles.sectionTitle}>Meals 🍽️</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Meals 🍽️
+        </Text>
         {todayMeals && todayMeals.length > 0 ? (
           todayMeals.map((item, index) => (
-            <View key={item._id || item.id || index} style={styles.mealCard}>
+            <View
+              key={item._id || item.id || index}
+              style={[
+                styles.mealCard,
+                { backgroundColor: colors.cardBg, borderColor: colors.border },
+              ]}
+            >
               <View style={{ flex: 1 }}>
-                <Text style={styles.mealName}>{item.name}</Text>
-                <Text style={styles.mealDetails}>
+                <Text style={[styles.mealName, { color: colors.text }]}>
+                  {item.name}
+                </Text>
+                <Text
+                  style={[styles.mealDetails, { color: colors.textSecondary }]}
+                >
                   {item.calories} kcal | P: {item.protein || 0}g C:{" "}
                   {item.carbs || 0}g F: {item.fats || 0}g
                 </Text>
@@ -459,22 +571,29 @@ export default function HomeScreen({ navigation }) {
             </View>
           ))
         ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No meals logged for this date.</Text>
+          <View
+            style={[
+              styles.emptyCard,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              No meals logged for this date.
+            </Text>
           </View>
         )}
       </ScrollView>
 
-      {/* 🤖 FLOATING AI CHATBOT BUTTON */}
+      {/* Floating AI Chatbot Button */}
       <TouchableOpacity
-        style={styles.floatingBotBtn}
+        style={[styles.floatingBotBtn, { backgroundColor: colors.primary }]}
         onPress={() => navigation.navigate("ChatBotScreen")}
         activeOpacity={0.85}
       >
         <Ionicons name="chatbubble-ellipses" size={28} color="#ffffff" />
       </TouchableOpacity>
 
-      {/* 🤖 AI RECOVERY COACH MODAL */}
+      {/* AI Recovery Coach Modal */}
       <Modal
         visible={isRecoveryModalOpen}
         transparent
@@ -482,21 +601,35 @@ export default function HomeScreen({ navigation }) {
         onRequestClose={() => setIsRecoveryModalOpen(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>AI Recovery Coach 🩺</Text>
-            <Text style={{ color: "#AAA", fontSize: 13, marginBottom: 15 }}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              AI Recovery Coach 🩺
+            </Text>
+            <Text
+              style={[styles.coachSubText, { color: colors.textSecondary }]}
+            >
               Here is your immediate recovery plan for today's calorie
               overshoot:
             </Text>
 
-            <View style={styles.coachCard}>
-              <Text style={styles.coachPoint}>
+            <View
+              style={[
+                styles.coachCard,
+                { backgroundColor: colors.inputBg, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.coachPoint, { color: colors.text }]}>
                 💧 Drink 500ml water to reduce bloat.
               </Text>
-              <Text style={styles.coachPoint}>
+              <Text style={[styles.coachPoint, { color: colors.text }]}>
                 🚶 20-minute light walk will boost digestion.
               </Text>
-              <Text style={styles.coachPoint}>
+              <Text style={[styles.coachPoint, { color: colors.text }]}>
                 🥗 Keep your next meal lean with high-protein greens.
               </Text>
             </View>
@@ -504,7 +637,7 @@ export default function HomeScreen({ navigation }) {
             <TouchableOpacity
               style={[
                 styles.modalBtn,
-                { backgroundColor: "#10B981", marginTop: 15 },
+                { backgroundColor: colors.primary, marginTop: 15 },
               ]}
               onPress={() => setIsRecoveryModalOpen(false)}
             >
@@ -530,74 +663,139 @@ export default function HomeScreen({ navigation }) {
         onRequestClose={() => setIsEditModalOpen(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Meal ✏️</Text>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Edit Meal ✏️
+            </Text>
 
-            <Text style={styles.inputLabel}>Meal Name</Text>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+              Meal Name
+            </Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
               value={editName}
               onChangeText={setEditName}
               placeholder="e.g. Chicken Rice"
-              placeholderTextColor="#666"
+              placeholderTextColor={colors.textSecondary}
             />
 
-            <Text style={styles.inputLabel}>Calories (kcal)</Text>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+              Calories (kcal)
+            </Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
               value={editCalories}
               onChangeText={setEditCalories}
               keyboardType="numeric"
               placeholder="0"
-              placeholderTextColor="#666"
+              placeholderTextColor={colors.textSecondary}
             />
 
             <View style={{ flexDirection: "row", gap: 10 }}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>Protein (g)</Text>
+                <Text
+                  style={[styles.inputLabel, { color: colors.textSecondary }]}
+                >
+                  Protein (g)
+                </Text>
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBg,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
                   value={editProtein}
                   onChangeText={setEditProtein}
                   keyboardType="numeric"
                   placeholder="0"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.textSecondary}
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>Carbs (g)</Text>
+                <Text
+                  style={[styles.inputLabel, { color: colors.textSecondary }]}
+                >
+                  Carbs (g)
+                </Text>
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBg,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
                   value={editCarbs}
                   onChangeText={setEditCarbs}
                   keyboardType="numeric"
                   placeholder="0"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.textSecondary}
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>Fats (g)</Text>
+                <Text
+                  style={[styles.inputLabel, { color: colors.textSecondary }]}
+                >
+                  Fats (g)
+                </Text>
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBg,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
                   value={editFats}
                   onChangeText={setEditFats}
                   keyboardType="numeric"
                   placeholder="0"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.textSecondary}
                 />
               </View>
             </View>
 
             <View style={styles.modalBtns}>
               <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: "#333" }]}
+                style={[
+                  styles.modalBtn,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  },
+                ]}
                 onPress={() => setIsEditModalOpen(false)}
                 disabled={loading}
               >
-                <Text style={{ color: "#fff" }}>Cancel</Text>
+                <Text style={{ color: colors.text }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: "#4CAF50" }]}
+                style={[styles.modalBtn, { backgroundColor: colors.primary }]}
                 onPress={handleSaveEdit}
                 disabled={loading}
               >
@@ -618,7 +816,7 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeContainer: { flex: 1, backgroundColor: "#121212" },
+  safeContainer: { flex: 1 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -629,21 +827,17 @@ const styles = StyleSheet.create({
   },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   iconBtn: {
-    backgroundColor: "#1e1e1e",
     padding: 8,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#333",
   },
-  greeting: { color: "#aaa", fontSize: 14 },
-  userName: { color: "#fff", fontSize: 22, fontWeight: "bold" },
+  greeting: { fontSize: 14 },
+  userName: { fontSize: 22, fontWeight: "bold" },
   logoutBtn: {
-    backgroundColor: "#2a1a1a",
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#ff4d4d",
   },
   logoutText: { color: "#ff4d4d", fontWeight: "bold", fontSize: 12 },
 
@@ -669,24 +863,21 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#1e1e1e",
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginHorizontal: 20,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: "#2a2a2a",
   },
   dateArrowBtn: { padding: 4 },
-  dateArrowText: { color: "#4CAF50", fontSize: 16, fontWeight: "bold" },
-  dateText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  dateArrowText: { fontSize: 16, fontWeight: "bold" },
+  dateText: { fontSize: 16, fontWeight: "bold" },
 
-  /* 🚨 Diet Deviation Card Styles */
+  // Diet Deviation Card Styles
   deviationCard: {
-    backgroundColor: "#2C1214",
-    borderColor: "#FF3B30",
     borderWidth: 1,
+    borderColor: "#FF3B30",
     borderRadius: 16,
     padding: 16,
     marginHorizontal: 20,
@@ -702,7 +893,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#3A1A1C",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
@@ -710,7 +900,6 @@ const styles = StyleSheet.create({
   deviationBadgeText: { color: "#FF3B30", fontWeight: "bold", fontSize: 12 },
   excessText: { color: "#FF3B30", fontWeight: "bold", fontSize: 12 },
   deviationSubtext: {
-    color: "#D1D5DB",
     fontSize: 12,
     marginBottom: 12,
     lineHeight: 18,
@@ -725,38 +914,34 @@ const styles = StyleSheet.create({
   },
   recoveryCoachBtnText: { color: "#FFF", fontWeight: "bold", fontSize: 13 },
 
+  coachSubText: { fontSize: 13, marginBottom: 15 },
   coachCard: {
-    backgroundColor: "#161616",
     padding: 14,
-    borderRadius: 10,
+    borderRadius: 12,
     gap: 8,
     borderWidth: 1,
-    borderColor: "#333",
   },
-  coachPoint: { color: "#DDD", fontSize: 13, fontWeight: "500" },
+  coachPoint: { fontSize: 13, fontWeight: "500" },
 
   calorieCard: {
-    backgroundColor: "#1e1e1e",
     borderRadius: 16,
     padding: 20,
     marginHorizontal: 20,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: "#2a2a2a",
   },
-  cardTitle: { color: "#aaa", fontSize: 14, marginBottom: 16 },
+  cardTitle: { fontSize: 14, marginBottom: 16 },
   calorieRow: {
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
   },
   calorieStat: { alignItems: "center" },
-  statNumber: { color: "#fff", fontSize: 22, fontWeight: "bold" },
-  statLabel: { color: "#888", fontSize: 12, marginTop: 4 },
-  calorieDivider: { width: 1, height: 30, backgroundColor: "#333" },
+  statNumber: { fontSize: 22, fontWeight: "bold" },
+  statLabel: { fontSize: 12, marginTop: 4 },
+  calorieDivider: { width: 1, height: 30 },
 
   sectionTitle: {
-    color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 12,
@@ -771,17 +956,15 @@ const styles = StyleSheet.create({
   },
   macroCard: {
     flex: 1,
-    backgroundColor: "#1e1e1e",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     alignItems: "center",
     marginHorizontal: 4,
     borderWidth: 1,
-    borderColor: "#2a2a2a",
   },
   macroEmoji: { fontSize: 22, marginBottom: 6 },
-  macroVal: { color: "#fff", fontSize: 16, fontWeight: "bold" },
-  macroLabel: { color: "#888", fontSize: 12, marginTop: 2 },
+  macroVal: { fontSize: 16, fontWeight: "bold" },
+  macroLabel: { fontSize: 12, marginTop: 2 },
 
   actionsGrid: {
     flexDirection: "row",
@@ -791,43 +974,37 @@ const styles = StyleSheet.create({
   },
   actionCard: {
     flex: 0.48,
-    backgroundColor: "#1c3a21",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#4CAF50",
   },
   actionIcon: { fontSize: 26, marginBottom: 8 },
-  actionTitle: { color: "#fff", fontSize: 16, fontWeight: "bold" },
-  actionSub: { color: "#4CAF50", fontSize: 12, marginTop: 2 },
+  actionTitle: { fontSize: 16, fontWeight: "bold" },
+  actionSub: { fontSize: 12, marginTop: 2 },
 
   mealCard: {
-    backgroundColor: "#1e1e1e",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 14,
     marginHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#2a2a2a",
   },
-  mealName: { color: "#fff", fontSize: 16, fontWeight: "bold" },
-  mealDetails: { color: "#aaa", fontSize: 12, marginTop: 4 },
+  mealName: { fontSize: 16, fontWeight: "bold" },
+  mealDetails: { fontSize: 12, marginTop: 4 },
   mealActionBtns: { flexDirection: "row", gap: 10 },
   actionIconBtn: { padding: 4 },
 
   emptyCard: {
-    backgroundColor: "#1e1e1e",
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginHorizontal: 20,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#2a2a2a",
     marginBottom: 20,
   },
-  emptyText: { color: "#666", fontSize: 14 },
+  emptyText: { fontSize: 14 },
 
   modalOverlay: {
     flex: 1,
@@ -836,26 +1013,20 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: "#1e1e1e",
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: "#333",
   },
   modalTitle: {
-    color: "#fff",
     fontSize: 20,
     fontWeight: "bold",
     marginBottom: 16,
   },
-  inputLabel: { color: "#aaa", fontSize: 12, marginBottom: 4, marginTop: 8 },
+  inputLabel: { fontSize: 12, marginBottom: 4, marginTop: 8 },
   input: {
-    backgroundColor: "#121212",
-    color: "#fff",
-    padding: 10,
-    borderRadius: 8,
+    padding: 12,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#333",
   },
   modalBtns: {
     flexDirection: "row",
@@ -866,14 +1037,13 @@ const styles = StyleSheet.create({
   modalBtn: {
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: 8,
+    borderRadius: 12,
   },
 
   floatingBotBtn: {
     position: "absolute",
     bottom: 25,
     right: 20,
-    backgroundColor: "#3b82f6",
     width: 58,
     height: 58,
     borderRadius: 29,

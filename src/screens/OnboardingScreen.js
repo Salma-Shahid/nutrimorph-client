@@ -8,14 +8,21 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  FlatList,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuthStore } from "../store/useAuthStore";
 import { WORLD_LANGUAGES } from "../constants/languages";
+import { getThemeColors } from "../theme/colors";
 
-export default function OnboardingScreen() {
-  // Wizard Steps State (Total 9 Steps)
+const TOTAL_STEPS = 11;
+
+export default function OnboardingScreen({ navigation }) {
+  const { theme, updateProfile, isLoading } = useAuthStore();
+  const colors = getThemeColors(theme || "dark");
+
+  // Wizard Steps State (Total 11 Steps)
   const [currentStep, setCurrentStep] = useState(1);
 
   // Loading Calculation Overlay State
@@ -40,18 +47,20 @@ export default function OnboardingScreen() {
   const [activityLevel, setActivityLevel] = useState("Lightly active");
   const [preferredMealsCount, setPreferredMealsCount] = useState(4);
   const [medicalCondition, setMedicalCondition] = useState("None");
-
-  const { updateProfile, isLoading } = useAuthStore();
+  const [dailyCalories, setDailyCalories] = useState(2000);
 
   const handleNextStep = () => {
     if (currentStep === 2 && !name.trim()) {
       Alert.alert("Validation Error", "Please enter your name.");
       return;
     }
-    if (currentStep < 9) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      handleCalculateAndSave();
+    if (currentStep < TOTAL_STEPS) {
+      if (currentStep === 9) {
+        // Trigger calculation before moving to summary step
+        handleCalculateAndSave();
+      } else {
+        setCurrentStep(currentStep + 1);
+      }
     }
   };
 
@@ -62,7 +71,6 @@ export default function OnboardingScreen() {
   };
 
   const handleCalculateAndSave = async () => {
-    // Determine effective Height in CM
     let finalHeight = parseFloat(heightCm);
     if (heightUnit === "ft") {
       const ft = parseFloat(heightFeet) || 0;
@@ -87,7 +95,6 @@ export default function OnboardingScreen() {
       return;
     }
 
-    // 🌟 Start Final Plan Calculation Animation Overlay
     setIsCalculating(true);
     setCalcStatus("Calculating BMR & TDEE...");
 
@@ -98,14 +105,14 @@ export default function OnboardingScreen() {
     setTimeout(async () => {
       setCalcStatus("Finalizing Your Personalized Dashboard...");
 
-      // 1. Basic BMR / TDEE Macro Calculation (Mifflin-St Jeor formula)
       let bmr = 10 * numWeight + 6.25 * finalHeight - 5 * numAge;
       bmr = gender === "male" ? bmr + 5 : bmr - 161;
 
-      let targetCalories = Math.round(bmr * 1.375); // Default activity multiplier
+      let targetCaloriesCalc = Math.round(bmr * 1.375);
+      if (goal === "weight_loss") targetCaloriesCalc -= 500;
+      else if (goal === "muscle_gain") targetCaloriesCalc += 300;
 
-      if (goal === "weight_loss") targetCalories -= 500;
-      else if (goal === "muscle_gain") targetCalories += 300;
+      setDailyCalories(targetCaloriesCalc);
 
       const profileData = {
         language,
@@ -118,16 +125,15 @@ export default function OnboardingScreen() {
         fitnessGoal: goal,
         activityLevel,
         preferredMealsCount,
-        dailyCalorieTarget: targetCalories,
-        proteinTarget: Math.round((targetCalories * 0.3) / 4),
-        carbsTarget: Math.round((targetCalories * 0.4) / 4),
-        fatsTarget: Math.round((targetCalories * 0.3) / 9),
+        dailyCalorieTarget: targetCaloriesCalc,
+        proteinTarget: Math.round((targetCaloriesCalc * 0.3) / 4),
+        carbsTarget: Math.round((targetCaloriesCalc * 0.4) / 4),
+        fatsTarget: Math.round((targetCaloriesCalc * 0.3) / 9),
         medicalCondition: medicalCondition || "None",
         isOnboarded: true,
         isOnboardingCompleted: true,
       };
 
-      // 2. Call Store API
       const res = await updateProfile(profileData);
       setIsCalculating(false);
 
@@ -136,49 +142,77 @@ export default function OnboardingScreen() {
           "Save Failed",
           res?.message || "Could not save health profile.",
         );
+      } else {
+        setCurrentStep(11); // Move to milestone summary step
       }
     }, 2800);
   };
 
-  // Render Calculation Overlay
+  const handleCompleteOnboarding = async () => {
+    try {
+      await AsyncStorage.setItem("hasCompletedOnboarding", "true");
+      navigation.replace("Main");
+    } catch (error) {
+      console.log("Error saving onboarding state:", error);
+    }
+  };
+
   if (isCalculating) {
     return (
-      <SafeAreaView style={[styles.container, styles.calcOverlay]}>
+      <SafeAreaView
+        style={[
+          styles.container,
+          styles.calcOverlay,
+          { backgroundColor: colors.bg },
+        ]}
+      >
         <ActivityIndicator
           size="large"
-          color="#4CAF50"
+          color={colors.primary}
           style={{ marginBottom: 20 }}
         />
-        <Text style={styles.calcTitle}>Creating Your Custom Plan 🧬</Text>
-        <Text style={styles.calcSubtitle}>{calcStatus}</Text>
+        <Text style={[styles.calcTitle, { color: colors.primary }]}>
+          Creating Your Custom Plan 🧬
+        </Text>
+        <Text style={[styles.calcSubtitle, { color: colors.textSecondary }]}>
+          {calcStatus}
+        </Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       {/* Progress Bar Header */}
       <View style={styles.progressContainer}>
-        {Array.from({ length: 9 }).map((_, index) => (
+        {Array.from({ length: TOTAL_STEPS }).map((_, index) => (
           <View
             key={index}
             style={[
               styles.progressBarSegment,
-              index + 1 <= currentStep
-                ? styles.activeSegment
-                : styles.inactiveSegment,
+              { backgroundColor: colors.border },
+              index + 1 <= currentStep && { backgroundColor: colors.primary },
             ]}
           />
         ))}
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Step 1: Language Selection (30+ Global Languages) */}
+        {/* Step 1: Language Selection */}
         {currentStep === 1 && (
           <View>
-            <Text style={styles.title}>Select Language 🌍</Text>
-            <Text style={styles.subtitle}>Choose your preferred language</Text>
-            <View style={styles.langListContainer}>
+            <Text style={[styles.title, { color: colors.primary }]}>
+              Select Language 🌍
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              Choose your preferred language
+            </Text>
+            <View
+              style={[
+                styles.langListContainer,
+                { backgroundColor: colors.cardBg, borderColor: colors.border },
+              ]}
+            >
               <ScrollView nestedScrollEnabled style={{ maxHeight: 380 }}>
                 {WORLD_LANGUAGES && WORLD_LANGUAGES.length > 0 ? (
                   WORLD_LANGUAGES.map((item) => (
@@ -186,17 +220,26 @@ export default function OnboardingScreen() {
                       key={item.code}
                       style={[
                         styles.langBtn,
-                        language === item.name && styles.selectedOption,
+                        {
+                          backgroundColor: colors.inputBg,
+                          borderColor: colors.border,
+                        },
+                        language === item.name && {
+                          backgroundColor: colors.glassGlow,
+                          borderColor: colors.primary,
+                        },
                       ]}
                       onPress={() => setLanguage(item.name)}
                     >
-                      <Text style={styles.optionText}>
+                      <Text style={[styles.optionText, { color: colors.text }]}>
                         {item.flag} {item.name}
                       </Text>
                     </TouchableOpacity>
                   ))
                 ) : (
-                  <Text style={{ color: "#FFF", textAlign: "center" }}>
+                  <Text
+                    style={{ color: colors.textSecondary, textAlign: "center" }}
+                  >
                     Loading languages...
                   </Text>
                 )}
@@ -208,17 +251,28 @@ export default function OnboardingScreen() {
         {/* Step 2: User Name */}
         {currentStep === 2 && (
           <View>
-            <Text style={styles.title}>What's Your Name? 👤</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: colors.primary }]}>
+              What's Your Name? 👤
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Let us personalize your experience
             </Text>
-            <Text style={styles.label}>Full Name</Text>
+            <Text style={[styles.label, { color: colors.text }]}>
+              Full Name
+            </Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
               value={name}
               onChangeText={setName}
-              placeholder="e.g. User Name"
-              placeholderTextColor="#666"
+              placeholder="e.g. Salma Shahid"
+              placeholderTextColor={colors.textSecondary}
             />
           </View>
         )}
@@ -226,69 +280,111 @@ export default function OnboardingScreen() {
         {/* Step 3: Gender Selection */}
         {currentStep === 3 && (
           <View>
-            <Text style={styles.title}>How Do You Identify? 🧬</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: colors.primary }]}>
+              How Do You Identify? 🧬
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Used to calculate your precise BMR
             </Text>
             <View style={styles.row}>
               <TouchableOpacity
                 style={[
                   styles.optionBtn,
-                  gender === "male" && styles.selectedOption,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderColor: colors.border,
+                  },
+                  gender === "male" && {
+                    backgroundColor: colors.glassGlow,
+                    borderColor: colors.primary,
+                  },
                 ]}
                 onPress={() => setGender("male")}
               >
-                <Text style={styles.optionText}>Male 🧔</Text>
+                <Text style={[styles.optionText, { color: colors.text }]}>
+                  Male 🧔
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
                   styles.optionBtn,
-                  gender === "female" && styles.selectedOption,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderColor: colors.border,
+                  },
+                  gender === "female" && {
+                    backgroundColor: colors.glassGlow,
+                    borderColor: colors.primary,
+                  },
                 ]}
                 onPress={() => setGender("female")}
               >
-                <Text style={styles.optionText}>Female 👩</Text>
+                <Text style={[styles.optionText, { color: colors.text }]}>
+                  Female 👩
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* Step 4: Age / Birthday */}
+        {/* Step 4: Age */}
         {currentStep === 4 && (
           <View>
-            <Text style={styles.title}>How Old Are You? 🎂</Text>
-            <Text style={styles.subtitle}>Enter your age in years</Text>
-            <Text style={styles.label}>Age (Years)</Text>
+            <Text style={[styles.title, { color: colors.primary }]}>
+              How Old Are You? 🎂
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              Enter your age in years
+            </Text>
+            <Text style={[styles.label, { color: colors.text }]}>
+              Age (Years)
+            </Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
               keyboardType="numeric"
               value={age}
               onChangeText={setAge}
               placeholder="e.g. 25"
-              placeholderTextColor="#666"
+              placeholderTextColor={colors.textSecondary}
             />
           </View>
         )}
 
-        {/* Step 5: Height (With CM / Inches Unit Toggle) */}
+        {/* Step 5: Height */}
         {currentStep === 5 && (
           <View>
-            <Text style={styles.title}>How Tall Are You? 📏</Text>
-            <Text style={styles.subtitle}>Enter your height</Text>
+            <Text style={[styles.title, { color: colors.primary }]}>
+              How Tall Are You? 📏
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              Enter your height
+            </Text>
 
-            {/* Unit Toggle Buttons */}
-            <View style={styles.unitToggleRow}>
+            <View
+              style={[
+                styles.unitToggleRow,
+                { backgroundColor: colors.inputBg },
+              ]}
+            >
               <TouchableOpacity
                 style={[
                   styles.unitBtn,
-                  heightUnit === "cm" && styles.activeUnitBtn,
+                  heightUnit === "cm" && { backgroundColor: colors.primary },
                 ]}
                 onPress={() => setHeightUnit("cm")}
               >
                 <Text
                   style={[
                     styles.unitBtnText,
-                    heightUnit === "cm" && styles.activeUnitBtnText,
+                    { color: colors.textSecondary },
+                    heightUnit === "cm" && { color: "#FFF" },
                   ]}
                 >
                   Centimeters (cm)
@@ -297,14 +393,15 @@ export default function OnboardingScreen() {
               <TouchableOpacity
                 style={[
                   styles.unitBtn,
-                  heightUnit === "ft" && styles.activeUnitBtn,
+                  heightUnit === "ft" && { backgroundColor: colors.primary },
                 ]}
                 onPress={() => setHeightUnit("ft")}
               >
                 <Text
                   style={[
                     styles.unitBtnText,
-                    heightUnit === "ft" && styles.activeUnitBtnText,
+                    { color: colors.textSecondary },
+                    heightUnit === "ft" && { color: "#FFF" },
                   ]}
                 >
                   Feet & Inches (ft/in)
@@ -312,42 +409,67 @@ export default function OnboardingScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* CM Input Mode */}
             {heightUnit === "cm" ? (
               <View>
-                <Text style={styles.label}>Height (cm)</Text>
+                <Text style={[styles.label, { color: colors.text }]}>
+                  Height (cm)
+                </Text>
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBg,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
                   keyboardType="numeric"
                   value={heightCm}
                   onChangeText={setHeightCm}
                   placeholder="e.g. 170"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.textSecondary}
                 />
               </View>
             ) : (
-              /* Feet & Inches Input Mode */
               <View style={styles.row}>
                 <View style={styles.flex1}>
-                  <Text style={styles.label}>Feet (ft)</Text>
+                  <Text style={[styles.label, { color: colors.text }]}>
+                    Feet (ft)
+                  </Text>
                   <TextInput
-                    style={styles.input}
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: colors.inputBg,
+                        color: colors.text,
+                        borderColor: colors.border,
+                      },
+                    ]}
                     keyboardType="numeric"
                     value={heightFeet}
                     onChangeText={setHeightFeet}
                     placeholder="5"
-                    placeholderTextColor="#666"
+                    placeholderTextColor={colors.textSecondary}
                   />
                 </View>
                 <View style={styles.flex1}>
-                  <Text style={styles.label}>Inches (in)</Text>
+                  <Text style={[styles.label, { color: colors.text }]}>
+                    Inches (in)
+                  </Text>
                   <TextInput
-                    style={styles.input}
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: colors.inputBg,
+                        color: colors.text,
+                        borderColor: colors.border,
+                      },
+                    ]}
                     keyboardType="numeric"
                     value={heightInches}
                     onChangeText={setHeightInches}
                     placeholder="7"
-                    placeholderTextColor="#666"
+                    placeholderTextColor={colors.textSecondary}
                   />
                 </View>
               </View>
@@ -358,25 +480,45 @@ export default function OnboardingScreen() {
         {/* Step 6: Weight & Target Weight */}
         {currentStep === 6 && (
           <View>
-            <Text style={styles.title}>Weight Goals ⚖️</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: colors.primary }]}>
+              Weight Goals ⚖️
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Track your current and target weight
             </Text>
-            <Text style={styles.label}>Current Weight (kg)</Text>
+            <Text style={[styles.label, { color: colors.text }]}>
+              Current Weight (kg)
+            </Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
               keyboardType="numeric"
               value={weight}
               onChangeText={setWeight}
-              placeholderTextColor="#666"
+              placeholderTextColor={colors.textSecondary}
             />
-            <Text style={styles.label}>Target Weight (kg)</Text>
+            <Text style={[styles.label, { color: colors.text }]}>
+              Target Weight (kg)
+            </Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
               keyboardType="numeric"
               value={targetWeight}
               onChangeText={setTargetWeight}
-              placeholderTextColor="#666"
+              placeholderTextColor={colors.textSecondary}
             />
           </View>
         )}
@@ -384,43 +526,47 @@ export default function OnboardingScreen() {
         {/* Step 7: Fitness Goal */}
         {currentStep === 7 && (
           <View>
-            <Text style={styles.title}>What's Your Fitness Goal? 🎯</Text>
-            <Text style={styles.subtitle}>Select your primary target</Text>
-            <TouchableOpacity
-              style={[
-                styles.goalBtn,
-                goal === "weight_loss" && styles.selectedGoal,
-              ]}
-              onPress={() => setGoal("weight_loss")}
-            >
-              <Text style={styles.goalText}>Weight Loss 🔥</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.goalBtn,
-                goal === "maintain" && styles.selectedGoal,
-              ]}
-              onPress={() => setGoal("maintain")}
-            >
-              <Text style={styles.goalText}>Maintain Weight ⚖️</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.goalBtn,
-                goal === "muscle_gain" && styles.selectedGoal,
-              ]}
-              onPress={() => setGoal("muscle_gain")}
-            >
-              <Text style={styles.goalText}>Muscle Gain 💪</Text>
-            </TouchableOpacity>
+            <Text style={[styles.title, { color: colors.primary }]}>
+              What's Your Fitness Goal? 🎯
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              Select your primary target
+            </Text>
+            {[
+              { id: "weight_loss", label: "Weight Loss 🔥" },
+              { id: "maintain", label: "Maintain Weight ⚖️" },
+              { id: "muscle_gain", label: "Muscle Gain 💪" },
+            ].map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.goalBtn,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderColor: colors.border,
+                  },
+                  goal === item.id && {
+                    backgroundColor: colors.glassGlow,
+                    borderColor: colors.primary,
+                  },
+                ]}
+                onPress={() => setGoal(item.id)}
+              >
+                <Text style={[styles.goalText, { color: colors.text }]}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         )}
 
         {/* Step 8: Activity Level */}
         {currentStep === 8 && (
           <View>
-            <Text style={styles.title}>Activity Level 🏃‍♀️</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: colors.primary }]}>
+              Activity Level 🏃‍♀️
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               How active is your daily routine?
             </Text>
             {["Not very active", "Lightly active", "Active", "Very active"].map(
@@ -429,11 +575,20 @@ export default function OnboardingScreen() {
                   key={act}
                   style={[
                     styles.goalBtn,
-                    activityLevel === act && styles.selectedGoal,
+                    {
+                      backgroundColor: colors.inputBg,
+                      borderColor: colors.border,
+                    },
+                    activityLevel === act && {
+                      backgroundColor: colors.glassGlow,
+                      borderColor: colors.primary,
+                    },
                   ]}
                   onPress={() => setActivityLevel(act)}
                 >
-                  <Text style={styles.goalText}>{act}</Text>
+                  <Text style={[styles.goalText, { color: colors.text }]}>
+                    {act}
+                  </Text>
                 </TouchableOpacity>
               ),
             )}
@@ -443,8 +598,10 @@ export default function OnboardingScreen() {
         {/* Step 9: Meal Preferences */}
         {currentStep === 9 && (
           <View>
-            <Text style={styles.title}>Daily Meal Routine 🍽️</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: colors.primary }]}>
+              Daily Meal Routine 🍽️
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               How many meals do you prefer daily?
             </Text>
             {[3, 4, 5].map((count) => (
@@ -452,21 +609,32 @@ export default function OnboardingScreen() {
                 key={count}
                 style={[
                   styles.goalBtn,
-                  preferredMealsCount === count && styles.selectedGoal,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderColor: colors.border,
+                  },
+                  preferredMealsCount === count && {
+                    backgroundColor: colors.glassGlow,
+                    borderColor: colors.primary,
+                  },
                 ]}
                 onPress={() => setPreferredMealsCount(count)}
               >
-                <Text style={styles.goalText}>{count} Meals / Day</Text>
+                <Text style={[styles.goalText, { color: colors.text }]}>
+                  {count} Meals / Day
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
         )}
 
-        {/* Medical Condition Selection Step */}
+        {/* Step 10: Medical Condition Selection */}
         {currentStep === 10 && (
           <View>
-            <Text style={styles.title}>Do You Have Any Medical Condition?</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: colors.primary }]}>
+              Do You Have Any Medical Condition?
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Let us know if you have any medical condition that we should
               consider while customizing plans for you.
             </Text>
@@ -486,7 +654,14 @@ export default function OnboardingScreen() {
                   key={item.label}
                   style={[
                     styles.langBtn,
-                    medicalCondition === item.label && styles.selectedOption,
+                    {
+                      backgroundColor: colors.inputBg,
+                      borderColor: colors.border,
+                    },
+                    medicalCondition === item.label && {
+                      backgroundColor: colors.glassGlow,
+                      borderColor: colors.primary,
+                    },
                     {
                       flexDirection: "row",
                       justifyContent: "space-between",
@@ -496,9 +671,13 @@ export default function OnboardingScreen() {
                   onPress={() => setMedicalCondition(item.label)}
                 >
                   <View>
-                    <Text style={styles.optionText}>{item.label}</Text>
+                    <Text style={[styles.optionText, { color: colors.text }]}>
+                      {item.label}
+                    </Text>
                     {item.desc ? (
-                      <Text style={{ color: "#888", fontSize: 11 }}>
+                      <Text
+                        style={{ color: colors.textSecondary, fontSize: 11 }}
+                      >
                         {item.desc}
                       </Text>
                     ) : null}
@@ -506,7 +685,11 @@ export default function OnboardingScreen() {
                   <View
                     style={[
                       styles.radioCircle,
-                      medicalCondition === item.label && styles.radioSelected,
+                      { borderColor: colors.border },
+                      medicalCondition === item.label && {
+                        backgroundColor: colors.primary,
+                        borderColor: colors.primary,
+                      },
                     ]}
                   />
                 </TouchableOpacity>
@@ -515,29 +698,35 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {/* 🟢 STEP 11: PASTE YOUR MILESTONE SUMMARY CODE HERE */}
+        {/* Step 11: Milestone Summary */}
         {currentStep === 11 && (
           <View style={{ flex: 1, paddingVertical: 10 }}>
-            <Text style={[styles.title, { textAlign: "center", fontSize: 24 }]}>
-              Almost there, {name || "Media"}!
+            <Text
+              style={[
+                styles.title,
+                { textAlign: "center", fontSize: 24, color: colors.primary },
+              ]}
+            >
+              Almost there, {name || "User"}!
             </Text>
             <Text
               style={{
-                color: "#10B981",
+                color: colors.primary,
                 textAlign: "center",
                 marginBottom: 20,
                 fontSize: 13,
                 fontWeight: "600",
               }}
             >
-              {targetWeight} Kg by 21 Oct 26 is within reach 🙌
+              {targetWeight} Kg target is within reach 🙌
             </Text>
 
-            {/* SVG Curve Progress Visual Representation */}
             <View
               style={{
                 height: 140,
-                backgroundColor: "#111827",
+                backgroundColor: colors.cardBg,
+                borderColor: colors.border,
+                borderWidth: 1,
                 borderRadius: 16,
                 justifyContent: "center",
                 alignItems: "center",
@@ -559,27 +748,28 @@ export default function OnboardingScreen() {
                   style={{ color: "#EF4444", fontSize: 12, fontWeight: "bold" }}
                 >
                   Current Weight{"\n"}
-                  <Text style={{ color: "#FFF" }}>{weight} Kg</Text>
+                  <Text style={{ color: colors.text }}>{weight} Kg</Text>
                 </Text>
                 <Text
                   style={{
-                    color: "#10B981",
+                    color: colors.primary,
                     fontSize: 12,
                     fontWeight: "bold",
                     textAlign: "right",
                   }}
                 >
                   Target Weight{"\n"}
-                  <Text style={{ color: "#FFF" }}>{targetWeight || 75} Kg</Text>
+                  <Text style={{ color: colors.text }}>
+                    {targetWeight || 75} Kg
+                  </Text>
                 </Text>
               </View>
 
-              {/* Simple Simulated Curve Line */}
               <View
                 style={{
                   width: "100%",
                   height: 2,
-                  backgroundColor: "#10B981",
+                  backgroundColor: colors.primary,
                   marginTop: 30,
                   position: "relative",
                 }}
@@ -600,29 +790,33 @@ export default function OnboardingScreen() {
                     width: 12,
                     height: 12,
                     borderRadius: 6,
-                    backgroundColor: "#10B981",
+                    backgroundColor: colors.primary,
                     position: "absolute",
                     right: 20,
                     top: -5,
                   }}
                 />
               </View>
-              <Text style={{ color: "#888", fontSize: 11, marginTop: 25 }}>
-                80% of NutriMorph users maintain their weight loss even 6 months
-                later
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 11,
+                  marginTop: 25,
+                }}
+              >
+                80% of NutriMorph users maintain their weight loss successfully
               </Text>
             </View>
 
-            {/* Journey Overview Cards Grid */}
             <Text
               style={{
-                color: "#FFF",
+                color: colors.text,
                 fontSize: 16,
                 fontWeight: "bold",
                 marginBottom: 10,
               }}
             >
-              Your Journey Overview, {name || "Media"}
+              Your Journey Overview, {name || "User"}
             </Text>
 
             <View
@@ -636,79 +830,95 @@ export default function OnboardingScreen() {
               <View
                 style={{
                   width: "48%",
-                  backgroundColor: "#111827",
+                  backgroundColor: colors.cardBg,
+                  borderColor: colors.border,
+                  borderWidth: 1,
                   padding: 14,
                   borderRadius: 12,
                 }}
               >
-                <Text style={{ color: "#888", fontSize: 12 }}>Goal</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Goal
+                </Text>
                 <Text
                   style={{
-                    color: "#FFF",
+                    color: colors.text,
                     fontSize: 15,
                     fontWeight: "bold",
                     marginTop: 4,
                   }}
                 >
-                  {fitnessGoal || "Weight Loss"}
+                  {goal === "weight_loss"
+                    ? "Weight Loss"
+                    : goal === "muscle_gain"
+                      ? "Muscle Gain"
+                      : "Maintenance"}
                 </Text>
               </View>
               <View
                 style={{
                   width: "48%",
-                  backgroundColor: "#111827",
+                  backgroundColor: colors.cardBg,
+                  borderColor: colors.border,
+                  borderWidth: 1,
                   padding: 14,
                   borderRadius: 12,
                 }}
               >
-                <Text style={{ color: "#888", fontSize: 12 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
                   Calories Budget
                 </Text>
                 <Text
                   style={{
-                    color: "#FFF",
+                    color: colors.text,
                     fontSize: 15,
                     fontWeight: "bold",
                     marginTop: 4,
                   }}
                 >
-                  {dailyCalories || 1812} kcal
+                  {dailyCalories} kcal
                 </Text>
               </View>
               <View
                 style={{
                   width: "48%",
-                  backgroundColor: "#111827",
+                  backgroundColor: colors.cardBg,
+                  borderColor: colors.border,
+                  borderWidth: 1,
                   padding: 14,
                   borderRadius: 12,
                 }}
               >
-                <Text style={{ color: "#888", fontSize: 12 }}>Duration</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  Meals Routine
+                </Text>
                 <Text
                   style={{
-                    color: "#FFF",
+                    color: colors.text,
                     fontSize: 15,
                     fontWeight: "bold",
                     marginTop: 4,
                   }}
                 >
-                  {durationWeeks || 8} Weeks
+                  {preferredMealsCount} Meals / Day
                 </Text>
               </View>
               <View
                 style={{
                   width: "48%",
-                  backgroundColor: "#111827",
+                  backgroundColor: colors.cardBg,
+                  borderColor: colors.border,
+                  borderWidth: 1,
                   padding: 14,
                   borderRadius: 12,
                 }}
               >
-                <Text style={{ color: "#888", fontSize: 12 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
                   Water Intake
                 </Text>
                 <Text
                   style={{
-                    color: "#FFF",
+                    color: colors.text,
                     fontSize: 15,
                     fontWeight: "bold",
                     marginTop: 4,
@@ -721,22 +931,30 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {/* 🔘 Navigation Buttons (Back / Continue) */}
-        <View style={styles.buttonContainer}>
-          {/* Continue Button logic for step 11 should navigate to Dashboard */}
-        </View>
-
-        {/* Navigation Buttons Row */}
         {/* Navigation Buttons Row */}
         <View style={styles.navRow}>
           {currentStep > 1 && (
-            <TouchableOpacity style={styles.backBtn} onPress={handlePrevStep}>
-              <Text style={styles.backBtnText}>Back</Text>
+            <TouchableOpacity
+              style={[
+                styles.backBtn,
+                { backgroundColor: colors.cardBg, borderColor: colors.border },
+              ]}
+              onPress={handlePrevStep}
+            >
+              <Text
+                style={[styles.backBtnText, { color: colors.textSecondary }]}
+              >
+                Back
+              </Text>
             </TouchableOpacity>
           )}
 
           <TouchableOpacity
-            style={[styles.submitBtn, currentStep === 1 && { flex: 1 }]}
+            style={[
+              styles.submitBtn,
+              { backgroundColor: colors.primary },
+              currentStep === 1 && { flex: 1 },
+            ]}
             onPress={
               currentStep === 11 ? handleCompleteOnboarding : handleNextStep
             }
@@ -760,32 +978,20 @@ export default function OnboardingScreen() {
   );
 }
 
-// Dedicated Onboarding Completion Handler
-const handleCompleteOnboarding = async () => {
-  try {
-    await AsyncStorage.setItem("hasCompletedOnboarding", "true");
-    navigation.replace("Main");
-  } catch (error) {
-    console.log("Error saving onboarding state:", error);
-  }
-};
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#121212" },
+  container: { flex: 1 },
   calcOverlay: {
     justifyContent: "center",
     alignItems: "center",
     padding: 30,
   },
   calcTitle: {
-    color: "#4CAF50",
     fontSize: 22,
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 10,
   },
   calcSubtitle: {
-    color: "#CCC",
     fontSize: 15,
     textAlign: "center",
   },
@@ -802,57 +1008,45 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
     borderRadius: 2,
   },
-  activeSegment: { backgroundColor: "#4CAF50" },
-  inactiveSegment: { backgroundColor: "#333" },
-  content: { padding: 20 },
+  content: { padding: 20, paddingBottom: 40 },
   title: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#4CAF50",
     textAlign: "center",
   },
   subtitle: {
     fontSize: 14,
-    color: "#AAA",
     textAlign: "center",
     marginBottom: 20,
   },
   label: {
-    color: "#FFF",
     fontSize: 14,
     fontWeight: "600",
     marginTop: 12,
     marginBottom: 6,
   },
   input: {
-    backgroundColor: "#1E1E1E",
-    color: "#FFF",
     padding: 14,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#333",
+    fontSize: 15,
   },
   row: { flexDirection: "row", gap: 10 },
   flex1: { flex: 1 },
   langListContainer: {
-    backgroundColor: "#181818",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 10,
     borderWidth: 1,
-    borderColor: "#2A2A2A",
   },
   langBtn: {
     padding: 14,
-    backgroundColor: "#1E1E1E",
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#333",
     marginBottom: 8,
   },
   unitToggleRow: {
     flexDirection: "row",
-    backgroundColor: "#1E1E1E",
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 4,
     marginBottom: 15,
   },
@@ -860,59 +1054,54 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     alignItems: "center",
-    borderRadius: 8,
-  },
-  activeUnitBtn: {
-    backgroundColor: "#4CAF50",
+    borderRadius: 10,
   },
   unitBtnText: {
-    color: "#AAA",
     fontWeight: "bold",
     fontSize: 13,
-  },
-  activeUnitBtnText: {
-    color: "#FFF",
   },
   optionBtn: {
     flex: 1,
     padding: 16,
-    backgroundColor: "#1E1E1E",
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#333",
     marginBottom: 10,
   },
-  selectedOption: { backgroundColor: "#1B382B", borderColor: "#4CAF50" },
-  optionText: { color: "#FFF", fontWeight: "bold" },
+  optionText: { fontWeight: "bold" },
   goalBtn: {
     padding: 16,
-    backgroundColor: "#1E1E1E",
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#333",
     alignItems: "center",
   },
-  selectedGoal: { backgroundColor: "#1B382B", borderColor: "#4CAF50" },
-  goalText: { color: "#FFF", fontWeight: "bold" },
+  goalText: { fontWeight: "bold" },
   navRow: { flexDirection: "row", gap: 10, marginTop: 25 },
   backBtn: {
     flex: 1,
-    backgroundColor: "#222",
     padding: 16,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#333",
   },
-  backBtnText: { color: "#AAA", fontSize: 16, fontWeight: "bold" },
+  backBtnText: { fontSize: 16, fontWeight: "bold" },
   submitBtn: {
     flex: 2,
-    backgroundColor: "#4CAF50",
     padding: 16,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: "center",
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   submitBtnText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+  },
 });

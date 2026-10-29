@@ -85,7 +85,7 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  // 🟢 Onboarding Wizard Complete Handler (Hits /api/auth/onboarding)
+  // Onboarding Wizard Complete Handler (Hits /api/auth/onboarding)
   completeOnboarding: async (onboardingData) => {
     set({ isLoading: true, error: null });
     try {
@@ -141,7 +141,7 @@ export const useAuthStore = create((set, get) => ({
 
       const token = get().token;
 
-      // 🟢 If Onboarding data is passed via updateProfile, route to /onboarding endpoint
+      // If Onboarding data is passed via updateProfile, route to /onboarding endpoint
       if (profileData.isOnboardingCompleted) {
         if (token) {
           const res = await axios.post(`${API_URL}/onboarding`, profileData, {
@@ -175,7 +175,7 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  // 🟢 Helper to update user gamification stats (Streak & Badges) in real-time
+  // Helper to update user gamification stats (Streak & Badges) in real-time
   updateUserStats: async (newStats) => {
     const currentUser = get().user;
     if (!currentUser) return;
@@ -185,7 +185,7 @@ export const useAuthStore = create((set, get) => ({
     set({ user: updatedUser });
   },
 
-  // 🟢 Signup / Register Function
+  // Signup / Register Function
   signup: async (name, email, password) => {
     set({ isLoading: true, error: null });
     try {
@@ -215,7 +215,6 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  // Alias for signup if component uses register
   register: async (name, email, password) => {
     return await get().signup(name, email, password);
   },
@@ -262,7 +261,7 @@ export const useAuthStore = create((set, get) => ({
     set({ user: null, token: null, error: null });
   },
 
-  // 🔴 Permanent Account Deletion Action (Google Play Compliance P0)
+  // Permanent Account Deletion Action
   deleteAccount: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -305,7 +304,7 @@ export const useAuthStore = create((set, get) => ({
   },
 }));
 
-// Theme colors helper exported for screens
+// Theme colors helper with Emerald Glassmorphism Palette
 export const getThemeColors = (theme) => {
   const isDark = theme === "dark";
 
@@ -317,5 +316,7 @@ export const getThemeColors = (theme) => {
     textSecondary: isDark ? "#94A3B8" : "#64748B",
     border: isDark ? "#334155" : "#E2E8F0",
     primary: "#10B981",
+    glassGlow: isDark ? "rgba(16, 185, 129, 0.15)" : "rgba(16, 185, 129, 0.1)",
+    cardBgGlow: isDark ? "rgba(30, 41, 59, 0.85)" : "rgba(255, 255, 255, 0.9)",
   };
 };

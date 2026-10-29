@@ -16,7 +16,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
-import NotificationSettings from "../components/NotificationSettings"; // 👈 Import Notification Settings component
+import NotificationSettings from "../components/NotificationSettings";
+import DeviceSyncSection from "../components/DeviceSyncSection";
 
 export default function ProfileScreen({ navigation }) {
   const {
@@ -103,7 +104,6 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  // Confirmation modal for permanent account deletion
   const handleDeleteAccountPress = () => {
     Alert.alert(
       "Delete Account ⚠️",
@@ -136,7 +136,7 @@ export default function ProfileScreen({ navigation }) {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Profile Settings
+          Profile Settings ⚙️
         </Text>
 
         {/* Profile Card */}
@@ -146,7 +146,6 @@ export default function ProfileScreen({ navigation }) {
             {
               backgroundColor: colors.cardBg,
               borderColor: colors.border,
-              borderWidth: 1,
             },
           ]}
         >
@@ -157,18 +156,28 @@ export default function ProfileScreen({ navigation }) {
                 style={styles.avatarImage}
               />
             ) : (
-              <View style={styles.avatarPlaceholder}>
+              <View
+                style={[
+                  styles.avatarPlaceholder,
+                  { backgroundColor: colors.primary },
+                ]}
+              >
                 <Text style={styles.avatarInitial}>
                   {name ? name.charAt(0).toUpperCase() : "U"}
                 </Text>
               </View>
             )}
             <TouchableOpacity
-              style={styles.changePhotoBtn}
+              style={[
+                styles.changePhotoBtn,
+                { backgroundColor: colors.inputBg, borderColor: colors.border },
+              ]}
               onPress={handlePickImage}
             >
-              <Ionicons name="camera" size={14} color="#FFF" />
-              <Text style={styles.changePhotoText}>Change Photo</Text>
+              <Ionicons name="camera" size={14} color={colors.primary} />
+              <Text style={[styles.changePhotoText, { color: colors.primary }]}>
+                Change Photo
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -262,7 +271,7 @@ export default function ProfileScreen({ navigation }) {
           />
 
           <TouchableOpacity
-            style={styles.saveButton}
+            style={[styles.saveButton, { backgroundColor: colors.primary }]}
             onPress={handleSaveChanges}
             disabled={isLoading}
           >
@@ -274,14 +283,13 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* 🌙 / ☀️ Light Mode & Dark Mode Switcher Card */}
+        {/* App Appearance Switcher Card */}
         <View
           style={[
             styles.card,
             {
               backgroundColor: colors.cardBg,
               borderColor: colors.border,
-              borderWidth: 1,
             },
           ]}
         >
@@ -308,14 +316,17 @@ export default function ProfileScreen({ navigation }) {
             <Switch
               value={theme === "dark"}
               onValueChange={toggleTheme}
-              trackColor={{ false: "#CBD5E1", true: "#10B981" }}
+              trackColor={{ false: "#CBD5E1", true: colors.primary }}
               thumbColor={theme === "dark" ? "#FFF" : "#F4F4F5"}
             />
           </View>
         </View>
 
-        {/* 🔔 Notifications Settings Card */}
+        {/* Notifications Settings Card */}
         <NotificationSettings />
+
+        {/* 📱 Health & Device Sync Section */}
+        <DeviceSyncSection />
 
         {/* Plan Switcher Box */}
         <View
@@ -324,7 +335,6 @@ export default function ProfileScreen({ navigation }) {
             {
               backgroundColor: colors.cardBg,
               borderColor: colors.border,
-              borderWidth: 1,
             },
           ]}
         >
@@ -345,7 +355,7 @@ export default function ProfileScreen({ navigation }) {
           <TouchableOpacity
             style={[
               styles.planToggleBtn,
-              { backgroundColor: isPro ? "#64748B" : "#10B981" },
+              { backgroundColor: isPro ? "#64748B" : colors.primary },
             ]}
             onPress={() => toggleSubscriptionTier(isPro ? "free" : "pro")}
           >
@@ -366,7 +376,7 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
 
-        {/* 🔴 Delete Account (Google Play Compliance P0) */}
+        {/* Delete Account */}
         <TouchableOpacity
           style={styles.deleteButton}
           onPress={handleDeleteAccountPress}
@@ -389,36 +399,49 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 20,
   },
-  card: { borderRadius: 16, padding: 18, marginBottom: 16 },
+  card: {
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
   avatarContainer: { alignItems: "center", marginBottom: 16 },
   avatarImage: { width: 80, height: 80, borderRadius: 40, marginBottom: 8 },
   avatarPlaceholder: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#10B981",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   avatarInitial: { fontSize: 32, fontWeight: "bold", color: "#FFF" },
   changePhotoBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#334155",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
+    borderWidth: 1,
   },
   changePhotoText: {
-    color: "#10B981",
     fontSize: 12,
     fontWeight: "600",
     marginLeft: 6,
   },
   label: { fontSize: 12, marginBottom: 6, fontWeight: "600" },
   input: {
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
     marginBottom: 12,
     fontSize: 14,
@@ -427,11 +450,15 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between" },
   halfInput: { width: "48%" },
   saveButton: {
-    backgroundColor: "#10B981",
     padding: 14,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: "center",
     marginTop: 6,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   saveBtnText: { color: "#FFF", fontWeight: "bold", fontSize: 15 },
   themeRow: {
@@ -446,7 +473,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 12,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
   planToggleText: { color: "#FFF", fontWeight: "bold", marginLeft: 8 },
   logoutButton: {
