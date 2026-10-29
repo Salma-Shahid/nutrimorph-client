@@ -17,29 +17,74 @@ export default function DeviceSyncSection() {
   const [isSynced, setIsSynced] = useState(user?.isDeviceSynced || false);
   const [syncing, setSyncing] = useState(false);
 
-  const handleConnectDevice = async () => {
-    setSyncing(true);
-    try {
-      // Platform specific native health integration simulation / bridge call
-      setTimeout(() => {
-        setIsSynced(true);
-        setSyncing(false);
+  // Helper for Disconnect logic
+  const executeDisconnect = () => {
+    setIsSynced(false);
+    if (updateUserStats) {
+      updateUserStats({ isDeviceSynced: false, dailySteps: 0 });
+    }
+    if (Platform.OS === "web") {
+      alert("Device successfully disconnected.");
+    } else {
+      Alert.alert("Disconnected", "Device successfully disconnected.");
+    }
+  };
 
-        // Update user stats or global store
-        if (updateUserStats) {
-          updateUserStats({ isDeviceSynced: true, dailySteps: 6420 });
-        }
-
-        Alert.alert(
-          "Success 🎉",
-          Platform.OS === "ios"
-            ? "Successfully connected with Apple Health! Steps and activity synced."
-            : "Successfully connected with Google Fit / Health Connect!",
+  const handleToggleSync = async () => {
+    if (isSynced) {
+      // Web vs Native Disconnect Handling
+      if (Platform.OS === "web") {
+        const confirmDisconnect = window.confirm(
+          "Are you sure you want to disconnect your health tracking device?",
         );
-      }, 1500);
-    } catch (error) {
-      setSyncing(false);
-      Alert.alert("Sync Error", "Could not connect to health services.");
+        if (confirmDisconnect) {
+          executeDisconnect();
+        }
+      } else {
+        Alert.alert(
+          "Disconnect Device",
+          "Are you sure you want to disconnect your health tracking device?",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Disconnect",
+              style: "destructive",
+              onPress: executeDisconnect,
+            },
+          ],
+        );
+      }
+    } else {
+      // Connect Logic
+      setSyncing(true);
+      try {
+        setTimeout(() => {
+          setIsSynced(true);
+          setSyncing(false);
+
+          if (updateUserStats) {
+            updateUserStats({ isDeviceSynced: true, dailySteps: 6420 });
+          }
+
+          const message =
+            Platform.OS === "ios"
+              ? "Successfully connected with Apple Health! Steps and activity synced."
+              : "Successfully connected with Google Fit / Health Connect!";
+
+          if (Platform.OS === "web") {
+            alert(`Success 🎉\n${message}`);
+          } else {
+            Alert.alert("Success 🎉", message);
+          }
+        }, 1000);
+      } catch (error) {
+        setSyncing(false);
+        if (Platform.OS === "web") {
+          alert("Could not connect to health services.");
+        } else {
+          Alert.alert("Sync Error", "Could not connect to health services.");
+        }
+      }
     }
   };
 
@@ -82,8 +127,8 @@ export default function DeviceSyncSection() {
       </View>
 
       <Text style={[styles.description, { color: colors.textSecondary }]}>
-        Sync your steps, active calories, and workouts automatically from{" "}
-        {Platform.OS === "ios" ? "Apple Health" : "Google Fit"}.
+        Sync your steps, active calories, and workouts automatically from your
+        fitness provider.
       </Text>
 
       <TouchableOpacity
@@ -94,19 +139,19 @@ export default function DeviceSyncSection() {
             borderColor: colors.border,
           },
         ]}
-        onPress={handleConnectDevice}
-        disabled={syncing || isSynced}
+        onPress={handleToggleSync}
+        disabled={syncing}
       >
         <Text
           style={[
             styles.syncButtonText,
-            { color: isSynced ? colors.text : "#FFFFFF" },
+            { color: isSynced ? "#EF4444" : "#FFFFFF" },
           ]}
         >
           {syncing
-            ? "Syncing Device..."
+            ? "Processing..."
             : isSynced
-              ? "Device Connected ✓"
+              ? "Disconnect Device ✕"
               : "Connect Health Device"}
         </Text>
       </TouchableOpacity>

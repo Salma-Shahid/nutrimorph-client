@@ -217,7 +217,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
             style={{ marginRight: 8 }}
           />
           <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 15 }}>
-            Add To Diary
+            Add To Log
           </Text>
         </TouchableOpacity>
       </View>

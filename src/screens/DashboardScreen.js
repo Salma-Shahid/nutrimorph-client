@@ -19,6 +19,7 @@ import { getThemeColors } from "../theme/colors";
 import AdBanner from "../components/AdBanner";
 import { saveDataToCache, getDataFromCache } from "../utils/cache";
 import StreakHeader from "../components/StreakHeader";
+import DeviceSyncSection from "../components/DeviceSyncSection";
 import axios from "axios";
 
 export default function DashboardScreen({ navigation }) {
@@ -505,37 +506,19 @@ export default function DashboardScreen({ navigation }) {
               {stepCount} / 10,000 steps
             </Text>
           </View>
-          <View style={{ flexDirection: "row", marginTop: 12, gap: 10 }}>
-            <TouchableOpacity
-              style={[
-                styles.stepActionBtn,
-                {
-                  backgroundColor: colors.inputBg,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                },
-              ]}
-              onPress={handleConnectDevice}
-            >
-              <Text
-                style={{ color: colors.text, fontWeight: "bold", fontSize: 12 }}
-              >
-                🤖 Connect Device
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.stepActionBtn,
-                { backgroundColor: colors.primary },
-              ]}
-              onPress={handleAddSteps}
-            >
-              <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 12 }}>
-                + Add Steps
-              </Text>
-            </TouchableOpacity>
-          </View>
+
+          <TouchableOpacity
+            style={[styles.stepActionBtn, { backgroundColor: colors.primary }]}
+            onPress={handleAddSteps}
+          >
+            <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 12 }}>
+              + Add Steps
+            </Text>
+          </TouchableOpacity>
         </View>
+
+        {/* 📱 Health & Device Sync Component */}
+        <DeviceSyncSection />
 
         {/* Weight Loss Progress Graph Card */}
         <View
