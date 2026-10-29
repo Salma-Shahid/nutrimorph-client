@@ -73,7 +73,8 @@ export default function SavedMealsScreen({ navigation }) {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (item) => {
+    const mealId = item._id || item.id;
     Alert.alert(
       "Delete Recipe",
       "Are you sure you want to delete this saved recipe?",
@@ -85,19 +86,27 @@ export default function SavedMealsScreen({ navigation }) {
           onPress: async () => {
             try {
               const token = await getAuthToken();
-              const res = await axios.delete(`${API_BASE}/saved-meals/${id}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
+              const res = await axios.delete(
+                `${API_BASE}/saved-meals/${mealId}`,
+                {
+                  headers: { Authorization: `Bearer ${token}` },
+                },
+              );
 
               if (res.data?.success) {
-                setSavedMeals((prev) => prev.filter((item) => item._id !== id));
+                setSavedMeals((prev) =>
+                  prev.filter((m) => (m._id || m.id) !== mealId),
+                );
+                Alert.alert("Success", "Saved recipe deleted successfully!");
               } else {
                 Alert.alert("Error", "Failed to delete saved recipe");
               }
             } catch (error) {
               Alert.alert(
                 "Error",
-                error.message || "Failed to delete saved recipe",
+                error.response?.data?.message ||
+                  error.message ||
+                  "Failed to delete saved recipe",
               );
             }
           },
@@ -110,7 +119,10 @@ export default function SavedMealsScreen({ navigation }) {
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Text style={styles.mealName}>{item.name}</Text>
-        <TouchableOpacity onPress={() => handleDelete(item._id)}>
+        <TouchableOpacity
+          onPress={() => handleDelete(item)}
+          style={{ padding: 4 }}
+        >
           <Ionicons name="trash-outline" size={20} color="#EF4444" />
         </TouchableOpacity>
       </View>
@@ -148,7 +160,7 @@ export default function SavedMealsScreen({ navigation }) {
       ) : (
         <FlatList
           data={savedMeals}
-          keyExtractor={(item) => item._id || Math.random().toString()}
+          keyExtractor={(item, index) => item._id || item.id || String(index)}
           renderItem={renderItem}
           contentContainerStyle={styles.listContainer}
           ListEmptyComponent={
