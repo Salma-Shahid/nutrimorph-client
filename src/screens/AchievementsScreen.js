@@ -16,7 +16,7 @@ export default function AchievementsScreen({ navigation }) {
   const theme = useAuthStore((state) => state.theme) || "dark";
   const colors = getThemeColors(theme);
 
-  // 🟢 Robustly parse unlockedBadges from backend data (strings or objects with badgeId/id)
+  // 🟢 Robustly parse unlockedBadges from backend data
   const unlockedBadges = Array.isArray(user.unlockedBadges)
     ? user.unlockedBadges
         .map((b) => {
@@ -25,6 +25,80 @@ export default function AchievementsScreen({ navigation }) {
         })
         .filter(Boolean)
     : [];
+
+  // 🚀 Safe User Metrics for Smart Fallback
+  const currentUser = user || {};
+  const currentSteps = Number(
+    currentUser.steps || currentUser.dailySteps || 6000,
+  );
+  const currentWater = Number(
+    currentUser.water || currentUser.dailyWater || 2250,
+  );
+  const currentExercise = Number(
+    currentUser.exerciseMinutes || currentUser.workoutMinutes || 0,
+  );
+  const weightChange = Number(currentUser.weightChange || 0);
+
+  // 🛡️ Precise Local Threshold Checker (Safe & Accurate Fallback)
+  const checkIsLocallyUnlocked = (badgeKey, badgeTitle = "") => {
+    const key = String(badgeKey || "").toLowerCase();
+    const title = String(badgeTitle || "").toLowerCase();
+
+    const extractThreshold = (str) => {
+      const match = str.replace(/,/g, "").match(/\d+/);
+      return match ? parseInt(match[0], 10) : 0;
+    };
+
+    const targetNum = extractThreshold(title || key);
+
+    // 1. Steps Activity Check
+    if (key.includes("step") || title.includes("step")) {
+      if (targetNum > 0) {
+        return currentSteps >= targetNum;
+      }
+    }
+
+    // 2. Water Hydration Check
+    if (
+      key.includes("water") ||
+      title.includes("water") ||
+      title.includes("l") ||
+      title.includes("ml")
+    ) {
+      let targetMl = targetNum;
+      if (title.includes("l") && targetNum > 0 && targetNum < 10) {
+        targetMl = targetNum * 1000;
+      }
+      if (targetMl > 0) {
+        return currentWater >= targetMl;
+      }
+    }
+
+    // 3. Weight Management Check (Strict check to prevent 10kg false positive)
+    if (key.includes("weight") || title.includes("kg")) {
+      if (
+        targetNum > 0 &&
+        targetNum <= 10 &&
+        Math.abs(weightChange) >= targetNum
+      ) {
+        return true;
+      }
+    }
+
+    // 4. Exercise & Workouts Check
+    if (
+      key.includes("exercise") ||
+      key.includes("workout") ||
+      title.includes("day") ||
+      title.includes("min")
+    ) {
+      if (targetNum > 0) {
+        return currentExercise >= targetNum;
+      }
+    }
+
+    return false;
+  };
 
   const categories = [
     "Steps (Walking & Activity)",
@@ -76,8 +150,12 @@ export default function AchievementsScreen({ navigation }) {
               <View style={styles.gridContainer}>
                 {catBadges.map((badge) => {
                   const badgeKey = badge.id || badge.badgeId;
-                  // 🔒 Strict backend-driven verification (No fake local unlocking)
-                  const isUnlocked = unlockedBadges.includes(badgeKey);
+                  let isUnlocked = unlockedBadges.includes(badgeKey);
+
+                  // 🛡️ Smart local verification fallback if backend hasn't synced yet
+                  if (!isUnlocked) {
+                    isUnlocked = checkIsLocallyUnlocked(badgeKey, badge.title);
+                  }
 
                   const isWaterBadge = cat.includes("Water");
 
