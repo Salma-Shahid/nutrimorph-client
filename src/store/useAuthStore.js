@@ -49,6 +49,19 @@ export const useAuthStore = create((set, get) => ({
     set({ theme: nextTheme });
   },
 
+  // 🟢 Helper to directly set or patch user object in store and storage
+  setUser: async (userData) => {
+    if (!userData) {
+      await AsyncStorage.removeItem("user");
+      set({ user: null });
+      return;
+    }
+    const currentUser = get().user || {};
+    const mergedUser = { ...currentUser, ...userData };
+    await AsyncStorage.setItem("user", JSON.stringify(mergedUser));
+    set({ user: mergedUser });
+  },
+
   // Real-time DB Sync & Plan Update
   toggleSubscriptionTier: async (tier) => {
     const currentUser = get().user;
@@ -85,7 +98,7 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  // Onboarding Wizard Complete Handler (Hits /api/auth/onboarding)
+  // Onboarding Wizard Complete Handler
   completeOnboarding: async (onboardingData) => {
     set({ isLoading: true, error: null });
     try {
@@ -141,7 +154,6 @@ export const useAuthStore = create((set, get) => ({
 
       const token = get().token;
 
-      // If Onboarding data is passed via updateProfile, route to /onboarding endpoint
       if (profileData.isOnboardingCompleted) {
         if (token) {
           const res = await axios.post(`${API_URL}/onboarding`, profileData, {
@@ -157,7 +169,6 @@ export const useAuthStore = create((set, get) => ({
         }
       }
 
-      // Standard profile update route fallback
       await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
       set({ user: updatedUser, isLoading: false });
 
@@ -175,7 +186,7 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  // Helper to update user gamification stats (Streak & Badges) in real-time
+  // 🟢 Helper to update user gamification stats (Streak & Badges) in real-time
   updateUserStats: async (newStats) => {
     const currentUser = get().user;
     if (!currentUser) return;
@@ -261,7 +272,6 @@ export const useAuthStore = create((set, get) => ({
     set({ user: null, token: null, error: null });
   },
 
-  // Permanent Account Deletion Action
   deleteAccount: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -304,7 +314,6 @@ export const useAuthStore = create((set, get) => ({
   },
 }));
 
-// Theme colors helper with Emerald Glassmorphism Palette
 export const getThemeColors = (theme) => {
   const isDark = theme === "dark";
 

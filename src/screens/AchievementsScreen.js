@@ -16,87 +16,37 @@ export default function AchievementsScreen({ navigation }) {
   const theme = useAuthStore((state) => state.theme) || "dark";
   const colors = getThemeColors(theme);
 
-  // 🟢 Robustly parse unlockedBadges from backend data
+  // 🟢 Robustly parse unlockedBadges from backend
   const unlockedBadges = Array.isArray(user.unlockedBadges)
     ? user.unlockedBadges
-        .map((b) => {
-          if (typeof b === "string") return b;
-          return b?.badgeId || b?.id || b?.badge;
-        })
+        .map((b) => (typeof b === "string" ? b : b?.badgeId || b?.id))
         .filter(Boolean)
     : [];
 
-  // 🚀 Safe User Metrics for Smart Fallback
-  const currentUser = user || {};
-  const currentSteps = Number(
-    currentUser.steps || currentUser.dailySteps || 6000,
-  );
-  const currentWater = Number(
-    currentUser.water || currentUser.dailyWater || 2250,
-  );
-  const currentExercise = Number(
-    currentUser.exerciseMinutes || currentUser.workoutMinutes || 0,
-  );
-  const weightChange = Number(currentUser.weightChange || 0);
+  const currentSteps = Number(user.steps || user.dailySteps || 6000);
+  const currentWater = Number(user.water || user.dailyWater || 2250);
+  const weightChange = Number(user.weightChange || 0);
 
-  // 🛡️ Precise Local Threshold Checker (Safe & Accurate Fallback)
+  // 🛡️ Strict Threshold Checker (Prevents false positives like 10kg bug)
   const checkIsLocallyUnlocked = (badgeKey, badgeTitle = "") => {
     const key = String(badgeKey || "").toLowerCase();
     const title = String(badgeTitle || "").toLowerCase();
 
-    const extractThreshold = (str) => {
-      const match = str.replace(/,/g, "").match(/\d+/);
-      return match ? parseInt(match[0], 10) : 0;
-    };
+    const match = title.replace(/,/g, "").match(/\d+/);
+    const targetNum = match ? parseInt(match[0], 10) : 0;
 
-    const targetNum = extractThreshold(title || key);
-
-    // 1. Steps Activity Check
     if (key.includes("step") || title.includes("step")) {
-      if (targetNum > 0) {
-        return currentSteps >= targetNum;
-      }
+      return targetNum > 0 && currentSteps >= targetNum;
     }
-
-    // 2. Water Hydration Check
-    if (
-      key.includes("water") ||
-      title.includes("water") ||
-      title.includes("l") ||
-      title.includes("ml")
-    ) {
+    if (key.includes("water") || title.includes("water")) {
       let targetMl = targetNum;
-      if (title.includes("l") && targetNum > 0 && targetNum < 10) {
-        targetMl = targetNum * 1000;
-      }
-      if (targetMl > 0) {
-        return currentWater >= targetMl;
-      }
+      if (title.includes("l") && targetNum < 10) targetMl = targetNum * 1000;
+      return targetMl > 0 && currentWater >= targetMl;
     }
-
-    // 3. Weight Management Check (Strict check to prevent 10kg false positive)
+    // Strict weight check: Ensure weightChange is explicitly recorded and matches target
     if (key.includes("weight") || title.includes("kg")) {
-      if (
-        targetNum > 0 &&
-        targetNum <= 10 &&
-        Math.abs(weightChange) >= targetNum
-      ) {
-        return true;
-      }
+      return targetNum > 0 && Math.abs(weightChange) >= targetNum;
     }
-
-    // 4. Exercise & Workouts Check
-    if (
-      key.includes("exercise") ||
-      key.includes("workout") ||
-      title.includes("day") ||
-      title.includes("min")
-    ) {
-      if (targetNum > 0) {
-        return currentExercise >= targetNum;
-      }
-    }
-
     return false;
   };
 
@@ -152,7 +102,6 @@ export default function AchievementsScreen({ navigation }) {
                   const badgeKey = badge.id || badge.badgeId;
                   let isUnlocked = unlockedBadges.includes(badgeKey);
 
-                  // 🛡️ Smart local verification fallback if backend hasn't synced yet
                   if (!isUnlocked) {
                     isUnlocked = checkIsLocallyUnlocked(badgeKey, badge.title);
                   }
@@ -166,14 +115,14 @@ export default function AchievementsScreen({ navigation }) {
                           styles.iconShield,
                           isUnlocked
                             ? isWaterBadge
-                              ? styles.waterUnlockedShield // 💧 Vibrant Cyan for Water
+                              ? styles.waterUnlockedShield
                               : [
                                   styles.unlockedShield,
                                   {
                                     backgroundColor: colors.glassGlow,
                                     borderColor: colors.primary,
                                   },
-                                ] // Default Emerald Glass for others
+                                ]
                             : [
                                 styles.lockedShield,
                                 {
@@ -189,7 +138,7 @@ export default function AchievementsScreen({ navigation }) {
                           color={
                             isUnlocked
                               ? isWaterBadge
-                                ? "#38BDF8" // Bright Cyan Blue
+                                ? "#38BDF8"
                                 : colors.primary
                               : colors.textSecondary
                           }
@@ -238,9 +187,7 @@ export default function AchievementsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -249,15 +196,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: 1,
   },
-  backBtn: {
-    padding: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
+  backBtn: { padding: 8, borderRadius: 12, borderWidth: 1 },
+  headerTitle: { fontSize: 20, fontWeight: "bold" },
   categoryCard: {
     borderRadius: 16,
     padding: 16,
@@ -269,22 +209,14 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 3,
   },
-  categoryTitle: {
-    fontSize: 15,
-    fontWeight: "bold",
-    marginBottom: 16,
-  },
+  categoryTitle: { fontSize: 15, fontWeight: "bold", marginBottom: 16 },
   gridContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "flex-start",
     gap: 12,
   },
-  badgeItem: {
-    width: "29%",
-    alignItems: "center",
-    marginBottom: 12,
-  },
+  badgeItem: { width: "29%", alignItems: "center", marginBottom: 12 },
   iconShield: {
     width: 58,
     height: 58,
@@ -302,7 +234,6 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
-  // 💧 Water Badges Custom Cyan Glow Styling
   waterUnlockedShield: {
     backgroundColor: "rgba(56, 189, 248, 0.15)",
     borderWidth: 2,
@@ -313,10 +244,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 5,
   },
-  lockedShield: {
-    borderWidth: 1,
-    opacity: 0.6,
-  },
+  lockedShield: { borderWidth: 1, opacity: 0.6 },
   lockBadge: {
     position: "absolute",
     bottom: -2,
@@ -325,9 +253,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
-  badgeTitle: {
-    fontSize: 10,
-    textAlign: "center",
-    fontWeight: "500",
-  },
+  badgeTitle: { fontSize: 10, textAlign: "center", fontWeight: "500" },
 });

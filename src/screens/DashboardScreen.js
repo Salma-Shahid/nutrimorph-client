@@ -90,6 +90,9 @@ export default function DashboardScreen({ navigation }) {
       );
       if (res.data?.success) {
         setStepCount(res.data.data.steps);
+        if (res.data?.userStats) {
+          useAuthStore.getState().updateUserStats(res.data.userStats);
+        }
       }
     } catch (err) {
       Alert.alert("Error", "Failed to update steps");
@@ -117,6 +120,9 @@ export default function DashboardScreen({ navigation }) {
       );
       if (res.data?.success) {
         setCaloriesBurned(res.data.data.caloriesBurned);
+        if (res.data?.userStats) {
+          useAuthStore.getState().updateUserStats(res.data.userStats);
+        }
         setShowExerciseModal(false);
         setCaloriesInput("");
         setExerciseName("");
