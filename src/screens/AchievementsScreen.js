@@ -16,7 +16,7 @@ export default function AchievementsScreen({ navigation }) {
   const theme = useAuthStore((state) => state.theme) || "dark";
   const colors = getThemeColors(theme);
 
-  // 🟢 Robustly parse unlockedBadges whether they are strings or objects with badgeId/id
+  // 🟢 Robustly parse unlockedBadges from backend data (strings or objects with badgeId/id)
   const unlockedBadges = Array.isArray(user.unlockedBadges)
     ? user.unlockedBadges
         .map((b) => {
@@ -76,8 +76,9 @@ export default function AchievementsScreen({ navigation }) {
               <View style={styles.gridContainer}>
                 {catBadges.map((badge) => {
                   const badgeKey = badge.id || badge.badgeId;
+                  // 🔒 Strict backend-driven verification (No fake local unlocking)
                   const isUnlocked = unlockedBadges.includes(badgeKey);
-                  // Check if it's a water badge to give it a custom vibrant cyan glow
+
                   const isWaterBadge = cat.includes("Water");
 
                   return (
