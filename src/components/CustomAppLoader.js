@@ -4,52 +4,38 @@ import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 
 /**
- * Animated Custom App Logo Loader with Breathing & Glowing Effect
+ * Animated Custom App Logo Loader with Stable Glassmorphism & Soft Fade/Glow Effect
  */
 const CustomAppLoader = ({ size = 60, text = "NutriBot is thinking..." }) => {
   const { theme } = useAuthStore();
   const colors = getThemeColors(theme);
 
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const opacityAnim = useRef(new Animated.Value(0.4)).current;
+  // Only Opacity Animation (No Scale/Bounce movement)
+  const opacityAnim = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
-    // Continuous Breathing / Pulse Animation
+    // Smooth Breathing Fade Loop
     Animated.loop(
-      Animated.parallel([
-        Animated.sequence([
-          Animated.timing(scaleAnim, {
-            toValue: 1.18,
-            duration: 900,
-            easing: Easing.out(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(scaleAnim, {
-            toValue: 1,
-            duration: 900,
-            easing: Easing.in(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ]),
-        Animated.sequence([
-          Animated.timing(opacityAnim, {
-            toValue: 1,
-            duration: 900,
-            useNativeDriver: true,
-          }),
-          Animated.timing(opacityAnim, {
-            toValue: 0.4,
-            duration: 900,
-            useNativeDriver: true,
-          }),
-        ]),
+      Animated.sequence([
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 0.3,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
       ]),
     ).start();
-  }, []);
+  }, [opacityAnim]);
 
   return (
     <View style={styles.container}>
-      {/* Outer Glowing Gradient Ring */}
+      {/* Outer Glowing Gradient Ring (Stable Position, Fading Opacity) */}
       <Animated.View
         style={[
           styles.glowRing,
@@ -59,13 +45,12 @@ const CustomAppLoader = ({ size = 60, text = "NutriBot is thinking..." }) => {
             borderRadius: (size + 24) / 2,
             backgroundColor: colors.glassGlow || "rgba(16, 185, 129, 0.35)",
             shadowColor: colors.primary,
-            transform: [{ scale: scaleAnim }],
             opacity: opacityAnim,
           },
         ]}
       />
 
-      {/* Animated App Icon */}
+      {/* Stable App Icon */}
       <Animated.Image
         source={require("../../assets/icon.png")}
         style={[
@@ -75,7 +60,7 @@ const CustomAppLoader = ({ size = 60, text = "NutriBot is thinking..." }) => {
             height: size,
             borderRadius: size / 4,
             shadowColor: colors.primary,
-            transform: [{ scale: scaleAnim }],
+            opacity: opacityAnim,
           },
         ]}
         resizeMode="contain"
