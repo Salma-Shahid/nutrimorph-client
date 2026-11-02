@@ -63,7 +63,7 @@ export default function LoginScreen({ navigation }) {
             ]}
           >
             <Image
-              source={require("../assets/images/nutribot-icon.png")}
+              source={require("../assets/images/icon.png")}
               style={styles.logoImage}
             />
           </View>

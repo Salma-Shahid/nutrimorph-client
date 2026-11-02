@@ -77,7 +77,7 @@ export default function SignupScreen({ navigation }) {
             ]}
           >
             <Image
-              source={require("../assets/images/nutribot-icon.png")}
+              source={require("../assets/images/icon.png")}
               style={styles.logoImage}
             />
           </View>
