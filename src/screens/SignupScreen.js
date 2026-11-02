@@ -10,8 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 
@@ -28,7 +28,7 @@ export default function SignupScreen({ navigation }) {
     const trimmedEmail = email.trim();
 
     if (!trimmedName || !trimmedEmail || !password) {
-      Alert.alert("Validation Error", "Tamam fields fill karein.");
+      Alert.alert("Validation Error", "Please fill all fields.");
       return;
     }
 
@@ -38,7 +38,7 @@ export default function SignupScreen({ navigation }) {
       Alert.alert(
         "Verify Your Email 📧",
         result?.message ||
-          "Registration successful! Apni email inbox check karke account verify karein.",
+          "Registration successful! Please check your email inbox to verify your account.",
         [
           {
             text: "OK",
@@ -49,7 +49,7 @@ export default function SignupScreen({ navigation }) {
     } else {
       Alert.alert(
         "Signup Failed",
-        result?.message || "Kuch masla hua hai. Dobara koshish karein.",
+        result?.message || "Signup failed. Please try again.",
       );
     }
   };
@@ -76,7 +76,10 @@ export default function SignupScreen({ navigation }) {
               },
             ]}
           >
-            <Ionicons name="leaf" size={40} color={colors.primary} />
+            <Image
+              source={require("../assets/images/nutribot-icon.png")}
+              style={styles.logoImage}
+            />
           </View>
           <Text style={[styles.title, { color: colors.text }]}>NutriMorph</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
@@ -156,9 +159,9 @@ export default function SignupScreen({ navigation }) {
           style={styles.linkContainer}
         >
           <Text style={[styles.linkText, { color: colors.textSecondary }]}>
-            Pehle se account hai?{" "}
+            Already have an account?{" "}
             <Text style={[styles.linkBold, { color: colors.primary }]}>
-              Login karein
+              Login
             </Text>
           </Text>
         </TouchableOpacity>
@@ -188,12 +191,19 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
     marginBottom: 16,
     shadowColor: "#10B981",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+  },
+  logoImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 40,
+    resizeMode: "cover",
   },
   title: {
     fontSize: 32,

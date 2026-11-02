@@ -23,10 +23,11 @@ export default function DeviceSyncSection() {
     if (updateUserStats) {
       updateUserStats({ isDeviceSynced: false, dailySteps: 0 });
     }
+    const msg = "Device successfully disconnected.";
     if (Platform.OS === "web") {
-      alert("Device successfully disconnected.");
+      alert(msg);
     } else {
-      Alert.alert("Disconnected", "Device successfully disconnected.");
+      Alert.alert("Disconnected", msg);
     }
   };
 
@@ -55,35 +56,66 @@ export default function DeviceSyncSection() {
         );
       }
     } else {
-      // Connect Logic
-      setSyncing(true);
-      try {
-        setTimeout(() => {
-          setIsSynced(true);
+      // Connect & Permission Prompt Logic
+      const providerName =
+        Platform.OS === "ios" ? "Apple Health" : "Google Fit / Health Connect";
+
+      const confirmPermissionPrompt = () => {
+        setSyncing(true);
+        try {
+          // Simulating native health permissions and step synchronization callback
+          setTimeout(() => {
+            setIsSynced(true);
+            setSyncing(false);
+
+            if (updateUserStats) {
+              updateUserStats({ isDeviceSynced: true, dailySteps: 5430 });
+            }
+
+            const successMsg = `Successfully connected with ${providerName}! Permissions granted and steps synchronized.`;
+
+            if (Platform.OS === "web") {
+              alert(`Success 🎉\n${successMsg}`);
+            } else {
+              Alert.alert("Success 🎉", successMsg);
+            }
+          }, 1500);
+        } catch (error) {
           setSyncing(false);
-
-          if (updateUserStats) {
-            updateUserStats({ isDeviceSynced: true, dailySteps: 6420 });
-          }
-
-          const message =
-            Platform.OS === "ios"
-              ? "Successfully connected with Apple Health! Steps and activity synced."
-              : "Successfully connected with Google Fit / Health Connect!";
-
+          const errorMsg =
+            "Could not connect to health services or request permissions.";
           if (Platform.OS === "web") {
-            alert(`Success 🎉\n${message}`);
+            alert(errorMsg);
           } else {
-            Alert.alert("Success 🎉", message);
+            Alert.alert("Sync Error", errorMsg);
           }
-        }, 1000);
-      } catch (error) {
-        setSyncing(false);
-        if (Platform.OS === "web") {
-          alert("Could not connect to health services.");
-        } else {
-          Alert.alert("Sync Error", "Could not connect to health services.");
         }
+      };
+
+      // Native Permission Request Alert Confirmation Dialog
+      if (Platform.OS === "web") {
+        const allowSync = window.confirm(
+          `Connect Fitness Provider\n\nNutriMorph needs permission to read your step count and active calories from ${providerName}. Allow access?`,
+        );
+        if (allowSync) {
+          confirmPermissionPrompt();
+        }
+      } else {
+        Alert.alert(
+          "Connect Fitness Provider 🏃‍♀️",
+          `NutriMorph needs permission to read your step count and active calories from ${providerName}.`,
+          [
+            {
+              text: "Cancel",
+              style: "cancel",
+              onPress: () => setSyncing(false),
+            },
+            {
+              text: "Allow & Connect",
+              onPress: confirmPermissionPrompt,
+            },
+          ],
+        );
       }
     }
   };
@@ -149,7 +181,7 @@ export default function DeviceSyncSection() {
           ]}
         >
           {syncing
-            ? "Processing..."
+            ? "Requesting Permissions..."
             : isSynced
               ? "Disconnect Device ✕"
               : "Connect Health Device"}

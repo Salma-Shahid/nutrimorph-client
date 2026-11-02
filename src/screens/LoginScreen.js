@@ -10,8 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 
@@ -33,7 +33,10 @@ export default function LoginScreen({ navigation }) {
     const result = await login(trimmedEmail, password);
 
     if (!result?.success) {
-      Alert.alert("Login Failed", result?.message || "Login fail ho gaya.");
+      Alert.alert(
+        "Login Failed",
+        result?.message || "Login failed. Please try again.",
+      );
     }
   };
 
@@ -59,7 +62,10 @@ export default function LoginScreen({ navigation }) {
               },
             ]}
           >
-            <Ionicons name="leaf" size={40} color={colors.primary} />
+            <Image
+              source={require("../assets/images/nutribot-icon.png")}
+              style={styles.logoImage}
+            />
           </View>
           <Text style={[styles.title, { color: colors.text }]}>NutriMorph</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
@@ -124,9 +130,9 @@ export default function LoginScreen({ navigation }) {
           style={styles.linkContainer}
         >
           <Text style={[styles.linkText, { color: colors.textSecondary }]}>
-            Account nahi hai?{" "}
+            Do not have Account?{" "}
             <Text style={[styles.linkBold, { color: colors.primary }]}>
-              Signup karein
+              Sign Up
             </Text>
           </Text>
         </TouchableOpacity>
@@ -156,12 +162,19 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
     marginBottom: 16,
     shadowColor: "#10B981",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+  },
+  logoImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 40,
+    resizeMode: "cover",
   },
   title: {
     fontSize: 32,

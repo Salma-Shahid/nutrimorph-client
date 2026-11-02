@@ -77,7 +77,7 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  // Add Steps Handler
+  // Add Steps Handler with strict validation
   const handleAddSteps = async () => {
     const todayDate = getLocalDate();
     try {
@@ -133,11 +133,23 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  // Connect Device Handler
+  // Connect Device Handler with confirmation prompt
   const handleConnectDevice = () => {
     Alert.alert(
-      "Device Sync",
-      "Google Fit / Apple Health connected successfully! Steps will sync automatically.",
+      "Connect Fitness Provider",
+      "NutriMorph needs permission to read your step count and daily active calories from Google Fit / Apple Health.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Allow & Connect",
+          onPress: () => {
+            Alert.alert(
+              "Success",
+              "Google Fit / Apple Health connected successfully! Steps will sync automatically.",
+            );
+          },
+        },
+      ],
     );
   };
 
@@ -293,14 +305,19 @@ export default function DashboardScreen({ navigation }) {
               </Text>
             </TouchableOpacity>
 
-            <View
+            <TouchableOpacity
               style={[
                 styles.badge,
                 { backgroundColor: isPro ? "#F59E0B" : colors.primary },
               ]}
+              onPress={() => {
+                if (!isPro) {
+                  navigation.navigate("Subscription");
+                }
+              }}
             >
               <Text style={styles.badgeText}>{isPro ? "PRO 👑" : "FREE"}</Text>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -378,7 +395,7 @@ export default function DashboardScreen({ navigation }) {
           </View>
         )}
 
-        {/* Water Tracker & Log Exercise Row */}
+        {/* Water Tracker & Log Exercise Row (Aligned with fixed width) */}
         <View style={styles.rowContainer}>
           {/* Water Tracker Card */}
           <View
@@ -483,7 +500,7 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Step Tracking Card */}
+        {/* Step Tracking Card (Full Width fixed) */}
         <View
           style={[
             styles.card,
@@ -524,7 +541,7 @@ export default function DashboardScreen({ navigation }) {
         </View>
 
         {/* 📱 Health & Device Sync Component */}
-        <DeviceSyncSection />
+        <DeviceSyncSection onConnect={handleConnectDevice} />
 
         {/* Weight Loss Progress Graph Card */}
         <View
@@ -922,83 +939,66 @@ export default function DashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 30 },
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  greeting: { fontSize: 13, fontWeight: "500" },
-  userName: { fontSize: 20, fontWeight: "bold" },
+  greeting: {
+    fontSize: 13,
+  },
+  userName: {
+    fontSize: 20,
+    fontWeight: "bold",
+  },
   badge: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
   },
-  badgeText: { color: "#FFF", fontSize: 11, fontWeight: "bold" },
-  alertCard: {
-    borderWidth: 1,
-    padding: 14,
-    borderRadius: 16,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 16,
-    shadowColor: "#EF4444",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  alertText: {
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
-  recoveryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  recoveryBtnText: { color: "#FFF", fontSize: 12, fontWeight: "bold" },
-  aiRecoveryCard: {
-    borderWidth: 1,
-    padding: 14,
-    borderRadius: 16,
-    marginBottom: 16,
-    shadowColor: "#10B981",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+  badgeText: {
+    color: "#FFF",
+    fontSize: 11,
+    fontWeight: "bold",
   },
   rowContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 16,
+    width: "100%",
+    marginVertical: 8,
   },
   halfCard: {
     width: "48%",
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
+    justifyContent: "space-between",
+  },
+  card: {
+    width: "100%",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    marginVertical: 8,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: "bold",
   },
   smallWaterBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1012,74 +1012,123 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   stepActionBtn: {
-    flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: 10,
     alignItems: "center",
-    justifyContent: "center",
+    marginTop: 10,
   },
-  graphPlaceholder: {
-    borderRadius: 12,
+  alertCard: {
+    flexDirection: "row",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    marginVertical: 8,
+    alignItems: "center",
+  },
+  alertText: {
+    fontSize: 13,
+    fontWeight: "bold",
+  },
+  recoveryBtn: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  recoveryBtnText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  aiRecoveryCard: {
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
     marginVertical: 8,
   },
+  graphPlaceholder: {
+    height: 120,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginVertical: 10,
+    position: "relative",
+  },
   targetLineBadge: {
-    paddingHorizontal: 10,
+    position: "absolute",
+    top: 10,
+    right: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 10,
-    alignSelf: "flex-start",
+    borderRadius: 8,
   },
   weighInBtn: {
-    alignItems: "center",
     paddingVertical: 12,
     borderRadius: 12,
+    alignItems: "center",
     marginTop: 6,
   },
-  card: { borderRadius: 16, padding: 18, borderWidth: 1, marginBottom: 16 },
-  cardTitle: { fontSize: 15, fontWeight: "bold" },
   statsRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    justifyContent: "space-between",
     marginVertical: 14,
   },
-  statItem: { alignItems: "center" },
-  statNum: { fontSize: 20, fontWeight: "bold" },
-  statLabel: { fontSize: 12, marginTop: 2 },
+  statItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  statNum: {
+    fontSize: 20,
+    fontWeight: "bold",
+  },
+  statLabel: {
+    fontSize: 12,
+    marginTop: 2,
+  },
   historyBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 12,
     marginTop: 4,
-    gap: 8,
   },
-  historyBtnText: { fontWeight: "bold", fontSize: 13 },
+  historyBtnText: {
+    fontSize: 13,
+    fontWeight: "bold",
+    marginLeft: 6,
+  },
   actionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 20,
+    marginVertical: 10,
   },
   actionCard: {
-    width: "48%",
-    padding: 16,
-    borderRadius: 16,
+    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
-    shadowColor: "#10B981",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginHorizontal: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  actionCardText: { color: "#FFF", fontWeight: "bold", fontSize: 15 },
+  actionCardText: {
+    color: "#FFF",
+    fontWeight: "bold",
+    fontSize: 14,
+    marginLeft: 8,
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
     padding: 20,
   },
@@ -1087,29 +1136,36 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    maxHeight: "80%",
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 15,
   },
-  modalTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 10 },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 15,
+  },
   modalInput: {
-    padding: 14,
     borderRadius: 12,
+    padding: 12,
     borderWidth: 1,
-    marginBottom: 14,
     fontSize: 15,
+    marginBottom: 15,
   },
   historyItem: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
     marginBottom: 10,
   },
-  mealName: { fontSize: 15, fontWeight: "bold", marginBottom: 2 },
+  mealName: {
+    fontSize: 15,
+    fontWeight: "bold",
+  },
 });

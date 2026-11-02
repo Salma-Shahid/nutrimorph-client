@@ -175,7 +175,7 @@ export default function MealScannerScreen({ navigation }) {
     }
   };
 
-  // 2. Barcode Product Lookup using Open Food Facts API
+  // 2. Barcode Product Lookup using Open Food Facts & AI Fallback
   const fetchProductByBarcode = async (barcode) => {
     setShowBarcodeScanner(false);
     setAnalyzing(true);
@@ -196,15 +196,40 @@ export default function MealScannerScreen({ navigation }) {
           product.product_name_en ||
           product.brands ||
           "Packaged Food";
+
+        // Comprehensive fallback key checking for macros
         const cal =
           nutriments["energy-kcal_100g"] ||
           nutriments["energy-kcal"] ||
           nutriments["energy-kcal_value"] ||
+          nutriments["energy_100g"] ||
           0;
+
         const prot = nutriments.proteins_100g || nutriments.proteins || 0;
         const carb =
           nutriments.carbohydrates_100g || nutriments.carbohydrates || 0;
         const fat = nutriments.fat_100g || nutriments.fat || 0;
+
+        // If Open Food Facts returns zero values, trigger AI estimation fallback
+        if (Number(cal) === 0 && Number(prot) === 0 && Number(carb) === 0) {
+          const activeToken = await getAuthToken();
+          const aiRes = await axios.post(
+            `${API_BASE}/meals/estimate-text`,
+            { query: name },
+            { headers: { Authorization: `Bearer ${activeToken}` } },
+          );
+          if (aiRes.data?.success) {
+            const aiData = aiRes.data.data;
+            setFoodName(name);
+            setCalories(String(aiData.calories || 150));
+            setProtein(String(aiData.protein || 2));
+            setCarbs(String(aiData.carbs || 30));
+            setFats(String(aiData.fats || 1));
+            setConfidence("High (AI Barcode Estimation)");
+            setModalVisible(true);
+            return;
+          }
+        }
 
         setFoodName(name);
         setCalories(String(Math.round(cal)));
@@ -216,7 +241,7 @@ export default function MealScannerScreen({ navigation }) {
       } else {
         Alert.alert(
           "Product Not Registered 🔍",
-          "This barcode isn't in the global database yet. Please take a photo of the food item or nutrition label using Camera/Gallery for AI scanning.",
+          "This barcode isn't fully detailed in the global database. Please take a photo of the food item or nutrition label using Camera/Gallery for AI scanning.",
           [{ text: "OK" }],
         );
       }

@@ -16,18 +16,19 @@ export default function AchievementsScreen({ navigation }) {
   const theme = useAuthStore((state) => state.theme) || "dark";
   const colors = getThemeColors(theme);
 
-  // 🟢 Robustly parse unlockedBadges from backend
+  // Robustly parse unlockedBadges from backend
   const unlockedBadges = Array.isArray(user.unlockedBadges)
     ? user.unlockedBadges
         .map((b) => (typeof b === "string" ? b : b?.badgeId || b?.id))
         .filter(Boolean)
     : [];
 
-  const currentSteps = Number(user.steps || user.dailySteps || 6000);
-  const currentWater = Number(user.water || user.dailyWater || 2250);
+  // Strict zero fallbacks to prevent auto-unlocking badges on fresh login
+  const currentSteps = Number(user.steps || user.dailySteps || 0);
+  const currentWater = Number(user.water || user.dailyWater || 0);
   const weightChange = Number(user.weightChange || 0);
 
-  // 🛡️ Strict Threshold Checker (Prevents false positives like 10kg bug)
+  // Strict Threshold Checker (Prevents false positives)
   const checkIsLocallyUnlocked = (badgeKey, badgeTitle = "") => {
     const key = String(badgeKey || "").toLowerCase();
     const title = String(badgeTitle || "").toLowerCase();

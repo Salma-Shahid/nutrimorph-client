@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -6,175 +6,59 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
-  Platform,
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import Purchases from "react-native-purchases";
+import * as WebBrowser from "expo-web-browser";
+import axios from "axios";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 
-// 🛡️ Guard: Check if native RevenueCat module is linked and available
-const isRevenueCatAvailable =
-  typeof Purchases?.isConfigured === "function" &&
-  typeof Purchases?.configure === "function" &&
-  typeof Purchases?.getOfferings === "function";
+const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app"}/api`;
 
 export default function SubscriptionScreen({ navigation }) {
-  const [packages, setPackages] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [purchasing, setPurchasing] = useState(false);
-
-  const { user, updateUserGlobally, theme } = useAuthStore();
+  const [loading, setLoading] = useState(false);
+  const { user, token, updateUserGlobally, theme } = useAuthStore();
   const colors = getThemeColors(theme);
 
-  useEffect(() => {
-    loadOfferings();
-  }, []);
-
-  const loadOfferings = async () => {
+  // Stripe Checkout Flow Handler
+  const handleStripeCheckout = async () => {
+    setLoading(true);
     try {
-      if (!isRevenueCatAvailable) {
-        console.warn(
-          "RevenueCat native modules are not available in Expo Go. Skipping offerings load.",
-        );
-        setLoading(false);
-        return;
-      }
+      const activeToken = token || user?.token;
 
-      const isConfigured = await Purchases.isConfigured();
-      if (!isConfigured) {
-        const apiKey = __DEV__
-          ? process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY
-          : Platform.OS === "android"
-            ? process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY
-            : process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
+      // Request backend to create a Stripe Checkout Session
+      const res = await axios.post(
+        `${API_BASE}/billing/create-checkout-session`,
+        { plan: "pro_monthly" },
+        { headers: { Authorization: `Bearer ${activeToken}` } },
+      );
 
-        if (apiKey) {
-          Purchases.configure({ apiKey });
-        } else {
-          console.warn(
-            "RevenueCat API key missing for current environment or platform.",
-          );
+      if (res.data?.success && res.data?.url) {
+        // Open Stripe Checkout in secure browser view
+        await WebBrowser.openBrowserAsync(res.data.url);
+
+        // Optimistically update global user state or check status upon return
+        if (updateUserGlobally) {
+          await updateUserGlobally({ subscriptionTier: "pro" });
         }
-      }
-
-      if (
-        typeof Purchases?.setLogLevel === "function" &&
-        Purchases?.LOG_LEVEL?.DEBUG
-      ) {
-        Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
-      }
-
-      const offerings = await Purchases.getOfferings();
-      if (
-        offerings?.current !== null &&
-        offerings?.current?.availablePackages?.length > 0
-      ) {
-        setPackages(offerings.current.availablePackages);
       } else {
-        console.log("No offerings/packages found.");
+        Alert.alert(
+          "Payment Error",
+          "Could not initiate Stripe payment gateway session.",
+        );
       }
     } catch (error) {
-      console.error("RevenueCat Offerings Error:", error);
-      Alert.alert("Notice", "Subscription plans are currently unavailable.");
+      console.error("Stripe Checkout Error:", error);
+      Alert.alert(
+        "Gateway Error",
+        "Unable to connect to payment server. Please try again.",
+      );
     } finally {
       setLoading(false);
     }
   };
-
-  const handlePurchase = async (packageToBuy) => {
-    if (!isRevenueCatAvailable) {
-      Alert.alert(
-        "Expo Go Restriction",
-        "In-App Purchases require a Standalone APK / EAS Development Build to test.",
-      );
-      return;
-    }
-
-    setPurchasing(true);
-    try {
-      const { customerInfo } = await Purchases.purchasePackage(packageToBuy);
-
-      if (customerInfo?.entitlements?.active?.["nutrimorph_pro"]?.isActive) {
-        if (updateUserGlobally) {
-          await updateUserGlobally({ subscriptionTier: "pro" });
-        }
-
-        Alert.alert("Success 🎉", "You are now a Pro member!", [
-          {
-            text: "OK",
-            onPress: () => {
-              if (navigation?.canGoBack && navigation.canGoBack()) {
-                navigation.goBack();
-              } else if (navigation?.navigate) {
-                navigation.navigate("MainTabs");
-              }
-            },
-          },
-        ]);
-      }
-    } catch (error) {
-      if (!error?.userCancelled) {
-        Alert.alert(
-          "Purchase Failed",
-          error?.message || "Something went wrong",
-        );
-      }
-    } finally {
-      setPurchasing(false);
-    }
-  };
-
-  const handleRestore = async () => {
-    if (!isRevenueCatAvailable) {
-      Alert.alert(
-        "Expo Go Restriction",
-        "Restoring purchases requires a Standalone APK / EAS Development Build.",
-      );
-      return;
-    }
-
-    try {
-      const customerInfo = await Purchases.restorePurchases();
-      const isProActive =
-        customerInfo?.entitlements?.active?.["nutrimorph_pro"]?.isActive;
-
-      if (isProActive) {
-        if (updateUserGlobally) {
-          await updateUserGlobally({ subscriptionTier: "pro" });
-        }
-        Alert.alert("Success 🎉", "Your subscription has been restored!", [
-          {
-            text: "OK",
-            onPress: () => {
-              if (navigation?.canGoBack && navigation.canGoBack()) {
-                navigation.goBack();
-              } else if (navigation?.navigate) {
-                navigation.navigate("MainTabs");
-              }
-            },
-          },
-        ]);
-      } else {
-        Alert.alert("Notice", "No active subscription found.");
-      }
-    } catch (error) {
-      Alert.alert(
-        "Restore Error",
-        error?.message || "Could not restore purchases.",
-      );
-    }
-  };
-
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.center, { backgroundColor: colors.bg }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
@@ -198,7 +82,7 @@ export default function SubscriptionScreen({ navigation }) {
           </Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Get unlimited AI meal scans, personalized diet plans, and priority
-            NutriBot coaching.
+            NutriBot coaching via Stripe secure checkout.
           </Text>
         </View>
 
@@ -241,45 +125,32 @@ export default function SubscriptionScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Dynamic Offerings List */}
-        {packages.length > 0 ? (
-          packages.map((pkg) => (
-            <TouchableOpacity
-              key={pkg.identifier}
-              style={[styles.buyButton, { backgroundColor: colors.primary }]}
-              disabled={purchasing}
-              onPress={() => handlePurchase(pkg)}
-              activeOpacity={0.8}
-            >
-              {purchasing ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.buttonText}>
-                  Upgrade to Pro — {pkg.product?.priceString || "$--"} / mo
-                </Text>
-              )}
-            </TouchableOpacity>
-          ))
-        ) : (
-          <View
-            style={[
-              styles.noPackageCard,
-              { backgroundColor: colors.cardBg, borderColor: colors.border },
-            ]}
-          >
-            <Text
-              style={[styles.noPackageText, { color: colors.textSecondary }]}
-            >
-              {!isRevenueCatAvailable
-                ? "In-App Subscriptions are disabled in Expo Go mode. Please use an EAS Development Build to test purchases."
-                : "No active plans available at the moment. Please check back later."}
+        {/* Stripe Checkout Button */}
+        <TouchableOpacity
+          style={[styles.buyButton, { backgroundColor: colors.primary }]}
+          disabled={loading}
+          onPress={handleStripeCheckout}
+          activeOpacity={0.8}
+        >
+          {loading ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={styles.buttonText}>
+              Upgrade to Pro — $9.99 / mo (Stripe)
             </Text>
-          </View>
-        )}
+          )}
+        </TouchableOpacity>
 
-        <TouchableOpacity onPress={handleRestore} style={styles.restoreButton}>
+        <TouchableOpacity
+          onPress={() => {
+            if (navigation?.canGoBack && navigation.canGoBack()) {
+              navigation.goBack();
+            }
+          }}
+          style={styles.restoreButton}
+        >
           <Text style={[styles.restoreText, { color: colors.textSecondary }]}>
-            Restore Purchases
+            Go Back to Dashboard
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -295,11 +166,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 24,
     justifyContent: "center",
-  },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
   },
   headerContainer: {
     alignItems: "center",
@@ -361,17 +227,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "bold",
-  },
-  noPackageCard: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 20,
-  },
-  noPackageText: {
-    textAlign: "center",
-    fontSize: 13,
-    lineHeight: 18,
   },
   restoreButton: {
     marginTop: 16,

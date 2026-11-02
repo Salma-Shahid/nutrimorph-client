@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -10,19 +10,18 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuthStore } from "../store/useAuthStore";
 import { WORLD_LANGUAGES } from "../constants/languages";
 import { getThemeColors } from "../theme/colors";
 
-const TOTAL_STEPS = 11;
+const TOTAL_STEPS = 10;
 
 export default function OnboardingScreen({ navigation }) {
   const { theme, updateProfile, isLoading } = useAuthStore();
   const colors = getThemeColors(theme || "dark");
 
-  // Wizard Steps State (Total 11 Steps)
+  // Wizard Steps State (Total 10 Steps)
   const [currentStep, setCurrentStep] = useState(1);
 
   // Loading Calculation Overlay State
@@ -48,6 +47,7 @@ export default function OnboardingScreen({ navigation }) {
   const [preferredMealsCount, setPreferredMealsCount] = useState(4);
   const [medicalCondition, setMedicalCondition] = useState("None");
   const [dailyCalories, setDailyCalories] = useState(2000);
+  const [calculatedBmi, setCalculatedBmi] = useState("22.4");
 
   const handleNextStep = () => {
     if (currentStep === 2 && !name.trim()) {
@@ -55,7 +55,7 @@ export default function OnboardingScreen({ navigation }) {
       return;
     }
     if (currentStep < TOTAL_STEPS) {
-      if (currentStep === 9) {
+      if (currentStep === 8) {
         // Trigger calculation before moving to summary step
         handleCalculateAndSave();
       } else {
@@ -96,7 +96,7 @@ export default function OnboardingScreen({ navigation }) {
     }
 
     setIsCalculating(true);
-    setCalcStatus("Calculating BMR & TDEE...");
+    setCalcStatus("Calculating BMR, TDEE & BMI...");
 
     setTimeout(() => {
       setCalcStatus("Optimizing Protein, Carbs & Fats split...");
@@ -105,6 +105,7 @@ export default function OnboardingScreen({ navigation }) {
     setTimeout(async () => {
       setCalcStatus("Finalizing Your Personalized Dashboard...");
 
+      // Calculate BMR & TDEE
       let bmr = 10 * numWeight + 6.25 * finalHeight - 5 * numAge;
       bmr = gender === "male" ? bmr + 5 : bmr - 161;
 
@@ -113,6 +114,13 @@ export default function OnboardingScreen({ navigation }) {
       else if (goal === "muscle_gain") targetCaloriesCalc += 300;
 
       setDailyCalories(targetCaloriesCalc);
+
+      // Calculate BMI (Weight in kg / (Height in meters squared))
+      const heightInMeters = finalHeight / 100;
+      const bmiValue = (numWeight / (heightInMeters * heightInMeters)).toFixed(
+        1,
+      );
+      setCalculatedBmi(bmiValue);
 
       const profileData = {
         language,
@@ -130,6 +138,7 @@ export default function OnboardingScreen({ navigation }) {
         carbsTarget: Math.round((targetCaloriesCalc * 0.4) / 4),
         fatsTarget: Math.round((targetCaloriesCalc * 0.3) / 9),
         medicalCondition: medicalCondition || "None",
+        bmi: bmiValue,
         isOnboarded: true,
         isOnboardingCompleted: true,
       };
@@ -143,7 +152,7 @@ export default function OnboardingScreen({ navigation }) {
           res?.message || "Could not save health profile.",
         );
       } else {
-        setCurrentStep(11); // Move to milestone summary step
+        setCurrentStep(10); // Move to final milestone summary step
       }
     }, 2800);
   };
@@ -560,11 +569,11 @@ export default function OnboardingScreen({ navigation }) {
           </View>
         )}
 
-        {/* Step 8: Activity Level */}
+        {/* Step 8: Activity Level & Meal Routine */}
         {currentStep === 8 && (
           <View>
             <Text style={[styles.title, { color: colors.primary }]}>
-              Activity Level 🏃‍♀️
+              Activity Level & Routine 🏃‍♀️
             </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               How active is your daily routine?
@@ -595,41 +604,8 @@ export default function OnboardingScreen({ navigation }) {
           </View>
         )}
 
-        {/* Step 9: Meal Preferences */}
+        {/* Step 9: Medical Condition Selection */}
         {currentStep === 9 && (
-          <View>
-            <Text style={[styles.title, { color: colors.primary }]}>
-              Daily Meal Routine 🍽️
-            </Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              How many meals do you prefer daily?
-            </Text>
-            {[3, 4, 5].map((count) => (
-              <TouchableOpacity
-                key={count}
-                style={[
-                  styles.goalBtn,
-                  {
-                    backgroundColor: colors.inputBg,
-                    borderColor: colors.border,
-                  },
-                  preferredMealsCount === count && {
-                    backgroundColor: colors.glassGlow,
-                    borderColor: colors.primary,
-                  },
-                ]}
-                onPress={() => setPreferredMealsCount(count)}
-              >
-                <Text style={[styles.goalText, { color: colors.text }]}>
-                  {count} Meals / Day
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {/* Step 10: Medical Condition Selection */}
-        {currentStep === 10 && (
           <View>
             <Text style={[styles.title, { color: colors.primary }]}>
               Do You Have Any Medical Condition?
@@ -698,8 +674,8 @@ export default function OnboardingScreen({ navigation }) {
           </View>
         )}
 
-        {/* Step 11: Milestone Summary */}
-        {currentStep === 11 && (
+        {/* Step 10: Milestone Summary */}
+        {currentStep === 10 && (
           <View style={{ flex: 1, paddingVertical: 10 }}>
             <Text
               style={[
@@ -890,7 +866,7 @@ export default function OnboardingScreen({ navigation }) {
                 }}
               >
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  Meals Routine
+                  BMI Score
                 </Text>
                 <Text
                   style={{
@@ -900,7 +876,7 @@ export default function OnboardingScreen({ navigation }) {
                     marginTop: 4,
                   }}
                 >
-                  {preferredMealsCount} Meals / Day
+                  {calculatedBmi}
                 </Text>
               </View>
               <View
@@ -940,6 +916,7 @@ export default function OnboardingScreen({ navigation }) {
                 { backgroundColor: colors.cardBg, borderColor: colors.border },
               ]}
               onPress={handlePrevStep}
+              disabled={isLoading || isCalculating}
             >
               <Text
                 style={[styles.backBtnText, { color: colors.textSecondary }]}
@@ -956,7 +933,7 @@ export default function OnboardingScreen({ navigation }) {
               currentStep === 1 && { flex: 1 },
             ]}
             onPress={
-              currentStep === 11 ? handleCompleteOnboarding : handleNextStep
+              currentStep === 10 ? handleCompleteOnboarding : handleNextStep
             }
             disabled={isLoading || isCalculating}
           >
@@ -964,9 +941,9 @@ export default function OnboardingScreen({ navigation }) {
               <ActivityIndicator color="#FFF" />
             ) : (
               <Text style={styles.submitBtnText}>
-                {currentStep === 9
+                {currentStep === 8
                   ? "Calculate Target"
-                  : currentStep === 11
+                  : currentStep === 10
                     ? "Get Started 🚀"
                     : "Continue"}
               </Text>
