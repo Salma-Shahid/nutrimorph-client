@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Pedometer } from "expo-pedometer";
 import {
   StyleSheet,
   Text,
@@ -60,6 +61,46 @@ export default function DashboardScreen({ navigation }) {
   // Device local date in YYYY-MM-DD format
   const getLocalDate = () => new Date().toLocaleDateString("en-CA");
 
+  // Pedometer Real-time Step Counter & Badge Check
+  useEffect(() => {
+    let subscription;
+    const subscribeSteps = async () => {
+      try {
+        const isAvailable = await Pedometer.isAvailableAsync();
+        if (isAvailable) {
+          const end = new Date();
+          const start = new Date();
+          start.setHours(0, 0, 0, 0); // Aaj ki subah se steps count karein
+
+          const pastStepsResult = await Pedometer.getStepCountAsync(start, end);
+          if (pastStepsResult) {
+            setStepCount(pastStepsResult.steps);
+          }
+
+          subscription = Pedometer.watchDeviceStepCount((result) => {
+            const currentSteps = result.steps;
+            setStepCount(currentSteps);
+
+            // Dynamic Achievement Badge Check (Only when steps >= 5000)
+            if (currentSteps >= 5000) {
+              // Trigger badge unlock API or state update safely
+              console.log("5000 steps milestone unlocked!");
+            }
+          });
+        }
+      } catch (error) {
+        console.log("Pedometer not available or permission denied:", error);
+      }
+    };
+
+    subscribeSteps();
+    return () => {
+      if (subscription && typeof subscription.remove === "function") {
+        subscription.remove();
+      }
+    };
+  }, []);
+
   // Fetch Exercise & Steps from backend
   const fetchExerciseData = async (date) => {
     try {
@@ -69,7 +110,6 @@ export default function DashboardScreen({ navigation }) {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.data?.success) {
-        setStepCount(res.data.data.steps || 0);
         setCaloriesBurned(res.data.data.caloriesBurned || 0);
       }
     } catch (error) {
@@ -77,25 +117,15 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  // Add Steps Handler with strict validation
+  // Add Manual Steps Handler
   const handleAddSteps = async () => {
-    const todayDate = getLocalDate();
-    try {
-      const BASE_URL =
-        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
-      const res = await axios.post(
-        `${BASE_URL}/api/exercise`,
-        { date: todayDate, steps: 500 },
-        { headers: { Authorization: `Bearer ${token}` } },
+    const newTotalSteps = stepCount + 500;
+    setStepCount(newTotalSteps);
+    if (newTotalSteps >= 5000) {
+      Alert.alert(
+        "Milestone Unlocked! 🏆",
+        "You've crossed 5,000 steps today!",
       );
-      if (res.data?.success) {
-        setStepCount(res.data.data.steps);
-        if (res.data?.userStats) {
-          useAuthStore.getState().updateUserStats(res.data.userStats);
-        }
-      }
-    } catch (err) {
-      Alert.alert("Error", "Failed to update steps");
     }
   };
 
@@ -395,9 +425,8 @@ export default function DashboardScreen({ navigation }) {
           </View>
         )}
 
-        {/* Water Tracker & Log Exercise Row (Aligned with fixed width) */}
+        {/* Water Tracker & Log Exercise Row */}
         <View style={styles.rowContainer}>
-          {/* Water Tracker Card */}
           <View
             style={[
               styles.halfCard,
@@ -456,7 +485,6 @@ export default function DashboardScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Exercise Card */}
           <View
             style={[
               styles.halfCard,
@@ -500,7 +528,7 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Step Tracking Card (Full Width fixed) */}
+        {/* Step Tracking Card */}
         <View
           style={[
             styles.card,
@@ -540,8 +568,13 @@ export default function DashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* 📱 Health & Device Sync Component */}
-        <DeviceSyncSection onConnect={handleConnectDevice} />
+        {/* Health & Device Sync Component */}
+        <DeviceSyncSection
+          colors={colors}
+          onSyncSuccess={(syncedSteps) => {
+            setStepCount(syncedSteps);
+          }}
+        />
 
         {/* Weight Loss Progress Graph Card */}
         <View
@@ -641,7 +674,6 @@ export default function DashboardScreen({ navigation }) {
             </View>
           </View>
 
-          {/* View Logged History Button */}
           <TouchableOpacity
             style={[
               styles.historyBtn,
@@ -678,6 +710,9 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.actionCardText}>Scan Food</Text>
           </TouchableOpacity>
         </View>
+
+        {/* AdMob Banner Component */}
+        <AdBanner />
       </ScrollView>
 
       {/* Exercise Logging Modal */}
@@ -933,32 +968,21 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-      <AdBanner />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
+  container: { flex: 1 },
+  scrollContent: { padding: 16, paddingBottom: 40 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
   },
-  greeting: {
-    fontSize: 13,
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
+  greeting: { fontSize: 13 },
+  userName: { fontSize: 18, fontWeight: "bold" },
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -966,35 +990,49 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  badgeText: {
-    color: "#FFF",
-    fontSize: 11,
-    fontWeight: "bold",
+  badgeText: { color: "#FFF", fontSize: 11, fontWeight: "bold" },
+  alertCard: {
+    flexDirection: "row",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+    alignItems: "center",
+  },
+  alertText: { fontSize: 13, fontWeight: "600", marginBottom: 6 },
+  recoveryBtn: {
+    flexDirection: "row",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    alignSelf: "flex-start",
+  },
+  recoveryBtnText: { color: "#FFF", fontSize: 11, fontWeight: "bold" },
+  aiRecoveryCard: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
   },
   rowContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    width: "100%",
-    marginVertical: 8,
+    marginBottom: 12,
   },
   halfCard: {
     width: "48%",
-    borderRadius: 16,
     padding: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    justifyContent: "space-between",
   },
   card: {
-    width: "100%",
-    borderRadius: 16,
     padding: 16,
+    borderRadius: 12,
     borderWidth: 1,
-    marginVertical: 8,
+    marginBottom: 12,
   },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: "bold",
-  },
+  cardTitle: { fontSize: 15, fontWeight: "bold" },
   smallWaterBtn: {
     width: 28,
     height: 28,
@@ -1004,54 +1042,23 @@ const styles = StyleSheet.create({
   },
   exerciseActionBtn: {
     backgroundColor: "#EF4444",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
     paddingVertical: 6,
     borderRadius: 8,
-    marginTop: 6,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 4,
   },
   stepActionBtn: {
     paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
     alignItems: "center",
     marginTop: 10,
   },
-  alertCard: {
-    flexDirection: "row",
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    marginVertical: 8,
-    alignItems: "center",
-  },
-  alertText: {
-    fontSize: 13,
-    fontWeight: "bold",
-  },
-  recoveryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  recoveryBtnText: {
-    color: "#FFF",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  aiRecoveryCard: {
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    marginVertical: 8,
-  },
   graphPlaceholder: {
-    height: 120,
-    borderRadius: 12,
+    height: 110,
+    borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
     marginVertical: 10,
@@ -1059,73 +1066,48 @@ const styles = StyleSheet.create({
   },
   targetLineBadge: {
     position: "absolute",
-    top: 10,
-    right: 10,
+    top: 8,
+    right: 8,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   weighInBtn: {
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
     alignItems: "center",
-    marginTop: 6,
   },
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginVertical: 14,
   },
-  statItem: {
-    alignItems: "center",
-    flex: 1,
-  },
-  statNum: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  statLabel: {
-    fontSize: 12,
-    marginTop: 2,
-  },
+  statItem: { alignItems: "center", flex: 1 },
+  statNum: { fontSize: 18, fontWeight: "bold" },
+  statLabel: { fontSize: 11, marginTop: 2 },
   historyBtn: {
     flexDirection: "row",
-    alignItems: "center",
+    padding: 12,
+    borderRadius: 10,
     justifyContent: "center",
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginTop: 4,
+    alignItems: "center",
+    gap: 6,
   },
-  historyBtnText: {
-    fontSize: 13,
-    fontWeight: "bold",
-    marginLeft: 6,
-  },
+  historyBtnText: { fontWeight: "bold", fontSize: 13 },
   actionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginVertical: 10,
+    marginBottom: 12,
   },
   actionCard: {
-    flex: 1,
-    flexDirection: "row",
+    width: "48%",
+    padding: 16,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 14,
-    marginHorizontal: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    gap: 6,
   },
-  actionCardText: {
-    color: "#FFF",
-    fontWeight: "bold",
-    fontSize: 14,
-    marginLeft: 8,
-  },
+  actionCardText: { color: "#FFF", fontWeight: "bold", fontSize: 14 },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
@@ -1133,8 +1115,8 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    borderRadius: 20,
     padding: 20,
+    borderRadius: 16,
     borderWidth: 1,
   },
   modalHeader: {
@@ -1143,29 +1125,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 15,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 15,
-  },
+  modalTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 12 },
   modalInput: {
-    borderRadius: 12,
-    padding: 12,
+    height: 48,
     borderWidth: 1,
-    fontSize: 15,
-    marginBottom: 15,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    fontSize: 14,
   },
   historyItem: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    marginBottom: 10,
+    alignItems: "center",
+    marginBottom: 8,
   },
-  mealName: {
-    fontSize: 15,
-    fontWeight: "bold",
-  },
+  mealName: { fontWeight: "bold", fontSize: 14, marginBottom: 2 },
 });

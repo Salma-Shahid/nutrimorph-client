@@ -3,238 +3,103 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
   Alert,
+  ActivityIndicator,
   StyleSheet,
-  ScrollView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import axios from "axios";
-import { useAuthStore } from "../store/useAuthStore";
-import { getThemeColors } from "../theme/colors";
-
-const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app"}/api`;
+import { useAuthStore } from "../store/authStore";
+import { getThemeColors } from "../constants/colors";
 
 export default function SubscriptionScreen({ navigation }) {
+  const { theme, user, token } = useAuthStore();
+  const colors = getThemeColors(theme || "dark");
   const [loading, setLoading] = useState(false);
-  const { user, token, updateUserGlobally, theme } = useAuthStore();
-  const colors = getThemeColors(theme);
 
-  // Stripe Checkout Flow Handler
-  const handleStripeCheckout = async () => {
-    setLoading(true);
+  const handleSubscribePro = async () => {
     try {
-      const activeToken = token || user?.token;
+      setLoading(true);
 
-      // Request backend to create a Stripe Checkout Session
-      const res = await axios.post(
-        `${API_BASE}/billing/create-checkout-session`,
-        { plan: "pro_monthly" },
-        { headers: { Authorization: `Bearer ${activeToken}` } },
+      // Backend API call jo Stripe Checkout Session create kare gi
+      const response = await axios.post(
+        "https://your-backend-api.com/api/payment/create-checkout-session",
+        { userId: user?._id || user?.id, email: user?.email },
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
-      if (res.data?.success && res.data?.url) {
-        // Open Stripe Checkout in secure browser view
-        await WebBrowser.openBrowserAsync(res.data.url);
+      const checkoutUrl = response.data?.url;
 
-        // Optimistically update global user state or check status upon return
-        if (updateUserGlobally) {
-          await updateUserGlobally({ subscriptionTier: "pro" });
+      if (checkoutUrl) {
+        setLoading(false);
+        // Expo Web Browser mein Stripe Checkout page open karein
+        const result = await WebBrowser.openBrowserAsync(checkoutUrl);
+
+        // Jab user browser band karke wapas aaye toh subscription status verify karein
+        if (result.type === "dismiss") {
+          console.log("User returned from Stripe checkout.");
+          // Yahan aap user profile ko refresh kar sakti hain taake Pro plan status update ho jaye
         }
       } else {
-        Alert.alert(
-          "Payment Error",
-          "Could not initiate Stripe payment gateway session.",
-        );
+        setLoading(false);
+        Alert.alert("Error", "Could not initiate payment session.");
       }
     } catch (error) {
-      console.error("Stripe Checkout Error:", error);
-      Alert.alert(
-        "Gateway Error",
-        "Unable to connect to payment server. Please try again.",
-      );
-    } finally {
       setLoading(false);
+      console.log("Stripe Checkout Error:", error);
+      Alert.alert(
+        "Payment Error",
+        error?.response?.data?.message ||
+          "Something went wrong with Stripe checkout.",
+      );
     }
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
-      <ScrollView contentContainerStyle={styles.container}>
-        {/* Header Icon */}
-        <View style={styles.headerContainer}>
-          <View
-            style={[
-              styles.crownBadge,
-              {
-                backgroundColor: colors.glassGlow,
-                borderColor: colors.primary,
-              },
-            ]}
-          >
-            <Ionicons name="sparkles" size={38} color={colors.primary} />
-          </View>
+    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+      <Text style={[styles.title, { color: colors.primary }]}>
+        Upgrade to NutriMorph Pro 👑
+      </Text>
+      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+        Unlock AI meal scanning, advanced analytics, and unlimited macro
+        tracking.
+      </Text>
 
-          <Text style={[styles.title, { color: colors.text }]}>
-            Unlock NutriMorph Pro 🚀
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Get unlimited AI meal scans, personalized diet plans, and priority
-            NutriBot coaching via Stripe secure checkout.
-          </Text>
-        </View>
-
-        {/* Feature Highlights */}
-        <View
-          style={[
-            styles.featuresCard,
-            { backgroundColor: colors.cardBg, borderColor: colors.border },
-          ]}
-        >
-          <View style={styles.featureRow}>
-            <Ionicons
-              name="checkmark-circle"
-              size={20}
-              color={colors.primary}
-            />
-            <Text style={[styles.featureText, { color: colors.text }]}>
-              Unlimited AI Food & Barcode Scans
-            </Text>
-          </View>
-          <View style={styles.featureRow}>
-            <Ionicons
-              name="checkmark-circle"
-              size={20}
-              color={colors.primary}
-            />
-            <Text style={[styles.featureText, { color: colors.text }]}>
-              Gemini AI Custom Diet Plan Generator
-            </Text>
-          </View>
-          <View style={styles.featureRow}>
-            <Ionicons
-              name="checkmark-circle"
-              size={20}
-              color={colors.primary}
-            />
-            <Text style={[styles.featureText, { color: colors.text }]}>
-              Advanced Macro & Diet Breach Recovery
-            </Text>
-          </View>
-        </View>
-
-        {/* Stripe Checkout Button */}
-        <TouchableOpacity
-          style={[styles.buyButton, { backgroundColor: colors.primary }]}
-          disabled={loading}
-          onPress={handleStripeCheckout}
-          activeOpacity={0.8}
-        >
-          {loading ? (
-            <ActivityIndicator color="#FFF" />
-          ) : (
-            <Text style={styles.buttonText}>
-              Upgrade to Pro — $9.99 / mo (Stripe)
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => {
-            if (navigation?.canGoBack && navigation.canGoBack()) {
-              navigation.goBack();
-            }
-          }}
-          style={styles.restoreButton}
-        >
-          <Text style={[styles.restoreText, { color: colors.textSecondary }]}>
-            Go Back to Dashboard
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+      <TouchableOpacity
+        style={[styles.proButton, { backgroundColor: colors.primary }]}
+        onPress={handleSubscribePro}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color="#FFF" />
+        ) : (
+          <Text style={styles.proButtonText}>Upgrade Now ($9.99/mo)</Text>
+        )}
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
   container: {
-    flexGrow: 1,
-    padding: 24,
-    justifyContent: "center",
-  },
-  headerContainer: {
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  crownBadge: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    borderWidth: 2,
+    flex: 1,
+    padding: 20,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16,
-    shadowColor: "#10B981",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
   },
   title: {
     fontSize: 24,
     fontWeight: "bold",
+    marginBottom: 10,
     textAlign: "center",
-    marginBottom: 8,
   },
-  subtitle: {
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  featuresCard: {
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 1,
-    marginBottom: 24,
-    gap: 12,
-  },
-  featureRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  featureText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  buyButton: {
-    padding: 16,
+  subtitle: { fontSize: 14, textAlign: "center", marginBottom: 30 },
+  proButton: {
+    width: "100%",
+    height: 50,
     borderRadius: 12,
+    justifyContent: "center",
     alignItems: "center",
-    marginVertical: 10,
-    shadowColor: "#10B981",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
-  buttonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  restoreButton: {
-    marginTop: 16,
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  restoreText: {
-    fontSize: 14,
-    textDecorationLine: "underline",
-  },
+  proButtonText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
 });

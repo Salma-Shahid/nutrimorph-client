@@ -1,19 +1,19 @@
 import React, { useState } from "react";
 import {
-  StyleSheet,
-  Text,
   View,
+  Text,
   TextInput,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
+  SafeAreaView,
   Alert,
+  ActivityIndicator,
+  StyleSheet,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuthStore } from "../store/useAuthStore";
+import { useAuthStore } from "../store/authStore";
+import { getThemeColors } from "../constants/colors";
 import { WORLD_LANGUAGES } from "../constants/languages";
-import { getThemeColors } from "../theme/colors";
 
 const TOTAL_STEPS = 10;
 
@@ -55,8 +55,8 @@ export default function OnboardingScreen({ navigation }) {
       return;
     }
     if (currentStep < TOTAL_STEPS) {
-      if (currentStep === 8) {
-        // Trigger calculation before moving to summary step
+      if (currentStep === 9) {
+        // Trigger calculation and backend save on step 9 transition
         handleCalculateAndSave();
       } else {
         setCurrentStep(currentStep + 1);
@@ -569,7 +569,7 @@ export default function OnboardingScreen({ navigation }) {
           </View>
         )}
 
-        {/* Step 8: Activity Level & Meal Routine */}
+        {/* Step 8: Activity Level & Routine */}
         {currentStep === 8 && (
           <View>
             <Text style={[styles.title, { color: colors.primary }]}>
@@ -941,7 +941,7 @@ export default function OnboardingScreen({ navigation }) {
               <ActivityIndicator color="#FFF" />
             ) : (
               <Text style={styles.submitBtnText}>
-                {currentStep === 8
+                {currentStep === 9
                   ? "Calculate Target"
                   : currentStep === 10
                     ? "Get Started 🚀"
@@ -956,129 +956,150 @@ export default function OnboardingScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
   calcOverlay: {
     justifyContent: "center",
     alignItems: "center",
-    padding: 30,
   },
   calcTitle: {
     fontSize: 22,
     fontWeight: "bold",
     textAlign: "center",
-    marginBottom: 10,
   },
   calcSubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     textAlign: "center",
+    marginTop: 8,
   },
   progressContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    marginBottom: 15,
+    gap: 4,
+    marginVertical: 15,
   },
   progressBarSegment: {
     flex: 1,
     height: 4,
-    marginHorizontal: 2,
     borderRadius: 2,
   },
-  content: { padding: 20, paddingBottom: 40 },
+  content: {
+    paddingBottom: 40,
+  },
   title: {
     fontSize: 24,
     fontWeight: "bold",
-    textAlign: "center",
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
-    textAlign: "center",
     marginBottom: 20,
   },
   label: {
     fontSize: 14,
     fontWeight: "600",
-    marginTop: 12,
     marginBottom: 6,
+    marginTop: 10,
   },
   input: {
-    padding: 14,
+    height: 50,
+    borderWidth: 1,
     borderRadius: 12,
-    borderWidth: 1,
-    fontSize: 15,
+    paddingHorizontal: 15,
+    fontSize: 16,
+    marginBottom: 15,
   },
-  row: { flexDirection: "row", gap: 10 },
-  flex1: { flex: 1 },
-  langListContainer: {
-    borderRadius: 16,
-    padding: 10,
+  row: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  flex1: {
+    flex: 1,
+  },
+  optionBtn: {
+    flex: 1,
+    padding: 20,
     borderWidth: 1,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  optionText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  langListContainer: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
   },
   langBtn: {
-    padding: 14,
-    borderRadius: 12,
+    padding: 15,
+    borderRadius: 10,
     borderWidth: 1,
     marginBottom: 8,
   },
   unitToggleRow: {
     flexDirection: "row",
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 4,
-    marginBottom: 15,
+    marginBottom: 20,
   },
   unitBtn: {
     flex: 1,
     paddingVertical: 10,
     alignItems: "center",
-    borderRadius: 10,
+    borderRadius: 8,
   },
   unitBtnText: {
-    fontWeight: "bold",
+    fontWeight: "600",
     fontSize: 13,
   },
-  optionBtn: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    marginBottom: 10,
-  },
-  optionText: { fontWeight: "bold" },
   goalBtn: {
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
+    padding: 18,
     borderWidth: 1,
-    alignItems: "center",
-  },
-  goalText: { fontWeight: "bold" },
-  navRow: { flexDirection: "row", gap: 10, marginTop: 25 },
-  backBtn: {
-    flex: 1,
-    padding: 16,
     borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 1,
+    marginBottom: 12,
   },
-  backBtnText: { fontSize: 16, fontWeight: "bold" },
-  submitBtn: {
-    flex: 2,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    shadowColor: "#10B981",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+  goalText: {
+    fontSize: 16,
+    fontWeight: "600",
   },
-  submitBtnText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
   radioCircle: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
+  },
+  navRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 20,
+  },
+  backBtn: {
+    flex: 1,
+    height: 50,
+    borderWidth: 1,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  backBtnText: {
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  submitBtn: {
+    flex: 2,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  submitBtnText: {
+    color: "#FFF",
+    fontWeight: "bold",
+    fontSize: 16,
   },
 });

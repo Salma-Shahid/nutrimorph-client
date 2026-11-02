@@ -14,6 +14,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import * as WebBrowser from "expo-web-browser";
+import axios from "axios";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 import NotificationSettings from "../components/NotificationSettings";
@@ -25,10 +27,10 @@ export default function ProfileScreen({ navigation }) {
     theme,
     toggleTheme,
     updateProfile,
-    toggleSubscriptionTier,
     logout,
     deleteAccount,
     isLoading,
+    token,
   } = useAuthStore();
   const colors = getThemeColors(theme);
 
@@ -42,6 +44,7 @@ export default function ProfileScreen({ navigation }) {
   const [profileImage, setProfileImage] = useState(
     user?.avatar || user?.profileImage || null,
   );
+  const [paymentLoading, setPaymentLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -56,6 +59,50 @@ export default function ProfileScreen({ navigation }) {
   }, [user]);
 
   const isPro = user?.subscriptionTier === "pro" || user?.isPro === true;
+
+  // Stripe Payment Gateway Integration via expo-web-browser
+  const handleStripeCheckout = async () => {
+    if (isPro) {
+      Alert.alert(
+        "Pro Plan",
+        "You are already enjoying NutriMorph Pro features! 👑",
+      );
+      return;
+    }
+
+    try {
+      setPaymentLoading(true);
+      const BASE_URL =
+        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
+
+      const response = await axios.post(
+        `${BASE_URL}/api/payment/create-checkout-session`,
+        { userId: user?._id || user?.id, email: user?.email },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      const checkoutUrl = response.data?.url;
+
+      if (checkoutUrl) {
+        setPaymentLoading(false);
+        const result = await WebBrowser.openBrowserAsync(checkoutUrl);
+        if (result.type === "dismiss") {
+          console.log("User returned from Stripe checkout session.");
+        }
+      } else {
+        setPaymentLoading(false);
+        Alert.alert("Error", "Could not initiate Stripe payment session.");
+      }
+    } catch (error) {
+      setPaymentLoading(false);
+      console.log("Stripe Checkout Error:", error);
+      Alert.alert(
+        "Payment Error",
+        error?.response?.data?.message ||
+          "Failed to connect to Stripe payment gateway.",
+      );
+    }
+  };
 
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -325,10 +372,10 @@ export default function ProfileScreen({ navigation }) {
         {/* Notifications Settings Card */}
         <NotificationSettings />
 
-        {/* 📱 Health & Device Sync Section */}
+        {/* Health & Device Sync Section */}
         <DeviceSyncSection />
 
-        {/* Plan Switcher Box */}
+        {/* Stripe Subscription Plan Box */}
         <View
           style={[
             styles.card,
@@ -357,16 +404,23 @@ export default function ProfileScreen({ navigation }) {
               styles.planToggleBtn,
               { backgroundColor: isPro ? "#64748B" : colors.primary },
             ]}
-            onPress={() => toggleSubscriptionTier(isPro ? "free" : "pro")}
+            onPress={handleStripeCheckout}
+            disabled={paymentLoading || isPro}
           >
-            <Ionicons
-              name={isPro ? "arrow-down-circle-outline" : "star-outline"}
-              size={18}
-              color="#FFF"
-            />
-            <Text style={styles.planToggleText}>
-              {isPro ? "Switch to Free Plan" : "Switch to Pro Plan"}
-            </Text>
+            {paymentLoading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <>
+                <Ionicons
+                  name={isPro ? "checkmark-circle-outline" : "star-outline"}
+                  size={18}
+                  color="#FFF"
+                />
+                <Text style={styles.planToggleText}>
+                  {isPro ? "Pro Plan Active" : "Upgrade to Pro ($9.99/mo) 🚀"}
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
 
