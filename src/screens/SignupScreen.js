@@ -12,6 +12,7 @@ import {
   ScrollView,
   Image,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 
@@ -19,6 +20,7 @@ export default function SignupScreen({ navigation }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const { register, isLoading, error, theme } = useAuthStore();
   const colors = getThemeColors(theme || "dark");
@@ -122,21 +124,35 @@ export default function SignupScreen({ navigation }) {
           autoCorrect={false}
         />
 
-        <TextInput
+        {/* Password Field with Show/Hide Eye Toggle */}
+        <View
           style={[
-            styles.input,
+            styles.passwordContainer,
             {
               backgroundColor: colors.inputBg,
-              color: colors.text,
               borderColor: colors.border,
             },
           ]}
-          placeholder="Password"
-          placeholderTextColor={colors.textSecondary}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
+        >
+          <TextInput
+            style={[styles.passwordInput, { color: colors.text }]}
+            placeholder="Password"
+            placeholderTextColor={colors.textSecondary}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+          />
+          <TouchableOpacity
+            onPress={() => setShowPassword(!showPassword)}
+            style={styles.eyeIconBtn}
+          >
+            <Ionicons
+              name={showPassword ? "eye-off-outline" : "eye-outline"}
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={[
@@ -222,6 +238,22 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontSize: 15,
     borderWidth: 1,
+  },
+  passwordContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+  },
+  passwordInput: {
+    flex: 1,
+    height: 52,
+    fontSize: 15,
+  },
+  eyeIconBtn: {
+    padding: 8,
   },
   button: {
     borderRadius: 12,

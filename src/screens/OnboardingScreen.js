@@ -11,8 +11,8 @@ import {
   StyleSheet,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuthStore } from "../store/authStore";
-import { getThemeColors } from "../constants/colors";
+import { useAuthStore } from "../store/useAuthStore";
+import { getThemeColors } from "../theme/colors";
 import { WORLD_LANGUAGES } from "../constants/languages";
 
 const TOTAL_STEPS = 10;

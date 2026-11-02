@@ -45,6 +45,7 @@ export default function ProfileScreen({ navigation }) {
     user?.avatar || user?.profileImage || null,
   );
   const [paymentLoading, setPaymentLoading] = useState(false);
+  
 
   useEffect(() => {
     if (user) {

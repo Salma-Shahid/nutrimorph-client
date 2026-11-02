@@ -9,8 +9,8 @@ import {
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import axios from "axios";
-import { useAuthStore } from "../store/authStore";
-import { getThemeColors } from "../constants/colors";
+import { useAuthStore } from "../store/useAuthStore";
+import { getThemeColors } from "../theme/colors";
 
 export default function SubscriptionScreen({ navigation }) {
   const { theme, user, token } = useAuthStore();
