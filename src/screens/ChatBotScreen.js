@@ -9,6 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -135,6 +137,26 @@ const ChatBotScreen = ({ navigation }) => {
   const flatListRef = useRef(null);
   const currentUserId = user?._id || user?.id;
 
+  // Animation for round icons
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.08,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [pulseAnim]);
+
   const getToken = async () => {
     try {
       const storeToken =
@@ -210,7 +232,6 @@ const ChatBotScreen = ({ navigation }) => {
       model: "gemini-3.5-flash-lite",
     };
 
-    // Immediate user message append
     const userMsg = {
       _id: `user-${Date.now()}`,
       sender: "user",
@@ -302,7 +323,7 @@ const ChatBotScreen = ({ navigation }) => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
-        {/* Header with Glass Back Button */}
+        {/* Header with Round Animated Icon */}
         <View
           style={[
             screenStyles.header,
@@ -323,16 +344,56 @@ const ChatBotScreen = ({ navigation }) => {
               <Ionicons name="arrow-back" size={20} color={colors.text} />
             </TouchableOpacity>
           )}
-          <Text style={[screenStyles.headerTitle, { color: colors.text }]}>
-            NutriBot Assistant 🤖
-          </Text>
+
+          <View style={screenStyles.headerTitleContainer}>
+            <Text style={[screenStyles.headerTitle, { color: colors.text }]}>
+              NutriBot Assistant
+            </Text>
+            <Animated.Image
+              source={require("../../assets/icon.png")}
+              style={[
+                screenStyles.headerIcon,
+                { transform: [{ scale: pulseAnim }] },
+              ]}
+            />
+          </View>
+
           <View style={{ width: 36 }} />
         </View>
 
-        {/* Chat History / Loader */}
+        {/* Chat History / Loader / Empty State with Large Round Animated Icon */}
         {fetchingHistory ? (
           <View style={screenStyles.loaderContainer}>
             <CustomAppLoader size={70} />
+          </View>
+        ) : messages.length === 0 ? (
+          <View style={screenStyles.emptyContainer}>
+            <Animated.View
+              style={[
+                screenStyles.largeIconWrapper,
+                {
+                  borderColor: colors.primary,
+                  transform: [{ scale: pulseAnim }],
+                },
+              ]}
+            >
+              <Image
+                source={require("../../assets/icon.png")}
+                style={screenStyles.largeIcon}
+              />
+            </Animated.View>
+            <Text style={[screenStyles.emptyTitle, { color: colors.primary }]}>
+              NutriBot Assistant is Ready!
+            </Text>
+            <Text
+              style={[
+                screenStyles.emptySubtitle,
+                { color: colors.textSecondary },
+              ]}
+            >
+              You can ask any questions related to your diet, macros, or
+              recipes.
+            </Text>
           </View>
         ) : (
           <FlatList
@@ -448,14 +509,60 @@ const screenStyles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
+  headerTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   headerTitle: {
     fontSize: 18,
     fontWeight: "bold",
+  },
+  headerIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    resizeMode: "cover",
   },
   loaderContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+  largeIconWrapper: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
+    marginBottom: 4,
+  },
+  largeIcon: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 40,
+    resizeMode: "cover",
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginTop: 12,
+    textAlign: "center",
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 6,
+    lineHeight: 18,
   },
   listPadding: {
     paddingHorizontal: 16,
