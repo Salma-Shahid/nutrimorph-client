@@ -77,7 +77,7 @@ export default function SignupScreen({ navigation }) {
             ]}
           >
             <Image
-              source={require("../assets/icon.png")}
+              source={require("../../assets/icon.png")}
               style={styles.logoImage}
             />
           </View>
