@@ -280,7 +280,7 @@ export default function OnboardingScreen({ navigation }) {
               ]}
               value={name}
               onChangeText={setName}
-              placeholder="e.g. Salma Shahid"
+              placeholder="e.g. John Doe"
               placeholderTextColor={colors.textSecondary}
             />
           </View>
