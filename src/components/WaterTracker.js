@@ -52,7 +52,7 @@ function WaterTracker({ date }) {
 
       <View style={styles.middleRow}>
         <Text style={[styles.glassesText, { color: colors.text }]}>
-          {waterIntake} Glasses <Text style={styles.glassEmoji}>🥛</Text>
+          {waterIntake} Glasses
         </Text>
         <Text style={[styles.percentageText, { color: colors.primary }]}>
           {percentage}%
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   btnPrimary: {
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 6,

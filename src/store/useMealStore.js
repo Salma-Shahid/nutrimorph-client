@@ -281,7 +281,7 @@ export const useMealStore = create((set, get) => ({
       const token = await getToken();
       const targetDate = get().selectedDate || getTodayDateString();
 
-      // 🟢 Step A: Optimistically remove from state for instant UI update
+      //  Step A: Optimistically remove from state for instant UI update
       const currentMeals = get().meals;
       const filteredMeals = currentMeals.filter(
         (m) => (m._id || m.id) !== mealId,
@@ -297,7 +297,7 @@ export const useMealStore = create((set, get) => ({
         totalCalories: newTotalCalories,
       });
 
-      // 🟢 Step B: Call backend delete API
+      //  Step B: Call backend delete API
       const res = await axios.delete(`${API_URL}/${mealId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -336,7 +336,7 @@ export const useMealStore = create((set, get) => ({
       const token = await getToken();
       const res = await axios.post(
         `${API_URL}/scan-ai`,
-        { imageBase64, model: "gemini-3.5-flash-lite" },
+        { imageBase64 },
         { headers: { Authorization: `Bearer ${token}` } },
       );
       set({ isLoading: false });
@@ -361,7 +361,7 @@ export const useMealStore = create((set, get) => ({
       const token = await getToken();
       const res = await axios.post(
         `${API_URL}/parse-text`,
-        { text, model: "gemini-3.5-flash-lite" },
+        { text },
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (res.data?.success) {

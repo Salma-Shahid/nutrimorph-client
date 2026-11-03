@@ -68,7 +68,7 @@ const renderMessage = (item, colors) => {
   const messageText = item?.text || item?.message || item?.content || "";
 
   // Fallback colors if not passed
-  const primaryColor = colors?.primary || "#10B981";
+  const primaryColor = colors?.primary || "#42F5A1";
   const cardBgColor = colors?.cardBg || "#1E293B";
   const borderColor = colors?.border || "rgba(16, 185, 129, 0.25)";
   const textColor = colors?.text || "#F8FAFC";

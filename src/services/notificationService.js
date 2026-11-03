@@ -59,7 +59,7 @@ export async function scheduleWaterReminder() {
 
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: "Time to Drink Water! 💧",
+      title: "Time to Drink Water! ",
       body: "Stay hydrated and reach your daily water intake goal.",
       sound: true,
     },
@@ -71,9 +71,9 @@ export async function scheduleWaterReminder() {
   });
 }
 
-// 🛡️ Ensure water reminder is always active (Prevents it from turning off automatically)
+//  Ensure water reminder is always active (Prevents it from turning off automatically)
 export async function ensureWaterReminderScheduled() {
-  // 🟢 Web Guard: Prevents Notifications.getAllScheduledNotificationsAsync crash on Web
+  //  Web Guard: Prevents Notifications.getAllScheduledNotificationsAsync crash on Web
   if (Platform.OS === "web") {
     console.log("Skipping scheduled notifications check on Web platform.");
     return;
@@ -85,7 +85,7 @@ export async function ensureWaterReminderScheduled() {
 
     const hasWaterReminder = scheduledNotifications.some(
       (notification) =>
-        notification.content.title === "Time to Drink Water! 💧",
+        notification.content.title === "Time to Drink Water! ",
     );
 
     if (!hasWaterReminder) {

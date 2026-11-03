@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import axios from "axios";
 import { useAuthStore } from "../store/useAuthStore";
@@ -17,7 +18,7 @@ const BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
 
 export default function SubscriptionScreen() {
-  const { theme, user, token, setUser } = useAuthStore();
+  const { theme, user, token, setUser, refreshUserProfile } = useAuthStore();
   const colors = getThemeColors(theme || "dark");
   const [loading, setLoading] = useState(false);
   const [billingCycle, setBillingCycle] = useState("monthly");
@@ -41,6 +42,12 @@ export default function SubscriptionScreen() {
           isPro: verifiedUser.isPro,
           subscriptionExpiresAt: verifiedUser.subscriptionExpiresAt,
         });
+        const refreshed = await refreshUserProfile();
+        if (!refreshed.success) {
+          throw new Error(
+            refreshed.message || "Could not refresh the account profile.",
+          );
+        }
       }
     } catch (error) {
       console.error("Could not verify subscription after checkout:", error);
@@ -52,7 +59,7 @@ export default function SubscriptionScreen() {
     } finally {
       verificationInProgressRef.current = false;
     }
-  }, [setUser, token]);
+  }, [refreshUserProfile, setUser, token]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
@@ -104,6 +111,12 @@ export default function SubscriptionScreen() {
             isPro: verifiedUser.isPro,
             subscriptionExpiresAt: verifiedUser.subscriptionExpiresAt,
           });
+          const refreshed = await refreshUserProfile();
+          if (!refreshed.success) {
+            throw new Error(
+              refreshed.message || "Could not refresh the account profile.",
+            );
+          }
         }
       }
     } catch (error) {
@@ -122,9 +135,12 @@ export default function SubscriptionScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
-      <Text style={[styles.title, { color: colors.primary }]}>
-        Upgrade to NutriMorph Pro 👑
-      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Ionicons name="ribbon-outline" size={24} color={colors.primary} />
+        <Text style={[styles.title, { color: colors.primary }]}>
+          Upgrade to NutriMorph Pro
+        </Text>
+      </View>
       <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
         Unlock AI meal scanning, advanced analytics, and unlimited macro
         tracking.

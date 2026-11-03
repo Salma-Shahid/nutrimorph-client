@@ -73,7 +73,7 @@ export const BADGES_DATA = [
     target: 10,
   },
 
-  // 3. Water Category (🟢 Fixed IDs with dots to match Backend)
+  // 3. Water Category ( Fixed IDs with dots to match Backend)
   {
     id: "water_1.5l",
     category: "Water (Hydration)",

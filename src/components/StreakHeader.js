@@ -29,7 +29,7 @@ export default function StreakHeader({ streakCount = 1, colors }) {
           style={[styles.subText, { color: colors.textSecondary }]}
           numberOfLines={2}
         >
-          Log daily meals to keep the flame alive 🔥
+          Log daily meals to keep the flame alive 
         </Text>
       </View>
 

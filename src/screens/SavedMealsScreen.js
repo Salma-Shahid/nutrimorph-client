@@ -69,7 +69,7 @@ export default function SavedMealsScreen({ navigation }) {
     });
 
     if (result.success) {
-      Alert.alert("Success 🎯", `${meal.name} added to today's log!`);
+      Alert.alert("Success ", `${meal.name} added to today's log!`);
     } else {
       Alert.alert("Error", result.message || "Failed to log meal");
     }
@@ -155,16 +155,16 @@ export default function SavedMealsScreen({ navigation }) {
         ]}
       >
         <Text style={[styles.macroText, { color: colors.text }]}>
-          🔥 {item.calories} kcal
+           {item.calories} kcal
         </Text>
         <Text style={[styles.macroText, { color: colors.text }]}>
-          🥩 P: {item.protein}g
+           P: {item.protein}g
         </Text>
         <Text style={[styles.macroText, { color: colors.text }]}>
-          🍞 C: {item.carbs}g
+           C: {item.carbs}g
         </Text>
         <Text style={[styles.macroText, { color: colors.text }]}>
-          🥑 F: {item.fats}g
+           F: {item.fats}g
         </Text>
       </View>
 
@@ -187,7 +187,7 @@ export default function SavedMealsScreen({ navigation }) {
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Saved Recipes & Meals 🥗
+          Saved Recipes & Meals 
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: "center",
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 6,

@@ -228,7 +228,7 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.header}>
           <View>
             <Text style={[styles.greeting, { color: colors.textSecondary }]}>
-              Welcome back 👋
+              Welcome back 
             </Text>
             <Text style={[styles.userName, { color: colors.text }]}>
               {user?.name || "User"}
@@ -252,8 +252,14 @@ export default function HomeScreen({ navigation }) {
               ]}
               onPress={() => navigation.navigate("ProfileScreen")}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Open profile settings"
             >
-              <Text style={{ fontSize: 20 }}>⚙️</Text>
+              <Ionicons
+                name="settings-outline"
+                size={20}
+                color={colors.primary}
+              />
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -307,9 +313,12 @@ export default function HomeScreen({ navigation }) {
             style={styles.dateArrowBtn}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={[styles.dateArrowText, { color: colors.primary }]}>
-              ◀
-            </Text>
+            <Ionicons
+              name="chevron-back"
+              size={20}
+              color={colors.primary}
+              accessibilityLabel="Previous day"
+            />
           </TouchableOpacity>
 
           <Text style={[styles.dateText, { color: colors.text }]}>
@@ -327,13 +336,16 @@ export default function HomeScreen({ navigation }) {
             style={[styles.dateArrowBtn, isToday && { opacity: 0.3 }]}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={[styles.dateArrowText, { color: colors.primary }]}>
-              ▶
-            </Text>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={colors.primary}
+              accessibilityLabel="Next day"
+            />
           </TouchableOpacity>
         </View>
 
-        {/* 🚨 DIET DEVIATION RED ALERT CARD */}
+        {/*  DIET DEVIATION RED ALERT CARD */}
         {isDeviated && (
           <View
             style={[styles.deviationCard, { backgroundColor: colors.cardBg }]}
@@ -386,7 +398,7 @@ export default function HomeScreen({ navigation }) {
           ]}
         >
           <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>
-            Daily Calorie Goal 🎯
+            Daily Calorie Goal 
           </Text>
           <View style={styles.calorieRow}>
             <View style={styles.calorieStat}>
@@ -434,9 +446,12 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         {/* Macros Breakdown */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Macros Target 📊
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Ionicons name="pie-chart-outline" size={18} color={colors.primary} />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Macros Target
+          </Text>
+        </View>
         <View style={styles.macrosRow}>
           <View
             style={[
@@ -444,7 +459,7 @@ export default function HomeScreen({ navigation }) {
               { backgroundColor: colors.cardBg, borderColor: colors.border },
             ]}
           >
-            <Text style={styles.macroEmoji}>🥩</Text>
+            <Ionicons name="fitness-outline" size={22} color={colors.primary} />
             <Text style={[styles.macroVal, { color: colors.text }]}>
               {protein}g
             </Text>
@@ -458,7 +473,7 @@ export default function HomeScreen({ navigation }) {
               { backgroundColor: colors.cardBg, borderColor: colors.border },
             ]}
           >
-            <Text style={styles.macroEmoji}>🍞</Text>
+            <Ionicons name="nutrition-outline" size={22} color={colors.primary} />
             <Text style={[styles.macroVal, { color: colors.text }]}>
               {carbs}g
             </Text>
@@ -472,7 +487,7 @@ export default function HomeScreen({ navigation }) {
               { backgroundColor: colors.cardBg, borderColor: colors.border },
             ]}
           >
-            <Text style={styles.macroEmoji}>🥑</Text>
+            <Ionicons name="water-outline" size={22} color={colors.primary} />
             <Text style={[styles.macroVal, { color: colors.text }]}>
               {fats}g
             </Text>
@@ -483,9 +498,12 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         {/* Quick Actions */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Quick Actions 🚀
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Ionicons name="flash-outline" size={18} color={colors.primary} />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Quick Actions
+          </Text>
+        </View>
         <View style={styles.actionsGrid}>
           <TouchableOpacity
             style={[
@@ -495,7 +513,7 @@ export default function HomeScreen({ navigation }) {
             onPress={() => navigation.navigate("MealScannerScreen")}
             activeOpacity={0.8}
           >
-            <Text style={styles.actionIcon}>📸</Text>
+            <Ionicons name="camera-outline" size={24} color={colors.primary} />
             <Text style={[styles.actionTitle, { color: colors.text }]}>
               Scan Meal
             </Text>
@@ -512,7 +530,7 @@ export default function HomeScreen({ navigation }) {
             onPress={() => navigation.navigate("LogFoodScreen")}
             activeOpacity={0.8}
           >
-            <Text style={styles.actionIcon}>📝</Text>
+            <Ionicons name="create-outline" size={24} color={colors.primary} />
             <Text style={[styles.actionTitle, { color: colors.text }]}>
               Log Food
             </Text>
@@ -530,9 +548,12 @@ export default function HomeScreen({ navigation }) {
         />
 
         {/* Logged Meals List */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Meals 🍽️
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Ionicons name="restaurant-outline" size={18} color={colors.primary} />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Meals
+          </Text>
+        </View>
         {todayMeals && todayMeals.length > 0 ? (
           todayMeals.map((item, index) => (
             <View
@@ -559,13 +580,21 @@ export default function HomeScreen({ navigation }) {
                   onPress={() => handleOpenEdit(item)}
                   style={styles.actionIconBtn}
                 >
-                  <Text style={{ fontSize: 18 }}>✏️</Text>
+                  <Ionicons
+                    name="create-outline"
+                    size={18}
+                    color={colors.primary}
+                  />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => handleDeleteMeal(item)}
                   style={styles.actionIconBtn}
                 >
-                  <Text style={{ fontSize: 18 }}>🗑️</Text>
+                  <Ionicons
+                    name="trash-outline"
+                    size={18}
+                    color={colors.textSecondary}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -608,7 +637,7 @@ export default function HomeScreen({ navigation }) {
             ]}
           >
             <Text style={[styles.modalTitle, { color: colors.text }]}>
-              AI Recovery Coach 🩺
+              AI Recovery Coach 
             </Text>
             <Text
               style={[styles.coachSubText, { color: colors.textSecondary }]}
@@ -624,13 +653,13 @@ export default function HomeScreen({ navigation }) {
               ]}
             >
               <Text style={[styles.coachPoint, { color: colors.text }]}>
-                💧 Drink 500ml water to reduce bloat.
+                 Drink 500ml water to reduce bloat.
               </Text>
               <Text style={[styles.coachPoint, { color: colors.text }]}>
-                🚶 20-minute light walk will boost digestion.
+                 20-minute light walk will boost digestion.
               </Text>
               <Text style={[styles.coachPoint, { color: colors.text }]}>
-                🥗 Keep your next meal lean with high-protein greens.
+                 Keep your next meal lean with high-protein greens.
               </Text>
             </View>
 
@@ -670,7 +699,7 @@ export default function HomeScreen({ navigation }) {
             ]}
           >
             <Text style={[styles.modalTitle, { color: colors.text }]}>
-              Edit Meal ✏️
+              Edit Meal 
             </Text>
 
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
@@ -871,7 +900,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   dateArrowBtn: { padding: 4 },
-  dateArrowText: { fontSize: 16, fontWeight: "bold" },
   dateText: { fontSize: 16, fontWeight: "bold" },
 
   // Diet Deviation Card Styles
@@ -962,7 +990,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     borderWidth: 1,
   },
-  macroEmoji: { fontSize: 22, marginBottom: 6 },
   macroVal: { fontSize: 16, fontWeight: "bold" },
   macroLabel: { fontSize: 12, marginTop: 2 },
 
@@ -978,7 +1005,6 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
   },
-  actionIcon: { fontSize: 26, marginBottom: 8 },
   actionTitle: { fontSize: 16, fontWeight: "bold" },
   actionSub: { fontSize: 12, marginTop: 2 },
 

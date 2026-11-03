@@ -38,7 +38,7 @@ export default function SignupScreen({ navigation }) {
 
     if (result?.success) {
       Alert.alert(
-        "Verify Your Email 📧",
+        "Verify Your Email ",
         result?.message ||
           "Registration successful! Please check your email inbox to verify your account.",
         [
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     overflow: "hidden",
     marginBottom: 16,
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: "center",
     marginTop: 8,
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

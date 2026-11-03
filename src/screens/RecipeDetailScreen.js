@@ -37,7 +37,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
 
       if (res.data?.success) {
         Alert.alert(
-          "Success 🎯",
+          "Success ",
           `"${recipe.name || recipe.title}" added to today's diary!`,
         );
 
@@ -150,7 +150,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
 
           {/* Ingredients Section */}
           <Text style={[styles.sectionHeading, { color: colors.text }]}>
-            Ingredients 🥗
+            Ingredients 
           </Text>
           {recipe?.ingredients && recipe.ingredients.length > 0 ? (
             recipe.ingredients.map((item, idx) => (
@@ -178,7 +178,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
               { color: colors.text, marginTop: 20 },
             ]}
           >
-            Cooking Instructions 🍳
+            Cooking Instructions 
           </Text>
           {recipe?.directions && recipe.directions.length > 0 ? (
             recipe.directions.map((step, idx) => (
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 14,
     borderRadius: 12,
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

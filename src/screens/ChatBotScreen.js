@@ -5,6 +5,8 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
+  ScrollView,
+  RefreshControl,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -133,6 +135,7 @@ const ChatBotScreen = ({ navigation }) => {
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetchingHistory, setFetchingHistory] = useState(true);
+  const [refreshingHistory, setRefreshingHistory] = useState(false);
 
   const flatListRef = useRef(null);
   const currentUserId = user?._id || user?.id;
@@ -180,12 +183,12 @@ const ChatBotScreen = ({ navigation }) => {
     }, 150);
   };
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (showLoader = true) => {
     try {
-      setFetchingHistory(true);
+      if (showLoader) setFetchingHistory(true);
       const token = await getToken();
 
-      if (!token) return;
+      if (!token) return false;
 
       const rawUrl =
         process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
@@ -208,11 +211,28 @@ const ChatBotScreen = ({ navigation }) => {
 
       setMessages(historyData);
       scrollToBottom();
+      return true;
     } catch (error) {
       console.error("History fetch error:", error);
+      return false;
     } finally {
-      setFetchingHistory(false);
+      if (showLoader) setFetchingHistory(false);
       setLoading(false);
+    }
+  };
+
+  const handleRefreshHistory = async () => {
+    setRefreshingHistory(true);
+    try {
+      const succeeded = await fetchHistory(false);
+      if (!succeeded) {
+        Alert.alert(
+          "Refresh failed",
+          "Could not reload your conversation history.",
+        );
+      }
+    } finally {
+      setRefreshingHistory(false);
     }
   };
 
@@ -229,7 +249,6 @@ const ChatBotScreen = ({ navigation }) => {
     const payload = {
       userId: currentUserId,
       message: textToSend,
-      model: "gemini-3.5-flash-lite",
     };
 
     const userMsg = {
@@ -367,7 +386,18 @@ const ChatBotScreen = ({ navigation }) => {
             <CustomAppLoader size={70} />
           </View>
         ) : messages.length === 0 ? (
-          <View style={screenStyles.emptyContainer}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={screenStyles.emptyContainer}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshingHistory}
+                onRefresh={handleRefreshHistory}
+                tintColor={colors.primary}
+                colors={[colors.primary]}
+              />
+            }
+          >
             <Animated.View
               style={[
                 screenStyles.largeIconWrapper,
@@ -394,10 +424,18 @@ const ChatBotScreen = ({ navigation }) => {
               You can ask any questions related to your diet, macros, or
               recipes.
             </Text>
-          </View>
+          </ScrollView>
         ) : (
           <FlatList
             ref={flatListRef}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshingHistory}
+                onRefresh={handleRefreshHistory}
+                tintColor={colors.primary}
+                colors={[colors.primary]}
+              />
+            }
             data={messages}
             keyExtractor={(item, index) =>
               item._id || item.id || `chat-msg-${index}`
@@ -595,7 +633,7 @@ const screenStyles = StyleSheet.create({
     borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 6,

@@ -11,16 +11,16 @@ export const calculateBMI = (weightKg, heightCm) => {
   let color = "#4CAF50"; // Green
 
   if (bmiVal < 18.5) {
-    category = "Underweight ⚠️";
+    category = "Underweight ";
     color = "#FFC107";
   } else if (bmiVal >= 18.5 && bmiVal <= 24.9) {
-    category = "Normal Weight ✅";
+    category = "Normal Weight ";
     color = "#4CAF50";
   } else if (bmiVal >= 25 && bmiVal <= 29.9) {
-    category = "Overweight ⚠️";
+    category = "Overweight ";
     color = "#FF9800";
   } else {
-    category = "Obese 🚨";
+    category = "Obese ";
     color = "#F44336";
   }
 

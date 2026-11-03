@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const CACHE_PREFIX = "NutriMorph_Cache_";
 
-// Data ko local storage mein save karne ke liye
+// Save data to local storage.
 export const saveDataToCache = async (key, data) => {
   try {
     const payload = {
@@ -15,7 +15,7 @@ export const saveDataToCache = async (key, data) => {
   }
 };
 
-// Local storage se cached data read karne ke liye
+// Read cached data from local storage.
 export const getDataFromCache = async (key) => {
   try {
     const cached = await AsyncStorage.getItem(CACHE_PREFIX + key);

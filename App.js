@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  AppState,
   StatusBar,
   StyleSheet,
   View,
@@ -16,6 +17,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import Purchases from "react-native-purchases";
 import crashlytics from "@react-native-firebase/crashlytics";
 import { useAuthStore } from "./src/store/useAuthStore";
+import { getThemeColors } from "./src/theme/colors";
 import { ensureWaterReminderScheduled } from "./src/services/notificationService";
 
 import AppNavigator from "./src/navigation/AppNavigator";
@@ -30,8 +32,10 @@ const Stack = createNativeStackNavigator();
 
 export default function App() {
   const { user, theme, loadStorage } = useAuthStore();
+  const refreshUserProfile = useAuthStore((state) => state.refreshUserProfile);
   const [isInitializing, setIsInitializing] = useState(true);
   const isDark = theme === "dark";
+  const colors = getThemeColors(theme);
 
   useEffect(() => {
     const initApp = async () => {
@@ -39,11 +43,15 @@ export default function App() {
         if (typeof loadStorage === "function") {
           await loadStorage();
         }
+        const storedAuth = useAuthStore.getState();
+        if (storedAuth.user && storedAuth.token) {
+          storedAuth.refreshUserProfile();
+        }
 
-        // 💧 Ensure water notification reminder is scheduled on app start
+        //  Ensure water notification reminder is scheduled on app start
         await ensureWaterReminderScheduled();
 
-        // 🛡️ Safety check: Firebase Crashlytics initialization guard
+        //  Safety check: Firebase Crashlytics initialization guard
         try {
           if (
             typeof crashlytics === "function" ||
@@ -59,7 +67,7 @@ export default function App() {
           );
         }
 
-        // 🛡️ Safety check: Safe RevenueCat guard for standard Expo Go
+        //  Safety check: Safe RevenueCat guard for standard Expo Go
         const isRevenueCatAvailable =
           typeof Purchases?.isConfigured === "function" &&
           typeof Purchases?.configure === "function";
@@ -94,29 +102,33 @@ export default function App() {
     initApp();
   }, []);
 
+  useEffect(() => {
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active" && previousState !== "active" && user) {
+        refreshUserProfile();
+      }
+      previousState = nextState;
+    });
+
+    return () => subscription.remove();
+  }, [refreshUserProfile, user?._id, user?.id]);
+
   if (isInitializing) {
     return (
-      <View
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: isDark ? "#0F172A" : "#F8FAFC" },
-        ]}
-      >
-        <ActivityIndicator size="large" color="#10B981" />
+      <View style={[styles.loadingContainer, { backgroundColor: colors.bg }]}>
+        <ActivityIndicator size="large" color="#42F5A1" />
       </View>
     );
   }
 
   return (
     <SafeAreaProvider
-      style={[
-        styles.container,
-        { backgroundColor: isDark ? "#0F172A" : "#F8FAFC" },
-      ]}
+      style={[styles.container, { backgroundColor: colors.bg }]}
     >
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
-        backgroundColor={isDark ? "#0F172A" : "#F8FAFC"}
+        backgroundColor={colors.bg}
       />
 
       <NavigationContainer theme={isDark ? DarkTheme : DefaultTheme}>
@@ -144,7 +156,7 @@ export default function App() {
             )
           ) : (
             <>
-              {/* Screen Name Aliases ("Login"/"LoginScreen" & "Signup"/"SignupScreen") */}
+              {/* Screen Name Aliases ("Login"/"LoginScreen" &"Signup"/"SignupScreen") */}
               <Stack.Screen name="Login" component={LoginScreen} />
               <Stack.Screen name="Signup" component={SignupScreen} />
               <Stack.Screen name="LoginScreen" component={LoginScreen} />

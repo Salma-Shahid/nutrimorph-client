@@ -1,5 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 
@@ -10,10 +11,10 @@ export default function CalorieChart({
   const { theme } = useAuthStore();
   const colors = getThemeColors(theme);
 
-  // Default days list agar data array empty ho
+  // Use the full week when no history data is available.
   const defaultDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-  // Mapping dynamic history data or fallback to defaults
+  // Map available history data to the weekly chart.
   const chartData = defaultDays.map((dayLabel, idx) => {
     const item = historyData[idx];
     return {
@@ -35,9 +36,12 @@ export default function CalorieChart({
       ]}
     >
       <View style={styles.headerRow}>
-        <Text style={[styles.title, { color: colors.text }]}>
-          Weekly Calorie Trend 📈
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Ionicons name="analytics-outline" size={18} color={colors.primary} />
+          <Text style={[styles.title, { color: colors.text }]}>
+            Weekly Calorie Trend
+          </Text>
+        </View>
         <Text style={[styles.targetText, { color: colors.textSecondary }]}>
           Target: {targetCalories} kcal
         </Text>

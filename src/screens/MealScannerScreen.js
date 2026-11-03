@@ -143,7 +143,7 @@ export default function MealScannerScreen({ navigation }) {
 
         if (isNonFood) {
           Alert.alert(
-            "Invalid Food Image 🚫",
+            "Invalid Food Image ",
             "This image does not appear to contain edible food. Please scan or select a valid food photo.",
           );
           setModalVisible(false);
@@ -240,7 +240,7 @@ export default function MealScannerScreen({ navigation }) {
         setModalVisible(true);
       } else {
         Alert.alert(
-          "Product Not Registered 🔍",
+          "Product Not Registered ",
           "This barcode isn't fully detailed in the global database. Please take a photo of the food item or nutrition label using Camera/Gallery for AI scanning.",
           [{ text: "OK" }],
         );
@@ -336,7 +336,7 @@ export default function MealScannerScreen({ navigation }) {
       setImageBase64(null);
 
       Alert.alert(
-        "Meal Saved! 🎉",
+        "Meal Saved! ",
         `${foodName} logged into your diary and added to your saved recipes successfully.`,
       );
     } catch (error) {
@@ -351,7 +351,7 @@ export default function MealScannerScreen({ navigation }) {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={[styles.title, { color: colors.text }]}>
-          AI Scan Meal 📸
+          AI Scan Meal 
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           Take or upload a food photo, or scan a packaged product barcode.
@@ -510,7 +510,7 @@ export default function MealScannerScreen({ navigation }) {
           >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>
-                Confirm Nutrition 🥗
+                Confirm Nutrition 
               </Text>
               <View
                 style={[
@@ -705,7 +705,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -770,7 +770,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 12,
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 6,

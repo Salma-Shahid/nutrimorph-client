@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -37,6 +38,7 @@ export default function ExploreScreen({ navigation }) {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Meal Type Modal States
   const [showMealModal, setShowMealModal] = useState(false);
@@ -45,8 +47,8 @@ export default function ExploreScreen({ navigation }) {
   const [submitting, setSubmitting] = useState(false);
 
   // Fetch Categorized Recipes from Backend
-  const loadRecipes = async (category) => {
-    setLoading(true);
+  const loadRecipes = async (category, isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
     try {
       const BASE_URL =
         process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
@@ -59,11 +61,29 @@ export default function ExploreScreen({ navigation }) {
 
       if (res.data?.success) {
         setRecipes(res.data.recipes || res.data.data || []);
+        return true;
       }
+      return false;
     } catch (err) {
       console.log("Error loading recipes:", err.message);
+      if (isRefresh) {
+        Alert.alert(
+          "Refresh failed",
+          err?.response?.data?.message || "Could not refresh recipes.",
+        );
+      }
+      return false;
     } finally {
-      setLoading(false);
+      if (!isRefresh) setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadRecipes(selectedCategory, true);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -71,7 +91,7 @@ export default function ExploreScreen({ navigation }) {
     loadRecipes(selectedCategory);
   }, [selectedCategory]);
 
-  // Trigger Modal on "Add To Diary"
+  // Trigger Modal on"Add To Diary"
   const handleOpenMealModal = (recipe) => {
     setSelectedRecipe(recipe);
     setChosenMealType("Lunch"); // default reset
@@ -104,7 +124,7 @@ export default function ExploreScreen({ navigation }) {
 
       if (res.data?.success) {
         Alert.alert(
-          "Success 🎯",
+          "Success",
           `"${selectedRecipe.name || selectedRecipe.title}" added to ${chosenMealType}!`,
         );
 
@@ -130,7 +150,7 @@ export default function ExploreScreen({ navigation }) {
       {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Explore & Recipe Library 🥗
+          Explore & Recipe Library
         </Text>
       </View>
 
@@ -174,24 +194,58 @@ export default function ExploreScreen({ navigation }) {
 
       {/* Recipe Cards List */}
       {loading ? (
-        <ActivityIndicator
-          color={colors.primary}
-          size="large"
-          style={{ marginTop: 40 }}
-        />
-      ) : recipes.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons
-            name="restaurant-outline"
-            size={48}
-            color={colors.textSecondary}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ flexGrow: 1 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
+        >
+          <ActivityIndicator
+            color={colors.primary}
+            size="large"
+            style={{ marginTop: 40 }}
           />
-          <Text style={{ color: colors.textSecondary, marginTop: 10 }}>
-            No recipes found in this category.
-          </Text>
-        </View>
+        </ScrollView>
+      ) : recipes.length === 0 ? (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ flexGrow: 1 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
+        >
+          <View style={styles.emptyState}>
+            <Ionicons
+              name="restaurant-outline"
+              size={48}
+              color={colors.textSecondary}
+            />
+            <Text style={{ color: colors.textSecondary, marginTop: 10 }}>
+              No recipes found in this category.
+            </Text>
+          </View>
+        </ScrollView>
       ) : (
         <FlatList
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
           data={recipes}
           keyExtractor={(item, index) => item._id || item.id || String(index)}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
@@ -240,11 +294,11 @@ export default function ExploreScreen({ navigation }) {
                     marginBottom: 12,
                   }}
                 >
-                  P: {item.protein || 0}g | C: {item.carbs || 0}g | F:{" "}
+                  P: {item.protein || 0}g | C: {item.carbs || 0}g | F:{""}
                   {item.fats || 0}g
                 </Text>
 
-                {/* Direct "Add To Diary" Button triggers Modal */}
+                {/* Direct"Add To Diary" Button triggers Modal */}
                 <TouchableOpacity
                   style={[
                     styles.addToDiaryBtn,
@@ -282,7 +336,7 @@ export default function ExploreScreen({ navigation }) {
           >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>
-                Select Meal Type 🍽️
+                Select Meal Type
               </Text>
               <TouchableOpacity onPress={() => setShowMealModal(false)}>
                 <Ionicons
@@ -419,7 +473,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 10,
     borderRadius: 10,
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
@@ -457,7 +511,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

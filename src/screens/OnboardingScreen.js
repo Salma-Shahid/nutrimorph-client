@@ -10,9 +10,9 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
-import { WORLD_LANGUAGES } from "../constants/languages";
 
 const TOTAL_STEPS = 10;
 
@@ -45,7 +45,7 @@ export default function OnboardingScreen() {
   const [calculatedBmi, setCalculatedBmi] = useState("22.4");
 
   const handleNextStep = () => {
-    if (currentStep === 2 && !name.trim()) {
+    if (currentStep === 2 && !name.trim() && !user?.name) {
       Alert.alert("Validation Error", "Please enter your name.");
       return;
     }
@@ -180,16 +180,39 @@ export default function OnboardingScreen() {
           />
         ))}
       </View>
+      <View style={{ alignItems: "center", marginTop: 16 }}>
+        <Ionicons
+          name={
+            [
+              "globe-outline",
+              "person-outline",
+              "body-outline",
+              "calendar-outline",
+              "resize-outline",
+              "scale-outline",
+              "flag-outline",
+              "pulse-outline",
+              "restaurant-outline",
+              "checkmark-done-outline",
+            ][currentStep - 1]
+          }
+          size={26}
+          color={colors.primary}
+        />
+        <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
+          Step {currentStep} of {TOTAL_STEPS}
+        </Text>
+      </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* Step 1: Language Selection */}
         {currentStep === 1 && (
           <View>
             <Text style={[styles.title, { color: colors.primary }]}>
-              Select Language 🌍
+              Select Language
             </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Choose your preferred language
+              The NutriMorph closed beta is available in English.
             </Text>
             <View
               style={[
@@ -197,37 +220,25 @@ export default function OnboardingScreen() {
                 { backgroundColor: colors.cardBg, borderColor: colors.border },
               ]}
             >
-              <ScrollView nestedScrollEnabled style={{ maxHeight: 380 }}>
-                {WORLD_LANGUAGES && WORLD_LANGUAGES.length > 0 ? (
-                  WORLD_LANGUAGES.map((item) => (
-                    <TouchableOpacity
-                      key={item.code}
-                      style={[
-                        styles.langBtn,
-                        {
-                          backgroundColor: colors.inputBg,
-                          borderColor: colors.border,
-                        },
-                        language === item.name && {
-                          backgroundColor: colors.glassGlow,
-                          borderColor: colors.primary,
-                        },
-                      ]}
-                      onPress={() => setLanguage(item.name)}
-                    >
-                      <Text style={[styles.optionText, { color: colors.text }]}>
-                        {item.flag} {item.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))
-                ) : (
-                  <Text
-                    style={{ color: colors.textSecondary, textAlign: "center" }}
-                  >
-                    Loading languages...
-                  </Text>
-                )}
-              </ScrollView>
+              <View
+                style={[
+                  styles.langBtn,
+                  {
+                    backgroundColor: colors.glassGlow,
+                    borderColor: colors.primary,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="checkmark-circle"
+                  size={20}
+                  color={colors.primary}
+                  style={{ marginRight: 10 }}
+                />
+                <Text style={[styles.optionText, { color: colors.text }]}>
+                  English
+                </Text>
+              </View>
             </View>
           </View>
         )}
@@ -236,7 +247,7 @@ export default function OnboardingScreen() {
         {currentStep === 2 && (
           <View>
             <Text style={[styles.title, { color: colors.primary }]}>
-              What's Your Name? 👤
+              What's Your Name? 
             </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Let us personalize your experience
@@ -265,7 +276,7 @@ export default function OnboardingScreen() {
         {currentStep === 3 && (
           <View>
             <Text style={[styles.title, { color: colors.primary }]}>
-              How Do You Identify? 🧬
+              How Do You Identify? 
             </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Used to calculate your precise BMR
@@ -286,7 +297,7 @@ export default function OnboardingScreen() {
                 onPress={() => setGender("male")}
               >
                 <Text style={[styles.optionText, { color: colors.text }]}>
-                  Male 🧔
+                  Male 
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -304,7 +315,7 @@ export default function OnboardingScreen() {
                 onPress={() => setGender("female")}
               >
                 <Text style={[styles.optionText, { color: colors.text }]}>
-                  Female 👩
+                  Female 
                 </Text>
               </TouchableOpacity>
             </View>
@@ -315,7 +326,7 @@ export default function OnboardingScreen() {
         {currentStep === 4 && (
           <View>
             <Text style={[styles.title, { color: colors.primary }]}>
-              How Old Are You? 🎂
+              How Old Are You? 
             </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Enter your age in years
@@ -345,7 +356,7 @@ export default function OnboardingScreen() {
         {currentStep === 5 && (
           <View>
             <Text style={[styles.title, { color: colors.primary }]}>
-              How Tall Are You? 📏
+              How Tall Are You? 
             </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Enter your height
@@ -465,7 +476,7 @@ export default function OnboardingScreen() {
         {currentStep === 6 && (
           <View>
             <Text style={[styles.title, { color: colors.primary }]}>
-              Weight Goals ⚖️
+              Weight Goals 
             </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Track your current and target weight
@@ -511,15 +522,15 @@ export default function OnboardingScreen() {
         {currentStep === 7 && (
           <View>
             <Text style={[styles.title, { color: colors.primary }]}>
-              What's Your Fitness Goal? 🎯
+              What's Your Fitness Goal? 
             </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Select your primary target
             </Text>
             {[
-              { id: "weight_loss", label: "Weight Loss 🔥" },
-              { id: "maintain", label: "Maintain Weight ⚖️" },
-              { id: "muscle_gain", label: "Muscle Gain 💪" },
+              { id: "weight_loss", label: "Weight Loss " },
+              { id: "maintain", label: "Maintain Weight " },
+              { id: "muscle_gain", label: "Muscle Gain " },
             ].map((item) => (
               <TouchableOpacity
                 key={item.id}
@@ -548,7 +559,7 @@ export default function OnboardingScreen() {
         {currentStep === 8 && (
           <View>
             <Text style={[styles.title, { color: colors.primary }]}>
-              Activity Level & Routine 🏃‍♀️
+              Activity Level & Routine 
             </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               How active is your daily routine?
@@ -669,7 +680,7 @@ export default function OnboardingScreen() {
                 fontWeight: "600",
               }}
             >
-              {targetWeight} Kg target is within reach 🙌
+              {targetWeight} Kg target is within reach 
             </Text>
 
             <View
@@ -919,7 +930,7 @@ export default function OnboardingScreen() {
                 {currentStep === 9
                   ? "Calculate Target"
                   : currentStep === 10
-                    ? "Get Started 🚀"
+                    ? "Get Started "
                     : "Continue"}
               </Text>
             )}

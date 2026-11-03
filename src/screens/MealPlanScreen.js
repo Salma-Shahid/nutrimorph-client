@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,6 +18,7 @@ import { saveDataToCache, getDataFromCache } from "../utils/cache";
 
 export default function MealPlanScreen({ navigation }) {
   const user = useAuthStore((state) => state.user);
+  const refreshUserProfile = useAuthStore((state) => state.refreshUserProfile);
   const theme = useAuthStore((state) => state.theme);
   const colors = getThemeColors(theme);
 
@@ -34,6 +36,7 @@ export default function MealPlanScreen({ navigation }) {
       : "2000",
   );
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   const globalDietOptions = [
     "Desi / Pakistani Standard",
@@ -60,7 +63,7 @@ export default function MealPlanScreen({ navigation }) {
       try {
         await fetchActiveMealPlan();
       } catch (error) {
-        console.log("⚠️ Network offline. Checking for cached meal plan...");
+        console.log(" Network offline. Checking for cached meal plan...");
         const cachedPlan = await getDataFromCache("active_meal_plan");
         if (cachedPlan) {
           useMealPlanStore.setState({ activeMealPlan: cachedPlan });
@@ -88,7 +91,7 @@ export default function MealPlanScreen({ navigation }) {
 
     if (!res.success) {
       Alert.alert(
-        "Pro Feature Required 🌟",
+        "Pro Feature Required",
         res.message || "Please upgrade to access AI Meal Planner.",
         [
           { text: "Cancel", style: "cancel" },
@@ -106,15 +109,43 @@ export default function MealPlanScreen({ navigation }) {
     }
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const [profileResult] = await Promise.all([
+        refreshUserProfile(),
+        fetchActiveMealPlan(),
+      ]);
+      if (!profileResult.success) {
+        Alert.alert(
+          "Refresh failed",
+          profileResult.message || "Could not refresh your profile.",
+        );
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const currentDayPlan = activeMealPlan?.days?.[selectedDayIndex];
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
-            AI Meal Planner 🥗
+            AI Meal Planner
           </Text>
           <Text
             style={[styles.headerSubtitle, { color: colors.textSecondary }]}
@@ -378,7 +409,8 @@ export default function MealPlanScreen({ navigation }) {
                               marginTop: 2,
                             }}
                           >
-                            P: {mealInfo.protein}g | C: {mealInfo.carbs}g | F:{" "}
+                            P: {mealInfo.protein}g | C: {mealInfo.carbs}g | F:
+                            {""}
                             {mealInfo.fats}g
                           </Text>
                         </View>
@@ -414,7 +446,7 @@ const styles = StyleSheet.create({
     padding: 18,
     borderWidth: 1,
     marginBottom: 16,
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -443,7 +475,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginTop: 6,
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

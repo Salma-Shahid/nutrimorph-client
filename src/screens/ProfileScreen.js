@@ -6,6 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  RefreshControl,
   ActivityIndicator,
   Alert,
   Image,
@@ -31,6 +32,7 @@ export default function ProfileScreen({ navigation }) {
     deleteAccount,
     isLoading,
     token,
+    refreshUserProfile,
   } = useAuthStore();
   const colors = getThemeColors(theme);
 
@@ -45,7 +47,7 @@ export default function ProfileScreen({ navigation }) {
     user?.avatar || user?.profileImage || null,
   );
   const [paymentLoading, setPaymentLoading] = useState(false);
-  
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -61,12 +63,27 @@ export default function ProfileScreen({ navigation }) {
 
   const isPro = user?.subscriptionTier === "pro" || user?.isPro === true;
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const result = await refreshUserProfile();
+      if (!result.success) {
+        Alert.alert(
+          "Refresh failed",
+          result.message || "Could not refresh your profile.",
+        );
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   // Stripe Payment Gateway Integration via expo-web-browser
   const handleStripeCheckout = async () => {
     if (isPro) {
       Alert.alert(
         "Pro Plan",
-        "You are already enjoying NutriMorph Pro features! 👑",
+        "You are already enjoying NutriMorph Pro features!",
       );
       return;
     }
@@ -89,6 +106,7 @@ export default function ProfileScreen({ navigation }) {
         const result = await WebBrowser.openBrowserAsync(checkoutUrl);
         if (result.type === "dismiss") {
           console.log("User returned from Stripe checkout session.");
+          await refreshUserProfile();
         }
       } else {
         setPaymentLoading(false);
@@ -146,7 +164,7 @@ export default function ProfileScreen({ navigation }) {
 
     const res = await updateProfile(payload);
     if (res?.success) {
-      Alert.alert("Success 🎉", "Profile updated successfully!");
+      Alert.alert("Success", "Profile updated successfully!");
     } else {
       Alert.alert("Error", res?.message || "Failed to update profile.");
     }
@@ -154,7 +172,7 @@ export default function ProfileScreen({ navigation }) {
 
   const handleDeleteAccountPress = () => {
     Alert.alert(
-      "Delete Account ⚠️",
+      "Delete Account",
       "Are you sure you want to permanently delete your account? This will erase all your profile data, chat history, and preferences. This action cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
@@ -182,9 +200,19 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
         <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Profile Settings ⚙️
+          Profile Settings
         </Text>
 
         {/* Profile Card */}
@@ -397,7 +425,7 @@ export default function ProfileScreen({ navigation }) {
               marginBottom: 10,
             }}
           >
-            {isPro ? "Pro Plan Active 👑" : "Free Tier Plan"}
+            {isPro ? "Pro Plan Active" : "Free Tier Plan"}
           </Text>
 
           <TouchableOpacity
@@ -418,7 +446,7 @@ export default function ProfileScreen({ navigation }) {
                   color="#FFF"
                 />
                 <Text style={styles.planToggleText}>
-                  {isPro ? "Pro Plan Active" : "Upgrade to Pro ($9.99/mo) 🚀"}
+                  {isPro ? "Pro Plan Active" : "Upgrade to Pro ($9.99/mo)"}
                 </Text>
               </>
             )}
@@ -474,7 +502,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
@@ -509,7 +537,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     marginTop: 6,
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -529,7 +557,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 12,
     borderRadius: 12,
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
     shadowRadius: 6,

@@ -43,7 +43,7 @@ export default function LogFoodScreen({ navigation, route }) {
   const [imageUri, setImageUri] = useState(initialData.image || null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // 🟢 Image Picker Handler
+  //  Image Picker Handler
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -87,7 +87,7 @@ export default function LogFoodScreen({ navigation, route }) {
       return;
     }
 
-    // FormData use hoga agar image bhi bhejni ho backend par
+    // Include the image in FormData when one is available.
     const formData = new FormData();
     formData.append("name", name.trim());
     formData.append("calories", Number(calories));
@@ -111,7 +111,7 @@ export default function LogFoodScreen({ navigation, route }) {
     const res = await logMeal(formData, true); // True indicating multipart/form-data if store supports it
 
     if (res?.success) {
-      Alert.alert("Success 🎉", "Meal is successfully logged!");
+      Alert.alert("Success ", "Meal is successfully logged!");
       navigation.goBack();
     } else {
       Alert.alert("Error", res?.message || "Failed to log meal.");
@@ -136,11 +136,11 @@ export default function LogFoodScreen({ navigation, route }) {
             <Ionicons name="arrow-back" size={20} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: colors.text }]}>
-            Log Food Item 📝
+            Log Food Item 
           </Text>
         </View>
 
-        {/* 🟢 Meal Image Picker Section */}
+        {/*  Meal Image Picker Section */}
         <TouchableOpacity
           style={[
             styles.imagePickerCard,
@@ -163,7 +163,7 @@ export default function LogFoodScreen({ navigation, route }) {
                   { color: colors.textSecondary },
                 ]}
               >
-                Tap to attach meal photo 📸
+                Tap to attach meal photo 
               </Text>
             </View>
           )}
@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     marginBottom: 16,
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     marginTop: 10,
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,

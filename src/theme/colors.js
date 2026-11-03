@@ -2,13 +2,20 @@ export const getThemeColors = (theme) => {
   const isDark = theme === "dark";
 
   return {
-    bg: isDark ? "#090D16" : "#F8FAFC",
-    cardBg: isDark ? "rgba(30, 41, 59, 0.6)" : "rgba(255, 255, 255, 0.85)",
-    inputBg: isDark ? "rgba(15, 23, 42, 0.7)" : "rgba(241, 245, 249, 0.9)",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    textSecondary: isDark ? "#94A3B8" : "#64748B",
-    border: isDark ? "rgba(16, 185, 129, 0.25)" : "rgba(16, 185, 129, 0.3)", // Emerald glass border tint
-    primary: "#10B981",
-    glassGlow: isDark ? "rgba(16, 185, 129, 0.1)" : "rgba(16, 185, 129, 0.05)",
+    bg: isDark ? "#0B0F19" : "#F4F7FA",
+    cardBg: isDark ? "#111827" : "#FFFFFF",
+    inputBg: isDark ? "#0E1522" : "#EDF2F7",
+    text: isDark ? "#F4F7FA" : "#101827",
+    textSecondary: isDark ? "#9AA9BC" : "#5D6B7D",
+    border: isDark ? "#263449" : "#D7E0EA",
+    primary: "#42F5A1",
+    secondary: "#43D9F5",
+    glassGlow: isDark
+      ? "rgba(66, 245, 161, 0.12)"
+      : "rgba(28, 180, 118, 0.08)",
+    neonGlow: isDark
+      ? "rgba(66, 245, 161, 0.3)"
+      : "rgba(28, 180, 118, 0.16)",
+    cardBgGlow: isDark ? "#151F2E" : "#F8FAFC",
   };
 };

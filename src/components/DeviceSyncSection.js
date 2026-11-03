@@ -15,7 +15,9 @@ import { getThemeColors } from "../theme/colors";
 
 const BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
-const STEP_SYNC_INTERVAL_MS = 15000;
+const STEP_SYNC_INTERVAL_MS = 30000;
+const MIN_VALID_STEP_DELTA = 3;
+const MAX_STEPS_PER_SECOND = 3;
 
 const getLocalDate = () => {
   const date = new Date();
@@ -27,6 +29,7 @@ const getLocalDate = () => {
 export default function DeviceSyncSection({ onSyncSuccess }) {
   const { theme, user, token, updateUserStats, recordDailySteps } =
     useAuthStore();
+  const userId = String(user?._id || user?.id || "");
   const colors = getThemeColors(theme);
   const [isSynced, setIsSynced] = useState(user?.isDeviceSynced || false);
   const [syncing, setSyncing] = useState(false);
@@ -46,36 +49,93 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
     let isCancelled = false;
     let isRefreshing = false;
     let lastPushedSteps = null;
+    let previousSensorSteps = null;
+    let acceptedSteps = null;
+    let lastSampleAt = Date.now();
+    let pendingStepDelta = 0;
+    let pendingSince = lastSampleAt;
+    let sampleDate = getLocalDate();
     let interval;
 
     const refreshSteps = async () => {
-      if (isRefreshing) return;
+      if (isRefreshing || !userId) return;
       isRefreshing = true;
 
       try {
         const steps = await Pedometer.getTodayStepCountAsync();
         if (isCancelled) return;
+        if (!Number.isFinite(steps) || steps < 0) {
+          console.warn("Pedometer returned an invalid step count.");
+          return;
+        }
+        const activeUser = useAuthStore.getState().user;
+        if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
 
         const date = getLocalDate();
-        const updatedUser = await recordDailySteps(steps, date);
+        const now = Date.now();
+        let validSteps;
+        const isBaseline = previousSensorSteps === null || date !== sampleDate;
+        if (isBaseline) {
+          previousSensorSteps = steps;
+          acceptedSteps =
+            user?.stepUserId === userId && user?.stepCountDate === date
+              ? Number(user.dailySteps) || 0
+              : 0;
+          pendingStepDelta = 0;
+          pendingSince = now;
+          sampleDate = date;
+          validSteps = acceptedSteps;
+        } else {
+          const delta = steps - previousSensorSteps;
+          previousSensorSteps = steps;
+          if (delta < 0) {
+            pendingStepDelta = 0;
+            pendingSince = now;
+          } else {
+            if (pendingStepDelta === 0) pendingSince = lastSampleAt;
+            pendingStepDelta += delta;
+            if (pendingStepDelta >= MIN_VALID_STEP_DELTA) {
+              const elapsedSeconds = Math.max(
+                1,
+                (now - pendingSince) / 1000,
+              );
+              if (pendingStepDelta / elapsedSeconds <= MAX_STEPS_PER_SECOND) {
+                acceptedSteps = (acceptedSteps || 0) + pendingStepDelta;
+              }
+              pendingStepDelta = 0;
+              pendingSince = now;
+            }
+          }
+          validSteps = acceptedSteps || 0;
+        }
+        lastSampleAt = now;
+
+        const updatedUser = await recordDailySteps(validSteps, date);
         if (isCancelled) return;
-        const dailySteps = updatedUser?.dailySteps ?? steps;
+        const dailySteps = updatedUser?.dailySteps ?? validSteps;
+        if (isBaseline) acceptedSteps = dailySteps;
         onSyncSuccessRef.current?.(dailySteps);
 
-        if (token && steps !== lastPushedSteps) {
+        if (token && dailySteps !== lastPushedSteps) {
           try {
             const response = await axios.post(
               `${BASE_URL}/api/exercise`,
-              { date, stepsTotal: steps },
+              { date, stepsTotal: dailySteps },
               { headers: { Authorization: `Bearer ${token}` } },
             );
-            lastPushedSteps = steps;
+            lastPushedSteps = dailySteps;
 
-            if (response.data?.userStats) {
+            const activeUser = useAuthStore.getState().user;
+            if (
+              !isCancelled &&
+              String(activeUser?._id || activeUser?.id || "") === userId &&
+              response.data?.userStats
+            ) {
               await updateUserStats({
                 ...response.data.userStats,
                 dailySteps: response.data.data?.steps ?? dailySteps,
                 stepCountDate: date,
+                stepUserId: userId,
               });
             }
           } catch (error) {
@@ -128,7 +188,7 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
       isCancelled = true;
       if (interval) clearInterval(interval);
     };
-  }, [isSynced, recordDailySteps, token, updateUserStats]);
+  }, [isSynced, recordDailySteps, token, updateUserStats, userId]);
 
   const executeDisconnect = () => {
     setIsSynced(false);
@@ -201,8 +261,18 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
             return;
           }
 
-          const syncedSteps = await Pedometer.getTodayStepCountAsync();
+          await Pedometer.getTodayStepCountAsync();
+          const activeUser = useAuthStore.getState().user;
+          if (String(activeUser?._id || activeUser?.id || "") !== userId) {
+            setSyncing(false);
+            return;
+          }
           const date = getLocalDate();
+          const syncedSteps =
+            activeUser.stepUserId === userId &&
+            activeUser.stepCountDate === date
+              ? Number(activeUser.dailySteps) || 0
+              : 0;
 
           setIsSynced(true);
           setSyncing(false);
@@ -213,9 +283,9 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
           const successMsg = `Successfully connected with ${providerName}! Pedometer active. Synced ${syncedSteps} steps.`;
 
           if (Platform.OS === "web") {
-            alert(`Success 🎉\n${successMsg}`);
+            alert(`Success \n${successMsg}`);
           } else {
-            Alert.alert("Success 🎉", successMsg);
+            Alert.alert("Success", successMsg);
           }
         } catch (error) {
           setSyncing(false);
@@ -235,7 +305,7 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
         alert("Step tracking is available in the NutriMorph mobile app.");
       } else {
         Alert.alert(
-          "Connect Fitness Provider 🏃‍♀️",
+          "Connect Fitness Provider",
           `NutriMorph needs permission to read your step count from ${providerName}.`,
           [
             {
@@ -315,7 +385,7 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
           {syncing
             ? "Requesting Permissions..."
             : isSynced
-              ? "Disconnect Device ✕"
+              ? "Disconnect Device"
               : "Connect Health Device"}
         </Text>
       </TouchableOpacity>

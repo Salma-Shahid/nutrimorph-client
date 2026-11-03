@@ -19,10 +19,14 @@ const Tab = createBottomTabNavigator();
 
 export default function AppNavigator() {
   const theme = useAuthStore((state) => state.theme);
+  const userId = useAuthStore(
+    (state) => state.user?._id || state.user?.id || "signed-out",
+  );
   const colors = getThemeColors(theme);
 
   return (
     <Tab.Navigator
+      key={userId}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
@@ -32,7 +36,7 @@ export default function AppNavigator() {
           paddingBottom: 8,
           paddingTop: 8,
         },
-        tabBarActiveTintColor: colors?.primary || "#10B981",
+        tabBarActiveTintColor: colors?.primary || "#42F5A1",
         tabBarInactiveTintColor: colors?.textSecondary || "#64748B",
         tabBarIcon: ({ color, size }) => {
           let iconName = "grid-outline";

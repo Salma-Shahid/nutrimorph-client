@@ -25,7 +25,7 @@ export default function NotificationSettings() {
       if (token || Device.isDevice) {
         await scheduleWaterReminder();
         Alert.alert(
-          "Success 💧",
+          "Success ",
           "Water reminder notifications enabled successfully!",
         );
       }

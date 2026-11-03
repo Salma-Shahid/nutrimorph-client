@@ -45,9 +45,9 @@ export default function AdBanner() {
         requestOptions={{
           requestNonPersonalizedAdsOnly: true,
         }}
-        onAdLoaded={() => console.log("✅ AdMob Banner loaded successfully")}
+        onAdLoaded={() => console.log("AdMob banner loaded successfully.")}
         onAdFailedToLoad={(error) =>
-          console.error("❌ AdMob Banner failed to load: ", error)
+          console.error("AdMob banner failed to load:", error)
         }
       />
     </View>

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
+  RefreshControl,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { BADGES_DATA } from "../constants/badges";
@@ -14,7 +16,24 @@ import { useAuthStore, getThemeColors } from "../store/useAuthStore";
 export default function AchievementsScreen({ navigation }) {
   const user = useAuthStore((state) => state.user) || {};
   const theme = useAuthStore((state) => state.theme) || "dark";
+  const refreshUserProfile = useAuthStore((state) => state.refreshUserProfile);
+  const [refreshing, setRefreshing] = useState(false);
   const colors = getThemeColors(theme);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const result = await refreshUserProfile();
+      if (!result.success) {
+        Alert.alert(
+          "Refresh failed",
+          result.message || "Could not refresh achievements.",
+        );
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const normalizeBadgeId = (badge) => {
     const badgeId =
@@ -75,12 +94,22 @@ export default function AchievementsScreen({ navigation }) {
           <Ionicons name="arrow-back" size={20} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Achievements 🏆
+          Achievements
         </Text>
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 16 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
         {categories.map((cat) => {
           const catBadges = (BADGES_DATA || []).filter(
             (b) => b.category === cat,
@@ -209,7 +238,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 10,
@@ -234,7 +263,7 @@ const styles = StyleSheet.create({
   },
   unlockedShield: {
     borderWidth: 2,
-    shadowColor: "#10B981",
+    shadowColor: "#42F5A1",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 6,

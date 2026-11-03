@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
+export { getThemeColors } from "../theme/colors";
 
 const BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
@@ -12,6 +13,10 @@ const getLocalDate = () => {
   const day = String(date.getDate()).padStart(2, "0");
   return `${date.getFullYear()}-${month}-${day}`;
 };
+
+const getUserId = (user) => String(user?._id || user?.id || "");
+const getDailyStepsKey = (userId, date) =>
+  `dailySteps:${encodeURIComponent(userId)}:${date}`;
 
 const normalizeBadgeId = (badge) => {
   const badgeId =
@@ -45,6 +50,7 @@ export const useAuthStore = create((set, get) => ({
   isLoading: false,
   error: null,
   theme: "dark",
+  isRefreshingProfile: false,
 
   loadStorage: async () => {
     try {
@@ -82,7 +88,7 @@ export const useAuthStore = create((set, get) => ({
     set({ theme: nextTheme });
   },
 
-  // 🟢 Helper to directly set or patch user object in store and storage
+  //  Helper to directly set or patch user object in store and storage
   setUser: async (userData) => {
     if (!userData) {
       await AsyncStorage.removeItem("user");
@@ -90,15 +96,70 @@ export const useAuthStore = create((set, get) => ({
       return;
     }
     const currentUser = get().user || {};
-    const mergedUser = { ...currentUser, ...userData };
+    const sameUser =
+      !getUserId(currentUser) ||
+      !getUserId(userData) ||
+      getUserId(currentUser) === getUserId(userData);
+    const mergedUser = { ...(sameUser ? currentUser : {}), ...userData };
     if (Array.isArray(userData.unlockedBadges)) {
       mergedUser.unlockedBadges = mergeUnlockedBadges(
-        currentUser.unlockedBadges,
+        sameUser ? currentUser.unlockedBadges : [],
         userData.unlockedBadges,
       );
     }
     set({ user: mergedUser });
     await AsyncStorage.setItem("user", JSON.stringify(mergedUser));
+  },
+
+  refreshUserProfile: async () => {
+    const { token, user: currentUser } = get();
+    if (!token || !currentUser) {
+      return { success: false, message: "No authenticated user to refresh." };
+    }
+
+    const requestedUserId = getUserId(currentUser);
+    set({ isRefreshingProfile: true });
+
+    try {
+      const response = await axios.get(`${API_URL}/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Cache-Control": "no-cache",
+        },
+      });
+      const profile = response.data?.user || response.data;
+
+      if (!profile || getUserId(profile) !== requestedUserId) {
+        throw new Error("Profile response does not match the signed-in user.");
+      }
+
+      const latestUser = get().user;
+      if (getUserId(latestUser) !== requestedUserId) {
+        set({ isRefreshingProfile: false });
+        return { success: false, message: "The active account has changed." };
+      }
+
+      const updatedUser = {
+        ...latestUser,
+        ...profile,
+        unlockedBadges: mergeUnlockedBadges(
+          latestUser.unlockedBadges,
+          profile.unlockedBadges,
+        ),
+      };
+
+      set({ user: updatedUser, isRefreshingProfile: false, error: null });
+      await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+      return { success: true, user: updatedUser };
+    } catch (error) {
+      const message =
+        error?.response?.data?.message ||
+        error.message ||
+        "Could not refresh the account profile.";
+      console.error("Profile refresh failed:", message);
+      set({ isRefreshingProfile: false, error: message });
+      return { success: false, message };
+    }
   },
 
   // Real-time DB Sync & Plan Update
@@ -225,7 +286,7 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  // 🟢 Helper to update user gamification stats (Streak & Badges) in real-time
+  //  Helper to update user gamification stats (Streak & Badges) in real-time
   updateUserStats: async (newStats) => {
     const currentUser = get().user;
     if (!currentUser) return;
@@ -242,15 +303,26 @@ export const useAuthStore = create((set, get) => ({
   recordDailySteps: async (steps, date) => {
     const currentUser = get().user;
     if (!currentUser) return null;
+    const userId = getUserId(currentUser);
+    if (!userId) return null;
 
     const stepDate = date || getLocalDate();
     const incomingSteps = Number.isFinite(Number(steps))
       ? Math.max(0, Math.floor(Number(steps)))
       : 0;
-    const sameDay = currentUser.stepCountDate === stepDate;
-    const dailySteps = sameDay
-      ? Math.max(Number(currentUser.dailySteps) || 0, incomingSteps)
-      : incomingSteps;
+    const storageKey = getDailyStepsKey(userId, stepDate);
+    const storedStepsValue = await AsyncStorage.getItem(storageKey);
+    if (getUserId(get().user) !== userId) return null;
+    const latestUser = get().user;
+    const storedSteps = Number(storedStepsValue);
+    const existingSteps =
+      storedStepsValue !== null && Number.isFinite(storedSteps)
+        ? storedSteps
+        : latestUser.stepUserId === userId &&
+            latestUser.stepCountDate === stepDate
+          ? Number(latestUser.dailySteps) || 0
+          : 0;
+    const dailySteps = Math.max(existingSteps, incomingSteps);
     const stepBadges = [
       { target: 5000, badgeId: "step_5k" },
       { target: 10000, badgeId: "step_10k" },
@@ -260,19 +332,26 @@ export const useAuthStore = create((set, get) => ({
       { target: 30000, badgeId: "step_30k" },
     ]
       .filter(({ target }) => dailySteps >= target)
-      .map(({ badgeId }) => ({ badgeId, unlockedAt: new Date().toISOString() }));
+      .map(({ badgeId }) => ({
+        badgeId,
+        unlockedAt: new Date().toISOString(),
+      }));
 
     const updatedUser = {
-      ...currentUser,
+      ...latestUser,
       dailySteps,
       stepCountDate: stepDate,
+      stepUserId: userId,
       unlockedBadges: mergeUnlockedBadges(
-        currentUser.unlockedBadges,
+        latestUser.unlockedBadges,
         stepBadges,
       ),
     };
     set({ user: updatedUser });
-    await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+    await AsyncStorage.setItem(storageKey, String(dailySteps));
+    if (getUserId(get().user) === userId) {
+      await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+    }
     return updatedUser;
   },
 
@@ -332,6 +411,7 @@ export const useAuthStore = create((set, get) => ({
         user: formattedUser,
         token: userData.token || null,
         isLoading: false,
+        error: null,
       });
 
       return { success: true, user: formattedUser };
@@ -343,14 +423,23 @@ export const useAuthStore = create((set, get) => ({
   },
 
   logout: async () => {
+    const currentUserId = getUserId(get().user);
+    set({
+      user: null,
+      token: null,
+      error: null,
+      isLoading: false,
+      isRefreshingProfile: false,
+    });
     try {
-      await AsyncStorage.removeItem("token");
-      await AsyncStorage.removeItem("user");
-      await AsyncStorage.removeItem("hasCompletedOnboarding");
+      const storageKeys = ["token", "user", "hasCompletedOnboarding"];
+      if (currentUserId) {
+        storageKeys.push(getDailyStepsKey(currentUserId, getLocalDate()));
+      }
+      await Promise.all(storageKeys.map((key) => AsyncStorage.removeItem(key)));
     } catch (e) {
       console.error("Logout error:", e);
     }
-    set({ user: null, token: null, error: null });
   },
 
   deleteAccount: async () => {
@@ -394,19 +483,3 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 }));
-
-export const getThemeColors = (theme) => {
-  const isDark = theme === "dark";
-
-  return {
-    bg: isDark ? "#0F172A" : "#F8FAFC",
-    cardBg: isDark ? "#1E293B" : "#FFFFFF",
-    inputBg: isDark ? "#334155" : "#F1F5F9",
-    text: isDark ? "#FFFFFF" : "#0F172A",
-    textSecondary: isDark ? "#94A3B8" : "#64748B",
-    border: isDark ? "#334155" : "#E2E8F0",
-    primary: "#10B981",
-    glassGlow: isDark ? "rgba(16, 185, 129, 0.15)" : "rgba(16, 185, 129, 0.1)",
-    cardBgGlow: isDark ? "rgba(30, 41, 59, 0.85)" : "rgba(255, 255, 255, 0.9)",
-  };
-};

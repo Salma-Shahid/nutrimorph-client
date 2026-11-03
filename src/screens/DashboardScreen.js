@@ -9,6 +9,7 @@ import {
   FlatList,
   Alert,
   TextInput,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,10 +25,12 @@ import axios from "axios";
 
 export default function DashboardScreen({ navigation }) {
   const user = useAuthStore((state) => state.user);
+  const userId = String(user?._id || user?.id || "");
   const theme = useAuthStore((state) => state.theme);
   const colors = getThemeColors(theme);
   const updateUserStats = useAuthStore((state) => state.updateUserStats);
   const recordDailySteps = useAuthStore((state) => state.recordDailySteps);
+  const refreshUserProfile = useAuthStore((state) => state.refreshUserProfile);
   const token = useAuthStore((state) => state.token);
 
   const {
@@ -57,6 +60,7 @@ export default function DashboardScreen({ navigation }) {
   // Exercise & Steps State
   const [stepCount, setStepCount] = useState(0);
   const [caloriesBurned, setCaloriesBurned] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Device local date in YYYY-MM-DD format
   const getLocalDate = () => {
@@ -96,6 +100,8 @@ export default function DashboardScreen({ navigation }) {
       const res = await axios.get(`${BASE_URL}/api/exercise?date=${date}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      const activeUser = useAuthStore.getState().user;
+      if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
       if (res.data?.success) {
         setCaloriesBurned(res.data.data.caloriesBurned || 0);
         const updatedUser = await recordDailySteps(
@@ -109,6 +115,31 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const profileRefresh = await refreshUserProfile();
+      if (!profileRefresh.success) {
+        throw new Error(profileRefresh.message);
+      }
+
+      const todayDate = getLocalDate();
+      await Promise.all([
+        fetchTodayMeals(todayDate),
+        fetchWaterIntake(todayDate),
+        fetchWeeklySummary(),
+        fetchExerciseData(todayDate),
+      ]);
+    } catch (error) {
+      Alert.alert(
+        "Refresh failed",
+        error.message || "Could not refresh your dashboard data.",
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const handleAddSteps = async () => {
     const today = getLocalDate();
     const previousSteps =
@@ -116,6 +147,8 @@ export default function DashboardScreen({ navigation }) {
     const newTotalSteps = previousSteps + 500;
     setStepCount(newTotalSteps);
     await recordDailySteps(newTotalSteps, today);
+    const activeUser = useAuthStore.getState().user;
+    if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
 
     if (token) {
       try {
@@ -126,7 +159,11 @@ export default function DashboardScreen({ navigation }) {
           { date: today, steps: 500 },
           { headers: { Authorization: `Bearer ${token}` } },
         );
-        if (response.data?.userStats) {
+        const latestUser = useAuthStore.getState().user;
+        if (
+          String(latestUser?._id || latestUser?.id || "") === userId &&
+          response.data?.userStats
+        ) {
           await updateUserStats({
             ...response.data.userStats,
             dailySteps: response.data.data?.steps ?? newTotalSteps,
@@ -142,10 +179,7 @@ export default function DashboardScreen({ navigation }) {
     }
 
     if (previousSteps < 5000 && newTotalSteps >= 5000) {
-      Alert.alert(
-        "Milestone Unlocked! 🏆",
-        "You've crossed 5,000 steps today!",
-      );
+      Alert.alert("Milestone Unlocked!", "You've crossed 5,000 steps today!");
     }
   };
 
@@ -210,6 +244,7 @@ export default function DashboardScreen({ navigation }) {
         const todayDate = getLocalDate();
         try {
           await Promise.all([
+            refreshUserProfile(),
             fetchTodayMeals(todayDate),
             fetchWaterIntake(todayDate),
             fetchWeeklySummary(),
@@ -230,8 +265,8 @@ export default function DashboardScreen({ navigation }) {
             });
           }
         } catch (error) {
-          console.log(
-            "⚠️ Network offline or failed. Loading Dashboard from local cache...",
+          console.warn(
+            "Dashboard refresh failed; attempting to load cached data.",
           );
           if (isMounted) {
             await getDataFromCache(`meals_${todayDate}`);
@@ -246,7 +281,7 @@ export default function DashboardScreen({ navigation }) {
       return () => {
         isMounted = false;
       };
-    }, []),
+    }, [refreshUserProfile]),
   );
 
   const handleWaterChange = async (newGlasses) => {
@@ -298,7 +333,7 @@ export default function DashboardScreen({ navigation }) {
       }
     } catch (err) {
       setAiRecoveryTip(
-        "💡 Rescue Tip: Keep your next meal light with leafy greens and lean protein. Drink an extra 2 glasses of water to stabilize metabolism.",
+        " Rescue Tip: Keep your next meal light with leafy greens and lean protein. Drink an extra 2 glasses of water to stabilize metabolism.",
       );
     } finally {
       setRecoveryLoading(false);
@@ -314,7 +349,17 @@ export default function DashboardScreen({ navigation }) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <View>
@@ -322,7 +367,7 @@ export default function DashboardScreen({ navigation }) {
               Welcome back,
             </Text>
             <Text style={[styles.userName, { color: colors.text }]}>
-              {user?.name || "User Name"} 👋
+              {user?.name || "User Name"}
             </Text>
           </View>
 
@@ -366,7 +411,7 @@ export default function DashboardScreen({ navigation }) {
                 }
               }}
             >
-              <Text style={styles.badgeText}>{isPro ? "PRO 👑" : "FREE"}</Text>
+              <Text style={styles.badgeText}>{isPro ? "PRO" : "FREE"}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -384,7 +429,7 @@ export default function DashboardScreen({ navigation }) {
             <Ionicons name="warning" size={22} color="#EF4444" />
             <View style={{ flex: 1, marginLeft: 8 }}>
               <Text style={[styles.alertText, { color: colors.text }]}>
-                Diet Deviation Alert: Exceeded goal by{" "}
+                Diet Deviation Alert: Exceeded goal by{""}
                 {currentEaten - calorieGoal} kcal!
               </Text>
               <TouchableOpacity
@@ -401,7 +446,7 @@ export default function DashboardScreen({ navigation }) {
                 <Text style={styles.recoveryBtnText}>
                   {recoveryLoading
                     ? "Generating AI Rescue..."
-                    : "Ask AI Recovery Assistant 🤖"}
+                    : "Ask AI Recovery Assistant"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -590,6 +635,7 @@ export default function DashboardScreen({ navigation }) {
 
         {/* Health & Device Sync Component */}
         <DeviceSyncSection
+          key={String(user?._id || user?.id || "signed-out")}
           colors={colors}
           onSyncSuccess={(syncedSteps) => {
             setStepCount(syncedSteps);
@@ -613,7 +659,7 @@ export default function DashboardScreen({ navigation }) {
               marginBottom: 10,
             }}
           >
-            Log Weight & monitor your target trajectory! 📉
+            Log Weight & monitor your target trajectory!
           </Text>
           <View
             style={[
@@ -951,7 +997,7 @@ export default function DashboardScreen({ navigation }) {
                       <Text
                         style={{ color: colors.textSecondary, fontSize: 12 }}
                       >
-                        P: {item.protein || 0}g | C: {item.carbs || 0}g | F:{" "}
+                        P: {item.protein || 0}g | C: {item.carbs || 0}g | F:{""}
                         {item.fats || 0}g
                       </Text>
                     </View>
