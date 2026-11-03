@@ -141,10 +141,17 @@ export default function SignupScreen({ navigation }) {
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
+            autoCapitalize="none"
+            autoCorrect={false}
           />
           <TouchableOpacity
-            onPress={() => setShowPassword(!showPassword)}
+            onPress={() => setShowPassword((visible) => !visible)}
             style={styles.eyeIconBtn}
+            accessibilityRole="button"
+            accessibilityLabel={
+              showPassword ? "Hide password" : "Show password"
+            }
+            accessibilityState={{ selected: showPassword }}
           >
             <Ionicons
               name={showPassword ? "eye-off-outline" : "eye-outline"}

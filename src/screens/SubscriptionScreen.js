@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AppState,
   View,
   Text,
   TouchableOpacity,
@@ -12,46 +13,110 @@ import axios from "axios";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 
-export default function SubscriptionScreen({ navigation }) {
-  const { theme, user, token } = useAuthStore();
+const BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
+
+export default function SubscriptionScreen() {
+  const { theme, user, token, setUser } = useAuthStore();
   const colors = getThemeColors(theme || "dark");
   const [loading, setLoading] = useState(false);
+  const [billingCycle, setBillingCycle] = useState("monthly");
+  const checkoutPendingRef = useRef(false);
+  const verificationInProgressRef = useRef(false);
 
-  const handleSubscribePro = async () => {
+  const verifyCheckout = useCallback(async () => {
+    if (!token || verificationInProgressRef.current) return;
+
+    verificationInProgressRef.current = true;
     try {
-      setLoading(true);
-
-      // Backend API call jo Stripe Checkout Session create kare gi
-      const response = await axios.post(
-        "https://your-backend-api.com/api/payment/create-checkout-session",
-        { userId: user?._id || user?.id, email: user?.email },
+      const verification = await axios.post(
+        `${BASE_URL}/api/payment/verify-payment`,
+        {},
         { headers: { Authorization: `Bearer ${token}` } },
       );
-
-      const checkoutUrl = response.data?.url;
-
-      if (checkoutUrl) {
-        setLoading(false);
-        // Expo Web Browser mein Stripe Checkout page open karein
-        const result = await WebBrowser.openBrowserAsync(checkoutUrl);
-
-        // Jab user browser band karke wapas aaye toh subscription status verify karein
-        if (result.type === "dismiss") {
-          console.log("User returned from Stripe checkout.");
-          // Yahan aap user profile ko refresh kar sakti hain taake Pro plan status update ho jaye
-        }
-      } else {
-        setLoading(false);
-        Alert.alert("Error", "Could not initiate payment session.");
+      if (verification.data?.user) {
+        const verifiedUser = verification.data.user;
+        await setUser({
+          subscriptionTier: verifiedUser.subscriptionTier,
+          isPro: verifiedUser.isPro,
+          subscriptionExpiresAt: verifiedUser.subscriptionExpiresAt,
+        });
       }
     } catch (error) {
-      setLoading(false);
-      console.log("Stripe Checkout Error:", error);
+      console.error("Could not verify subscription after checkout:", error);
+      Alert.alert(
+        "Subscription Status",
+        error?.response?.data?.message ||
+          "Could not refresh your subscription status. Please try again.",
+      );
+    } finally {
+      verificationInProgressRef.current = false;
+    }
+  }, [setUser, token]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active" && checkoutPendingRef.current) {
+        checkoutPendingRef.current = false;
+        verifyCheckout();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [verifyCheckout]);
+
+  const handleSubscribe = async () => {
+    if (!token) {
+      Alert.alert("Sign in required", "Please sign in before subscribing.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await axios.post(
+        `${BASE_URL}/api/payment/create-checkout-session`,
+        { plan: "pro", billingCycle },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const checkoutUrl = response.data?.url;
+      if (!checkoutUrl) {
+        throw new Error(
+          response.data?.message || "Could not initiate payment session.",
+        );
+      }
+
+      checkoutPendingRef.current = true;
+      const browserResult = await WebBrowser.openBrowserAsync(checkoutUrl);
+      if (
+        browserResult.type !== "opened" &&
+        checkoutPendingRef.current
+      ) {
+        checkoutPendingRef.current = false;
+        const verification = await axios.post(
+          `${BASE_URL}/api/payment/verify-payment`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (verification.data?.user) {
+          const verifiedUser = verification.data.user;
+          await setUser({
+            subscriptionTier: verifiedUser.subscriptionTier,
+            isPro: verifiedUser.isPro,
+            subscriptionExpiresAt: verifiedUser.subscriptionExpiresAt,
+          });
+        }
+      }
+    } catch (error) {
+      checkoutPendingRef.current = false;
+      console.error("Stripe Checkout Error:", error);
       Alert.alert(
         "Payment Error",
         error?.response?.data?.message ||
+          error.message ||
           "Something went wrong with Stripe checkout.",
       );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -65,17 +130,63 @@ export default function SubscriptionScreen({ navigation }) {
         tracking.
       </Text>
 
-      <TouchableOpacity
-        style={[styles.proButton, { backgroundColor: colors.primary }]}
-        onPress={handleSubscribePro}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#FFF" />
-        ) : (
-          <Text style={styles.proButtonText}>Upgrade Now ($9.99/mo)</Text>
-        )}
-      </TouchableOpacity>
+      {user?.subscriptionTier === "pro" || user?.isPro ? (
+        <Text style={[styles.currentPlan, { color: colors.primary }]}>
+          Your Pro subscription is active.
+        </Text>
+      ) : (
+        <>
+          <View style={styles.planRow}>
+            {[
+              { id: "monthly", title: "Monthly", price: "$9.99 / month" },
+              { id: "yearly", title: "Yearly", price: "$99 / year" },
+            ].map((plan) => (
+              <TouchableOpacity
+                key={plan.id}
+                style={[
+                  styles.planOption,
+                  {
+                    backgroundColor:
+                      billingCycle === plan.id
+                        ? colors.glassGlow
+                        : colors.cardBg,
+                    borderColor:
+                      billingCycle === plan.id
+                        ? colors.primary
+                        : colors.border,
+                  },
+                ]}
+                onPress={() => setBillingCycle(plan.id)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: billingCycle === plan.id }}
+              >
+                <Text style={[styles.planTitle, { color: colors.text }]}>
+                  {plan.title}
+                </Text>
+                <Text
+                  style={[styles.planPrice, { color: colors.textSecondary }]}
+                >
+                  {plan.price}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.proButton, { backgroundColor: colors.primary }]}
+            onPress={handleSubscribe}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.proButtonText}>
+                Continue to secure checkout
+              </Text>
+            )}
+          </TouchableOpacity>
+        </>
+      )}
     </View>
   );
 }
@@ -93,7 +204,24 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     textAlign: "center",
   },
-  subtitle: { fontSize: 14, textAlign: "center", marginBottom: 30 },
+  subtitle: { fontSize: 14, textAlign: "center", marginBottom: 24 },
+  currentPlan: { fontSize: 16, fontWeight: "bold", textAlign: "center" },
+  planRow: {
+    width: "100%",
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 20,
+  },
+  planOption: {
+    flex: 1,
+    minHeight: 86,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    justifyContent: "center",
+  },
+  planTitle: { fontSize: 15, fontWeight: "bold", marginBottom: 6 },
+  planPrice: { fontSize: 13 },
   proButton: {
     width: "100%",
     height: 50,

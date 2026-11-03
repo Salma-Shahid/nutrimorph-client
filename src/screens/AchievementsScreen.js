@@ -16,15 +16,18 @@ export default function AchievementsScreen({ navigation }) {
   const theme = useAuthStore((state) => state.theme) || "dark";
   const colors = getThemeColors(theme);
 
-  // Robustly parse unlockedBadges from backend
-  const unlockedBadges = Array.isArray(user.unlockedBadges)
-    ? user.unlockedBadges
-        .map((b) => (typeof b === "string" ? b : b?.badgeId || b?.id))
-        .filter(Boolean)
-    : [];
+  const normalizeBadgeId = (badge) => {
+    const badgeId =
+      typeof badge === "string" ? badge : badge?.badgeId || badge?.id;
+    return String(badgeId || "").replace(/^steps_/, "step_");
+  };
+  const unlockedBadges = new Set(
+    (Array.isArray(user.unlockedBadges) ? user.unlockedBadges : [])
+      .map(normalizeBadgeId)
+      .filter(Boolean),
+  );
 
-  // Strict zero fallbacks to prevent auto-unlocking badges on fresh login
-  const currentSteps = Number(user.steps || user.dailySteps || 0);
+  const currentSteps = Number(user.dailySteps || 0);
   const currentWater = Number(user.water || user.dailyWater || 0);
   const weightChange = Number(user.weightChange || 0);
 
@@ -101,7 +104,9 @@ export default function AchievementsScreen({ navigation }) {
               <View style={styles.gridContainer}>
                 {catBadges.map((badge) => {
                   const badgeKey = badge.id || badge.badgeId;
-                  let isUnlocked = unlockedBadges.includes(badgeKey);
+                  let isUnlocked = unlockedBadges.has(
+                    normalizeBadgeId(badgeKey),
+                  );
 
                   if (!isUnlocked) {
                     isUnlocked = checkIsLocallyUnlocked(badgeKey, badge.title);

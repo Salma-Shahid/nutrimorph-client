@@ -61,6 +61,14 @@
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics",
       [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ],
+      [
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-3940256099942544~3347511713",

@@ -6,6 +6,39 @@ const BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
 const API_URL = `${BASE_URL}/api/auth`;
 
+const getLocalDate = () => {
+  const date = new Date();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+};
+
+const normalizeBadgeId = (badge) => {
+  const badgeId =
+    typeof badge === "string" ? badge : badge?.badgeId || badge?.id;
+  return String(badgeId || "").replace(/^steps_/, "step_");
+};
+
+const mergeUnlockedBadges = (...badgeLists) => {
+  const badgesById = new Map();
+
+  badgeLists.forEach((badges) => {
+    if (!Array.isArray(badges)) return;
+
+    badges.forEach((badge) => {
+      const badgeId = normalizeBadgeId(badge);
+      if (!badgeId || badgesById.has(badgeId)) return;
+
+      badgesById.set(
+        badgeId,
+        typeof badge === "string" ? { badgeId } : { ...badge, badgeId },
+      );
+    });
+  });
+
+  return Array.from(badgesById.values());
+};
+
 export const useAuthStore = create((set, get) => ({
   user: null,
   token: null,
@@ -58,8 +91,14 @@ export const useAuthStore = create((set, get) => ({
     }
     const currentUser = get().user || {};
     const mergedUser = { ...currentUser, ...userData };
-    await AsyncStorage.setItem("user", JSON.stringify(mergedUser));
+    if (Array.isArray(userData.unlockedBadges)) {
+      mergedUser.unlockedBadges = mergeUnlockedBadges(
+        currentUser.unlockedBadges,
+        userData.unlockedBadges,
+      );
+    }
     set({ user: mergedUser });
+    await AsyncStorage.setItem("user", JSON.stringify(mergedUser));
   },
 
   // Real-time DB Sync & Plan Update
@@ -192,8 +231,49 @@ export const useAuthStore = create((set, get) => ({
     if (!currentUser) return;
 
     const updatedUser = { ...currentUser, ...newStats };
-    await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+    updatedUser.unlockedBadges = mergeUnlockedBadges(
+      currentUser.unlockedBadges,
+      newStats.unlockedBadges,
+    );
     set({ user: updatedUser });
+    await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+  },
+
+  recordDailySteps: async (steps, date) => {
+    const currentUser = get().user;
+    if (!currentUser) return null;
+
+    const stepDate = date || getLocalDate();
+    const incomingSteps = Number.isFinite(Number(steps))
+      ? Math.max(0, Math.floor(Number(steps)))
+      : 0;
+    const sameDay = currentUser.stepCountDate === stepDate;
+    const dailySteps = sameDay
+      ? Math.max(Number(currentUser.dailySteps) || 0, incomingSteps)
+      : incomingSteps;
+    const stepBadges = [
+      { target: 5000, badgeId: "step_5k" },
+      { target: 10000, badgeId: "step_10k" },
+      { target: 15000, badgeId: "step_15k" },
+      { target: 20000, badgeId: "step_20k" },
+      { target: 25000, badgeId: "step_25k" },
+      { target: 30000, badgeId: "step_30k" },
+    ]
+      .filter(({ target }) => dailySteps >= target)
+      .map(({ badgeId }) => ({ badgeId, unlockedAt: new Date().toISOString() }));
+
+    const updatedUser = {
+      ...currentUser,
+      dailySteps,
+      stepCountDate: stepDate,
+      unlockedBadges: mergeUnlockedBadges(
+        currentUser.unlockedBadges,
+        stepBadges,
+      ),
+    };
+    set({ user: updatedUser });
+    await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+    return updatedUser;
   },
 
   // Signup / Register Function
@@ -266,6 +346,7 @@ export const useAuthStore = create((set, get) => ({
     try {
       await AsyncStorage.removeItem("token");
       await AsyncStorage.removeItem("user");
+      await AsyncStorage.removeItem("hasCompletedOnboarding");
     } catch (e) {
       console.error("Logout error:", e);
     }

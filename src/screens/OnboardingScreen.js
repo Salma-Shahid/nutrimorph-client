@@ -10,27 +10,22 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 import { WORLD_LANGUAGES } from "../constants/languages";
 
 const TOTAL_STEPS = 10;
 
-export default function OnboardingScreen({ navigation }) {
-  const { theme, updateProfile, isLoading } = useAuthStore();
+export default function OnboardingScreen() {
+  const { theme, user, updateProfile, isLoading } = useAuthStore();
   const colors = getThemeColors(theme || "dark");
 
   // Wizard Steps State (Total 10 Steps)
   const [currentStep, setCurrentStep] = useState(1);
 
-  // Loading Calculation Overlay State
-  const [isCalculating, setIsCalculating] = useState(false);
-  const [calcStatus, setCalcStatus] = useState("Analyzing your metrics...");
-
   // Form Data States
   const [language, setLanguage] = useState("English");
-  const [name, setName] = useState("");
+  const [name, setName] = useState(user?.name || "");
   const [gender, setGender] = useState("male");
   const [age, setAge] = useState("25");
 
@@ -54,13 +49,14 @@ export default function OnboardingScreen({ navigation }) {
       Alert.alert("Validation Error", "Please enter your name.");
       return;
     }
+
+    if (currentStep === 9) {
+      handleCalculateTargets();
+      return;
+    }
+
     if (currentStep < TOTAL_STEPS) {
-      if (currentStep === 9) {
-        // Trigger calculation and backend save on step 9 transition
-        handleCalculateAndSave();
-      } else {
-        setCurrentStep(currentStep + 1);
-      }
+      setCurrentStep(currentStep + 1);
     }
   };
 
@@ -70,7 +66,7 @@ export default function OnboardingScreen({ navigation }) {
     }
   };
 
-  const handleCalculateAndSave = async () => {
+  const handleCalculateTargets = () => {
     let finalHeight = parseFloat(heightCm);
     if (heightUnit === "ft") {
       const ft = parseFloat(heightFeet) || 0;
@@ -78,117 +74,96 @@ export default function OnboardingScreen({ navigation }) {
       finalHeight = Math.round((ft * 12 + inch) * 2.54);
     }
 
-    if (!age || !weight || !finalHeight) {
+    const numAge = Number(age);
+    const numWeight = Number(weight);
+    const numTargetWeight = Number(targetWeight);
+
+    if (
+      !Number.isFinite(numAge) ||
+      !Number.isFinite(numWeight) ||
+      !Number.isFinite(numTargetWeight) ||
+      !Number.isFinite(finalHeight) ||
+      numAge <= 0 ||
+      numWeight <= 0 ||
+      numTargetWeight <= 0 ||
+      finalHeight <= 0
+    ) {
       Alert.alert(
         "Validation Error",
-        "Please fill all required health fields.",
+        "Enter valid positive values for age, height, and both weights.",
       );
       return;
     }
 
-    const numAge = parseInt(age);
-    const numWeight = parseFloat(weight);
-    const numTargetWeight = parseFloat(targetWeight);
+    const activityMultipliers = {
+      "Not very active": 1.2,
+      "Lightly active": 1.375,
+      Active: 1.55,
+      "Very active": 1.725,
+    };
+    let bmr = 10 * numWeight + 6.25 * finalHeight - 5 * numAge;
+    bmr += gender === "male" ? 5 : -161;
 
-    if (isNaN(numAge) || isNaN(numWeight) || isNaN(finalHeight)) {
-      Alert.alert("Invalid Input", "Please enter valid numeric values.");
-      return;
-    }
+    let targetCaloriesCalc = Math.round(
+      bmr * (activityMultipliers[activityLevel] || 1.375),
+    );
+    if (goal === "weight_loss") targetCaloriesCalc -= 500;
+    else if (goal === "muscle_gain") targetCaloriesCalc += 300;
+    targetCaloriesCalc = Math.max(1200, targetCaloriesCalc);
 
-    setIsCalculating(true);
-    setCalcStatus("Calculating BMR, TDEE & BMI...");
-
-    setTimeout(() => {
-      setCalcStatus("Optimizing Protein, Carbs & Fats split...");
-    }, 1200);
-
-    setTimeout(async () => {
-      setCalcStatus("Finalizing Your Personalized Dashboard...");
-
-      // Calculate BMR & TDEE
-      let bmr = 10 * numWeight + 6.25 * finalHeight - 5 * numAge;
-      bmr = gender === "male" ? bmr + 5 : bmr - 161;
-
-      let targetCaloriesCalc = Math.round(bmr * 1.375);
-      if (goal === "weight_loss") targetCaloriesCalc -= 500;
-      else if (goal === "muscle_gain") targetCaloriesCalc += 300;
-
-      setDailyCalories(targetCaloriesCalc);
-
-      // Calculate BMI (Weight in kg / (Height in meters squared))
-      const heightInMeters = finalHeight / 100;
-      const bmiValue = (numWeight / (heightInMeters * heightInMeters)).toFixed(
-        1,
-      );
-      setCalculatedBmi(bmiValue);
-
-      const profileData = {
-        language,
-        name,
-        age: numAge,
-        gender,
-        weight: numWeight,
-        height: finalHeight,
-        targetWeight: numTargetWeight,
-        fitnessGoal: goal,
-        activityLevel,
-        preferredMealsCount,
-        dailyCalorieTarget: targetCaloriesCalc,
-        proteinTarget: Math.round((targetCaloriesCalc * 0.3) / 4),
-        carbsTarget: Math.round((targetCaloriesCalc * 0.4) / 4),
-        fatsTarget: Math.round((targetCaloriesCalc * 0.3) / 9),
-        medicalCondition: medicalCondition || "None",
-        bmi: bmiValue,
-        isOnboarded: true,
-        isOnboardingCompleted: true,
-      };
-
-      const res = await updateProfile(profileData);
-      setIsCalculating(false);
-
-      if (!res?.success) {
-        Alert.alert(
-          "Save Failed",
-          res?.message || "Could not save health profile.",
-        );
-      } else {
-        setCurrentStep(10); // Move to final milestone summary step
-      }
-    }, 2800);
+    setDailyCalories(targetCaloriesCalc);
+    const heightInMeters = finalHeight / 100;
+    setCalculatedBmi(
+      (numWeight / (heightInMeters * heightInMeters)).toFixed(1),
+    );
+    setCurrentStep(10);
   };
 
   const handleCompleteOnboarding = async () => {
     try {
-      await AsyncStorage.setItem("hasCompletedOnboarding", "true");
-      navigation.replace("Main");
+      const finalHeight =
+        heightUnit === "ft"
+          ? Math.round(
+              ((parseFloat(heightFeet) || 0) * 12 +
+                (parseFloat(heightInches) || 0)) *
+                2.54,
+            )
+          : Number(heightCm);
+      const calories = Number(dailyCalories);
+      const profileData = {
+        language,
+        name: name.trim() || user?.name || "",
+        age: Number(age),
+        gender,
+        weight: Number(weight),
+        height: finalHeight,
+        targetWeight: Number(targetWeight),
+        fitnessGoal: goal,
+        activityLevel,
+        preferredMealsCount,
+        dailyCalories: calories,
+        dailyCalorieTarget: calories,
+        proteinTarget: Math.round((calories * 0.3) / 4),
+        carbsTarget: Math.round((calories * 0.4) / 4),
+        fatsTarget: Math.round((calories * 0.3) / 9),
+        medicalCondition: medicalCondition || "None",
+        bmi: Number(calculatedBmi),
+        isOnboarded: true,
+        isOnboardingCompleted: true,
+      };
+      const result = await updateProfile(profileData);
+
+      if (!result?.success) {
+        Alert.alert(
+          "Save Failed",
+          result?.message || "Could not save health profile.",
+        );
+      }
     } catch (error) {
-      console.log("Error saving onboarding state:", error);
+      console.error("Error completing onboarding:", error);
+      Alert.alert("Save Failed", "Could not complete onboarding.");
     }
   };
-
-  if (isCalculating) {
-    return (
-      <SafeAreaView
-        style={[
-          styles.container,
-          styles.calcOverlay,
-          { backgroundColor: colors.bg },
-        ]}
-      >
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-          style={{ marginBottom: 20 }}
-        />
-        <Text style={[styles.calcTitle, { color: colors.primary }]}>
-          Creating Your Custom Plan 🧬
-        </Text>
-        <Text style={[styles.calcSubtitle, { color: colors.textSecondary }]}>
-          {calcStatus}
-        </Text>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -916,7 +891,7 @@ export default function OnboardingScreen({ navigation }) {
                 { backgroundColor: colors.cardBg, borderColor: colors.border },
               ]}
               onPress={handlePrevStep}
-              disabled={isLoading || isCalculating}
+              disabled={isLoading}
             >
               <Text
                 style={[styles.backBtnText, { color: colors.textSecondary }]}
@@ -935,9 +910,9 @@ export default function OnboardingScreen({ navigation }) {
             onPress={
               currentStep === 10 ? handleCompleteOnboarding : handleNextStep
             }
-            disabled={isLoading || isCalculating}
+            disabled={isLoading}
           >
-            {isLoading || isCalculating ? (
+            {isLoading ? (
               <ActivityIndicator color="#FFF" />
             ) : (
               <Text style={styles.submitBtnText}>
@@ -959,20 +934,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 20,
-  },
-  calcOverlay: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  calcTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
-    textAlign: "center",
-  },
-  calcSubtitle: {
-    fontSize: 14,
-    textAlign: "center",
-    marginTop: 8,
   },
   progressContainer: {
     flexDirection: "row",

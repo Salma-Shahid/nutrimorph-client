@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Pedometer } from "expo-pedometer";
 import {
   StyleSheet,
   Text,
@@ -28,6 +27,7 @@ export default function DashboardScreen({ navigation }) {
   const theme = useAuthStore((state) => state.theme);
   const colors = getThemeColors(theme);
   const updateUserStats = useAuthStore((state) => state.updateUserStats);
+  const recordDailySteps = useAuthStore((state) => state.recordDailySteps);
   const token = useAuthStore((state) => state.token);
 
   const {
@@ -59,47 +59,34 @@ export default function DashboardScreen({ navigation }) {
   const [caloriesBurned, setCaloriesBurned] = useState(0);
 
   // Device local date in YYYY-MM-DD format
-  const getLocalDate = () => new Date().toLocaleDateString("en-CA");
+  const getLocalDate = () => {
+    const date = new Date();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${date.getFullYear()}-${month}-${day}`;
+  };
 
-  // Pedometer Real-time Step Counter & Badge Check
   useEffect(() => {
-    let subscription;
-    const subscribeSteps = async () => {
-      try {
-        const isAvailable = await Pedometer.isAvailableAsync();
-        if (isAvailable) {
-          const end = new Date();
-          const start = new Date();
-          start.setHours(0, 0, 0, 0); // Aaj ki subah se steps count karein
+    const today = getLocalDate();
+    if (user?.stepCountDate === today) {
+      setStepCount(Number(user.dailySteps) || 0);
+      return;
+    }
 
-          const pastStepsResult = await Pedometer.getStepCountAsync(start, end);
-          if (pastStepsResult) {
-            setStepCount(pastStepsResult.steps);
-          }
-
-          subscription = Pedometer.watchDeviceStepCount((result) => {
-            const currentSteps = result.steps;
-            setStepCount(currentSteps);
-
-            // Dynamic Achievement Badge Check (Only when steps >= 5000)
-            if (currentSteps >= 5000) {
-              // Trigger badge unlock API or state update safely
-              console.log("5000 steps milestone unlocked!");
-            }
-          });
-        }
-      } catch (error) {
-        console.log("Pedometer not available or permission denied:", error);
-      }
-    };
-
-    subscribeSteps();
-    return () => {
-      if (subscription && typeof subscription.remove === "function") {
-        subscription.remove();
-      }
-    };
-  }, []);
+    setStepCount(0);
+    if (!user?.isDeviceSynced) {
+      recordDailySteps(0, today)
+        .then((updatedUser) => setStepCount(updatedUser?.dailySteps || 0))
+        .catch((error) =>
+          console.error("Could not reset the local daily step count:", error),
+        );
+    }
+  }, [
+    recordDailySteps,
+    user?.dailySteps,
+    user?.isDeviceSynced,
+    user?.stepCountDate,
+  ]);
 
   // Fetch Exercise & Steps from backend
   const fetchExerciseData = async (date) => {
@@ -111,17 +98,50 @@ export default function DashboardScreen({ navigation }) {
       });
       if (res.data?.success) {
         setCaloriesBurned(res.data.data.caloriesBurned || 0);
+        const updatedUser = await recordDailySteps(
+          Number(res.data.data.steps) || 0,
+          date,
+        );
+        setStepCount(updatedUser?.dailySteps || 0);
       }
     } catch (error) {
       console.log("Error fetching exercise data:", error.message);
     }
   };
 
-  // Add Manual Steps Handler
   const handleAddSteps = async () => {
-    const newTotalSteps = stepCount + 500;
+    const today = getLocalDate();
+    const previousSteps =
+      user?.stepCountDate === today ? Number(user?.dailySteps) || 0 : 0;
+    const newTotalSteps = previousSteps + 500;
     setStepCount(newTotalSteps);
-    if (newTotalSteps >= 5000) {
+    await recordDailySteps(newTotalSteps, today);
+
+    if (token) {
+      try {
+        const BASE_URL =
+          process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
+        const response = await axios.post(
+          `${BASE_URL}/api/exercise`,
+          { date: today, steps: 500 },
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (response.data?.userStats) {
+          await updateUserStats({
+            ...response.data.userStats,
+            dailySteps: response.data.data?.steps ?? newTotalSteps,
+            stepCountDate: today,
+          });
+        }
+      } catch (error) {
+        console.error(
+          "Could not sync manually added steps:",
+          error?.response?.data?.message || error.message,
+        );
+      }
+    }
+
+    if (previousSteps < 5000 && newTotalSteps >= 5000) {
       Alert.alert(
         "Milestone Unlocked! 🏆",
         "You've crossed 5,000 steps today!",
@@ -342,7 +362,7 @@ export default function DashboardScreen({ navigation }) {
               ]}
               onPress={() => {
                 if (!isPro) {
-                  navigation.navigate("Subscription");
+                  navigation.navigate("SubscriptionScreen");
                 }
               }}
             >

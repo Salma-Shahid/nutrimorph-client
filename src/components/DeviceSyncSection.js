@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -7,91 +7,133 @@ import {
   Alert,
   Platform,
 } from "react-native";
+import axios from "axios";
 import { Ionicons } from "@expo/vector-icons";
-import { Pedometer } from "expo-pedometer";
+import * as Pedometer from "expo-pedometer";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 
+const BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
+const STEP_SYNC_INTERVAL_MS = 15000;
+
+const getLocalDate = () => {
+  const date = new Date();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+};
+
 export default function DeviceSyncSection({ onSyncSuccess }) {
-  const { theme, user, updateUserStats } = useAuthStore();
+  const { theme, user, token, updateUserStats, recordDailySteps } =
+    useAuthStore();
   const colors = getThemeColors(theme);
   const [isSynced, setIsSynced] = useState(user?.isDeviceSynced || false);
   const [syncing, setSyncing] = useState(false);
+  const onSyncSuccessRef = useRef(onSyncSuccess);
 
-  // Monitor real-time pedometer subscription if synced
   useEffect(() => {
-    let subscription;
-    const watchSteps = async () => {
-      if (isSynced) {
-        try {
-          const isAvailable = await Pedometer.isAvailableAsync();
-          console.log("Pedometer available:", isAvailable);
+    onSyncSuccessRef.current = onSyncSuccess;
+  }, [onSyncSuccess]);
 
-          if (isAvailable) {
-            const end = new Date();
-            const start = new Date();
-            start.setHours(0, 0, 0, 0); // Aaj ki subah se steps count
+  useEffect(() => {
+    setIsSynced(Boolean(user?.isDeviceSynced));
+  }, [user?.isDeviceSynced]);
 
-            const pastStepsResult = await Pedometer.getStepCountAsync(
-              start,
-              end,
+  useEffect(() => {
+    if (!isSynced) return undefined;
+
+    let isCancelled = false;
+    let isRefreshing = false;
+    let lastPushedSteps = null;
+    let interval;
+
+    const refreshSteps = async () => {
+      if (isRefreshing) return;
+      isRefreshing = true;
+
+      try {
+        const steps = await Pedometer.getTodayStepCountAsync();
+        if (isCancelled) return;
+
+        const date = getLocalDate();
+        const updatedUser = await recordDailySteps(steps, date);
+        if (isCancelled) return;
+        const dailySteps = updatedUser?.dailySteps ?? steps;
+        onSyncSuccessRef.current?.(dailySteps);
+
+        if (token && steps !== lastPushedSteps) {
+          try {
+            const response = await axios.post(
+              `${BASE_URL}/api/exercise`,
+              { date, stepsTotal: steps },
+              { headers: { Authorization: `Bearer ${token}` } },
             );
-            const initialSteps = pastStepsResult ? pastStepsResult.steps : 0;
-            console.log("Initial past steps:", initialSteps);
+            lastPushedSteps = steps;
 
-            if (updateUserStats) {
-              updateUserStats({
-                isDeviceSynced: true,
-                dailySteps: initialSteps,
+            if (response.data?.userStats) {
+              await updateUserStats({
+                ...response.data.userStats,
+                dailySteps: response.data.data?.steps ?? dailySteps,
+                stepCountDate: date,
               });
             }
-            if (onSyncSuccess) {
-              onSyncSuccess(initialSteps);
-            }
-
-            // Real-time step listener
-            subscription = Pedometer.watchStepCount((result) => {
-              console.log("Live pedometer step update:", result.steps);
-              const liveSteps = result.steps;
-              if (updateUserStats) {
-                updateUserStats({
-                  isDeviceSynced: true,
-                  dailySteps: liveSteps,
-                });
-              }
-              if (onSyncSuccess) {
-                onSyncSuccess(liveSteps);
-              }
-            });
-          } else {
-            console.log(
-              "Pedometer sensor is not available on this device/emulator.",
+          } catch (error) {
+            console.error(
+              "Could not sync daily steps to the account:",
+              error?.response?.data?.message || error.message,
             );
           }
-        } catch (error) {
-          console.log("Pedometer live watch error:", error);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          console.error("Could not read today's device step count:", error);
+        }
+      } finally {
+        isRefreshing = false;
+      }
+    };
+
+    const startPolling = async () => {
+      try {
+        const permission = await Pedometer.getPermissionsAsync();
+        if (isCancelled) return;
+        if (permission.status !== "granted") {
+          setIsSynced(false);
+          await updateUserStats({ isDeviceSynced: false });
+          return;
+        }
+
+        const isAvailable = await Pedometer.isAvailableAsync();
+        if (isCancelled) return;
+        if (!isAvailable) {
+          console.warn("Pedometer is unavailable on this device.");
+          return;
+        }
+
+        await refreshSteps();
+        if (!isCancelled) {
+          interval = setInterval(refreshSteps, STEP_SYNC_INTERVAL_MS);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          console.error("Could not start device step synchronization:", error);
         }
       }
     };
 
-    watchSteps();
+    startPolling();
 
     return () => {
-      if (subscription && typeof subscription.remove === "function") {
-        subscription.remove();
-      }
+      isCancelled = true;
+      if (interval) clearInterval(interval);
     };
-  }, [isSynced]);
+  }, [isSynced, recordDailySteps, token, updateUserStats]);
 
-  // Helper for Disconnect logic
   const executeDisconnect = () => {
     setIsSynced(false);
-    if (updateUserStats) {
-      updateUserStats({ isDeviceSynced: false, dailySteps: 0 });
-    }
-    if (onSyncSuccess) {
-      onSyncSuccess(0);
-    }
+    updateUserStats({ isDeviceSynced: false });
+    onSyncSuccessRef.current?.(Number(user?.dailySteps) || 0);
     const msg = "Device successfully disconnected.";
     if (Platform.OS === "web") {
       alert(msg);
@@ -127,50 +169,46 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
       const providerName =
         Platform.OS === "ios"
           ? "Apple Health"
-          : "Google Fit / Pedometer Sensor";
+          : "Health Connect / Pedometer Sensor";
 
       const confirmPermissionPrompt = async () => {
         setSyncing(true);
         try {
           const permissionResult = await Pedometer.requestPermissionsAsync();
-          console.log("Pedometer permission result:", permissionResult);
 
-          if (!permissionResult.granted) {
+          if (permissionResult.status !== "granted") {
             setSyncing(false);
-            Alert.alert(
-              "Permission Denied",
-              "Physical activity permission is required to track steps.",
-            );
+            const message =
+              "Physical activity permission is required to track steps.";
+            if (Platform.OS === "web") {
+              alert(message);
+            } else {
+              Alert.alert("Permission Denied", message);
+            }
             return;
           }
 
           const isAvailable = await Pedometer.isAvailableAsync();
           if (!isAvailable) {
             setSyncing(false);
-            Alert.alert(
-              "Not Available",
-              "Pedometer sensor is not available on this device (Emulators do not support physical step sensors).",
-            );
+            const message =
+              "Pedometer is unavailable on this device. Physical step sensors are not available in most emulators.";
+            if (Platform.OS === "web") {
+              alert(message);
+            } else {
+              Alert.alert("Not Available", message);
+            }
             return;
           }
 
-          const end = new Date();
-          const start = new Date();
-          start.setHours(0, 0, 0, 0);
-
-          const pastStepsResult = await Pedometer.getStepCountAsync(start, end);
-          const syncedSteps = pastStepsResult ? pastStepsResult.steps : 0;
+          const syncedSteps = await Pedometer.getTodayStepCountAsync();
+          const date = getLocalDate();
 
           setIsSynced(true);
           setSyncing(false);
-
-          if (updateUserStats) {
-            updateUserStats({ isDeviceSynced: true, dailySteps: syncedSteps });
-          }
-
-          if (onSyncSuccess) {
-            onSyncSuccess(syncedSteps);
-          }
+          await updateUserStats({ isDeviceSynced: true });
+          const updatedUser = await recordDailySteps(syncedSteps, date);
+          onSyncSuccessRef.current?.(updatedUser?.dailySteps ?? syncedSteps);
 
           const successMsg = `Successfully connected with ${providerName}! Pedometer active. Synced ${syncedSteps} steps.`;
 
@@ -183,7 +221,8 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
           setSyncing(false);
           console.log("Sync error details:", error);
           const errorMsg =
-            "Could not connect to health hardware or request permissions.";
+            error?.message ||
+            "Could not connect to the pedometer or read today's steps.";
           if (Platform.OS === "web") {
             alert(errorMsg);
           } else {
@@ -193,12 +232,7 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
       };
 
       if (Platform.OS === "web") {
-        const allowSync = window.confirm(
-          `Connect Fitness Provider\n\nNutriMorph needs permission to read your step count from ${providerName}. Allow access?`,
-        );
-        if (allowSync) {
-          confirmPermissionPrompt();
-        }
+        alert("Step tracking is available in the NutriMorph mobile app.");
       } else {
         Alert.alert(
           "Connect Fitness Provider 🏃‍♀️",
@@ -258,8 +292,7 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
       </View>
 
       <Text style={[styles.description, { color: colors.textSecondary }]}>
-        Sync your steps automatically from your device hardware pedometer
-        sensor.
+        Sync steps from your device pedometer or connected health provider.
       </Text>
 
       <TouchableOpacity

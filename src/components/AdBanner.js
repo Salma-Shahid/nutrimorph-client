@@ -1,5 +1,6 @@
 import React from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, Platform } from "react-native";
+import Constants from "expo-constants";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 
@@ -18,8 +19,9 @@ export default function AdBanner() {
   const colors = getThemeColors(theme);
   const isPro = user?.subscriptionTier === "pro" || user?.isPro === true;
 
-  // Agar Pro user hai ya native module runtime mein load nahi hua (Expo Go)
-  if (isPro || !BannerAd) {
+  // Check if running inside Expo Go or Web where native AdMob modules are unsupported
+  const isExpoGo = Constants.appOwnership === "expo";
+  if (isPro || isExpoGo || Platform.OS === "web" || !BannerAd) {
     return null;
   }
 

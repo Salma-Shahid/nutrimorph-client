@@ -94,7 +94,7 @@ export default function MealPlanScreen({ navigation }) {
           { text: "Cancel", style: "cancel" },
           {
             text: "Upgrade to Pro",
-            onPress: () => navigation.navigate("Subscription"),
+            onPress: () => navigation.navigate("SubscriptionScreen"),
           },
         ],
       );
