@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
+import { stopBackgroundStepTracking } from "../services/stepTrackingTask";
 export { getThemeColors } from "../theme/colors";
 
 const BASE_URL =
@@ -355,6 +356,27 @@ export const useAuthStore = create((set, get) => ({
     return updatedUser;
   },
 
+  setDailySteps: async (steps, date) => {
+    const currentUser = get().user;
+    const userId = getUserId(currentUser);
+    if (!userId) return null;
+
+    const stepDate = date || getLocalDate();
+    const dailySteps = Math.max(0, Math.floor(Number(steps) || 0));
+    const updatedUser = {
+      ...currentUser,
+      dailySteps,
+      stepCountDate: stepDate,
+      stepUserId: userId,
+    };
+    const storageKey = getDailyStepsKey(userId, stepDate);
+    await AsyncStorage.setItem(storageKey, String(dailySteps));
+    if (getUserId(get().user) !== userId) return null;
+    set({ user: updatedUser });
+    await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+    return updatedUser;
+  },
+
   // Signup / Register Function
   signup: async (name, email, password) => {
     set({ isLoading: true, error: null });
@@ -434,8 +456,15 @@ export const useAuthStore = create((set, get) => ({
     try {
       const storageKeys = ["token", "user", "hasCompletedOnboarding"];
       if (currentUserId) {
-        storageKeys.push(getDailyStepsKey(currentUserId, getLocalDate()));
+        const today = getLocalDate();
+        storageKeys.push(
+          getDailyStepsKey(currentUserId, today),
+          `stepSensorState:${encodeURIComponent(currentUserId)}:${today}`,
+        );
       }
+      await stopBackgroundStepTracking().catch((error) => {
+        console.error("Could not stop background step tracking on logout:", error);
+      });
       await Promise.all(storageKeys.map((key) => AsyncStorage.removeItem(key)));
     } catch (e) {
       console.error("Logout error:", e);

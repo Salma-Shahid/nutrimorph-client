@@ -136,6 +136,7 @@ const ChatBotScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [fetchingHistory, setFetchingHistory] = useState(true);
   const [refreshingHistory, setRefreshingHistory] = useState(false);
+  const [hasMoreHistory, setHasMoreHistory] = useState(false);
 
   const flatListRef = useRef(null);
   const currentUserId = user?._id || user?.id;
@@ -183,7 +184,7 @@ const ChatBotScreen = ({ navigation }) => {
     }, 150);
   };
 
-  const fetchHistory = async (showLoader = true) => {
+  const fetchHistory = async (showLoader = true, loadOlder = false) => {
     try {
       if (showLoader) setFetchingHistory(true);
       const token = await getToken();
@@ -195,7 +196,10 @@ const ChatBotScreen = ({ navigation }) => {
       const cleanBase = rawUrl.replace(/\/api\/?$/, "").replace(/\/$/, "");
       const targetUrl = `${cleanBase}/api/chat/history`;
 
-      const res = await axios.get(targetUrl, {
+      const cursor = loadOlder ? messages[0]?._id || messages[0]?.id : null;
+      const params = new URLSearchParams({ limit: "30" });
+      if (cursor) params.set("before", cursor);
+      const res = await axios.get(`${targetUrl}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
         timeout: 10000,
       });
@@ -209,8 +213,21 @@ const ChatBotScreen = ({ navigation }) => {
         historyData = res.data.messages;
       }
 
-      setMessages(historyData);
-      scrollToBottom();
+      if (loadOlder) {
+        setMessages((current) => {
+          const knownIds = new Set(
+            current.map((item) => String(item._id || item.id || "")),
+          );
+          const older = historyData.filter(
+            (item) => !knownIds.has(String(item._id || item.id || "")),
+          );
+          return [...older, ...current];
+        });
+      } else {
+        setMessages(historyData);
+      }
+      setHasMoreHistory(Boolean(res.data?.hasMore));
+      if (!loadOlder && showLoader) scrollToBottom();
       return true;
     } catch (error) {
       console.error("History fetch error:", error);
@@ -224,7 +241,7 @@ const ChatBotScreen = ({ navigation }) => {
   const handleRefreshHistory = async () => {
     setRefreshingHistory(true);
     try {
-      const succeeded = await fetchHistory(false);
+      const succeeded = await fetchHistory(false, hasMoreHistory);
       if (!succeeded) {
         Alert.alert(
           "Refresh failed",
@@ -442,7 +459,7 @@ const ChatBotScreen = ({ navigation }) => {
             }
             renderItem={({ item }) => renderMessageItem(item, colors)}
             contentContainerStyle={screenStyles.listPadding}
-            onContentSizeChange={scrollToBottom}
+            maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
             keyboardShouldPersistTaps="handled"
             initialNumToRender={15}
             maxToRenderPerBatch={10}

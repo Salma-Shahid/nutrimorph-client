@@ -1,3 +1,4 @@
+import "./src/services/stepTrackingTask";
 import React, { useEffect, useState } from "react";
 import {
   AppState,
@@ -17,25 +18,44 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import Purchases from "react-native-purchases";
 import crashlytics from "@react-native-firebase/crashlytics";
 import { useAuthStore } from "./src/store/useAuthStore";
+import { useMealStore } from "./src/store/useMealStore";
+import { useMealPlanStore } from "./src/store/useMealPlanStore";
 import { getThemeColors } from "./src/theme/colors";
 import { ensureWaterReminderScheduled } from "./src/services/notificationService";
+import { stopBackgroundStepTracking } from "./src/services/stepTrackingTask";
 
 import AppNavigator from "./src/navigation/AppNavigator";
 import LogFoodScreen from "./src/screens/LogFoodScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import SignupScreen from "./src/screens/SignupScreen";
+import ForgotPasswordScreen from "./src/screens/ForgotPasswordScreen";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import SubscriptionScreen from "./src/screens/SubscriptionScreen";
-import SavedMealsScreen from "./src/screens/SavedMealsScreen"; // Path apne folder ke mutabiq adjust kar lein
+import SavedMealsScreen from "./src/screens/SavedMealsScreen";
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   const { user, theme, loadStorage } = useAuthStore();
+  const activeUserId = String(user?._id || user?.id || "");
   const refreshUserProfile = useAuthStore((state) => state.refreshUserProfile);
   const [isInitializing, setIsInitializing] = useState(true);
   const isDark = theme === "dark";
   const colors = getThemeColors(theme);
+
+  useEffect(() => {
+    useMealStore.setState({
+      todaySummary: { calories: 0, protein: 0, carbs: 0, fats: 0 },
+      todayMeals: [],
+      meals: [],
+      totalCalories: 0,
+      weeklyHistory: [],
+      weeklyAiInsight: "",
+      waterIntake: 0,
+      savedMeals: [],
+    });
+    useMealPlanStore.setState({ activeMealPlan: null });
+  }, [activeUserId]);
 
   useEffect(() => {
     const initApp = async () => {
@@ -46,6 +66,10 @@ export default function App() {
         const storedAuth = useAuthStore.getState();
         if (storedAuth.user && storedAuth.token) {
           storedAuth.refreshUserProfile();
+        } else {
+          await stopBackgroundStepTracking().catch((error) => {
+            console.error("Could not stop signed-out step tracking:", error);
+          });
         }
 
         //  Ensure water notification reminder is scheduled on app start
@@ -161,6 +185,10 @@ export default function App() {
               <Stack.Screen name="Signup" component={SignupScreen} />
               <Stack.Screen name="LoginScreen" component={LoginScreen} />
               <Stack.Screen name="SignupScreen" component={SignupScreen} />
+              <Stack.Screen
+                name="ForgotPassword"
+                component={ForgotPasswordScreen}
+              />
             </>
           )}
         </Stack.Navigator>

@@ -25,7 +25,9 @@ export default function OnboardingScreen() {
 
   // Form Data States
   const [language, setLanguage] = useState("English");
-  const [name, setName] = useState(user?.name || "");
+  const [name, setName] = useState(
+    user?.isOnboarded || user?.isOnboardingCompleted ? user?.name || "" : "",
+  );
   const [gender, setGender] = useState("male");
   const [age, setAge] = useState("25");
 

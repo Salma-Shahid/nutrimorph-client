@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useMealStore } from "../store/useMealStore";
@@ -9,22 +9,42 @@ function WaterTracker({ date }) {
   const { waterIntake, updateWaterIntake, fetchWaterIntake } = useMealStore();
   const { theme } = useAuthStore();
   const colors = getThemeColors(theme);
+  const [displayWaterIntake, setDisplayWaterIntake] = useState(waterIntake || 0);
+  const waterCountRef = useRef(waterIntake || 0);
+  const updateQueueRef = useRef(Promise.resolve());
 
   useEffect(() => {
     fetchWaterIntake(date);
   }, [date]);
 
-  const handleAddGlass = () => {
-    updateWaterIntake(waterIntake + 1);
+  useEffect(() => {
+    const currentCount = Math.max(0, Number(waterIntake) || 0);
+    waterCountRef.current = currentCount;
+    setDisplayWaterIntake(currentCount);
+  }, [waterIntake]);
+
+  const handleGlassChange = (delta) => {
+    const nextCount = Math.max(0, waterCountRef.current + delta);
+    if (nextCount === waterCountRef.current) return;
+    waterCountRef.current = nextCount;
+    setDisplayWaterIntake(nextCount);
+    useMealStore.setState({ waterIntake: nextCount });
+
+    updateQueueRef.current = updateQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const response = await updateWaterIntake(nextCount, date);
+        if (!response?.success) {
+          throw new Error(response?.message || "Could not update water intake.");
+        }
+      })
+      .catch((error) => {
+        console.error("Could not sync water intake:", error.message);
+        fetchWaterIntake(date);
+      });
   };
 
-  const handleRemoveGlass = () => {
-    if (waterIntake > 0) {
-      updateWaterIntake(waterIntake - 1);
-    }
-  };
-
-  const currentMl = waterIntake * 250;
+  const currentMl = displayWaterIntake * 250;
   const targetMl = 2000;
   const percentage = Math.min(Math.round((currentMl / targetMl) * 100), 100);
 
@@ -52,7 +72,7 @@ function WaterTracker({ date }) {
 
       <View style={styles.middleRow}>
         <Text style={[styles.glassesText, { color: colors.text }]}>
-          {waterIntake} Glasses
+          {displayWaterIntake} Glasses
         </Text>
         <Text style={[styles.percentageText, { color: colors.primary }]}>
           {percentage}%
@@ -88,10 +108,10 @@ function WaterTracker({ date }) {
               borderColor: colors.border,
               borderWidth: 1,
             },
-            waterIntake === 0 && styles.btnDisabled,
+            displayWaterIntake === 0 && styles.btnDisabled,
           ]}
-          onPress={handleRemoveGlass}
-          disabled={waterIntake === 0}
+          onPress={() => handleGlassChange(-1)}
+          disabled={displayWaterIntake === 0}
         >
           <Text
             style={[styles.btnTextSecondary, { color: colors.textSecondary }]}
@@ -106,7 +126,7 @@ function WaterTracker({ date }) {
             styles.btnPrimary,
             { backgroundColor: colors.primary },
           ]}
-          onPress={handleAddGlass}
+          onPress={() => handleGlassChange(1)}
         >
           <Text style={styles.btnTextPrimary}>+ 1 Glass</Text>
         </TouchableOpacity>

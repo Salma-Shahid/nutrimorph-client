@@ -24,12 +24,17 @@ import { getThemeColors } from "../theme/colors";
 const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app"}/api`;
 
 export default function MealScannerScreen({ navigation }) {
-  const { theme, token: storeToken } = useAuthStore();
+  const { theme, token: storeToken, user } = useAuthStore();
   const colors = getThemeColors(theme);
+  const isPro =
+    user?.role === "admin" ||
+    user?.subscriptionTier === "pro" ||
+    user?.isPro === true;
 
   const [imageUri, setImageUri] = useState(null);
   const [imageBase64, setImageBase64] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [scanStatus, setScanStatus] = useState("");
 
   // Barcode Camera Modal & Lock States
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
@@ -54,7 +59,26 @@ export default function MealScannerScreen({ navigation }) {
     return activeToken;
   };
 
+  const promptUpgrade = () => {
+    Alert.alert(
+      "Upgrade to Pro",
+      "AI meal scanning is available with NutriMorph Pro.",
+      [
+        { text: "Not now", style: "cancel" },
+        {
+          text: "View plans",
+          onPress: () => navigation.navigate("SubscriptionScreen"),
+        },
+      ],
+    );
+  };
+
   const pickImage = async (useCamera = false) => {
+    if (!isPro) {
+      promptUpgrade();
+      return;
+    }
+
     const permissionResult = useCamera
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -88,6 +112,11 @@ export default function MealScannerScreen({ navigation }) {
 
   // 1. AI Image Analysis with Strict Non-Food Prevention
   const handleAnalyzePhoto = async () => {
+    if (!isPro) {
+      promptUpgrade();
+      return;
+    }
+
     if (!imageBase64) {
       Alert.alert(
         "No Image Selected",
@@ -97,6 +126,7 @@ export default function MealScannerScreen({ navigation }) {
     }
 
     setAnalyzing(true);
+    setScanStatus("Analyzing your meal…");
     try {
       const activeToken = await getAuthToken();
       if (!activeToken) {
@@ -166,12 +196,18 @@ export default function MealScannerScreen({ navigation }) {
       }
     } catch (error) {
       console.error("Meal Analysis Error:", error);
-      Alert.alert(
-        "Analysis Error",
-        "Failed to analyze meal photo. Please try again.",
-      );
+      if (error.response?.status === 403 || error.response?.data?.code === "PRO_REQUIRED") {
+        promptUpgrade();
+      } else {
+        Alert.alert(
+          "Analysis Error",
+          error.response?.data?.message ||
+            "Failed to analyze the meal photo. Please try again.",
+        );
+      }
     } finally {
       setAnalyzing(false);
+      setScanStatus("");
     }
   };
 
@@ -179,6 +215,7 @@ export default function MealScannerScreen({ navigation }) {
   const fetchProductByBarcode = async (barcode) => {
     setShowBarcodeScanner(false);
     setAnalyzing(true);
+    setScanStatus("Looking up product details…");
     try {
       const cleanBarcode = String(barcode).trim();
 
@@ -247,13 +284,19 @@ export default function MealScannerScreen({ navigation }) {
       }
     } catch (error) {
       console.error("Barcode Fetch Error:", error);
-      Alert.alert(
-        "Barcode Error",
-        "Could not retrieve barcode details. Please try taking a photo instead.",
-      );
+      if (error.response?.status === 403 || error.response?.data?.code === "PRO_REQUIRED") {
+        promptUpgrade();
+      } else {
+        Alert.alert(
+          "Barcode Error",
+          error.response?.data?.message ||
+            "Could not retrieve barcode details. Please try taking a photo instead.",
+        );
+      }
     } finally {
       setAnalyzing(false);
       setIsScanningBarcode(false);
+      setScanStatus("");
     }
   };
 
@@ -264,6 +307,11 @@ export default function MealScannerScreen({ navigation }) {
   };
 
   const handleOpenBarcodeScanner = async () => {
+    if (!isPro) {
+      promptUpgrade();
+      return;
+    }
+
     if (!permission?.granted) {
       const res = await requestPermission();
       if (!res.granted) {
@@ -350,6 +398,21 @@ export default function MealScannerScreen({ navigation }) {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
       <ScrollView contentContainerStyle={styles.container}>
+        {analyzing && (
+          <View
+            style={[
+              styles.scanProgress,
+              { backgroundColor: colors.cardBg, borderColor: colors.primary },
+            ]}
+            accessibilityRole="progressbar"
+            accessibilityLabel={scanStatus}
+          >
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={{ color: colors.primary, fontWeight: "700" }}>
+              {scanStatus}
+            </Text>
+          </View>
+        )}
         <Text style={[styles.title, { color: colors.text }]}>
           AI Scan Meal 
         </Text>
@@ -650,6 +713,21 @@ export default function MealScannerScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  scanProgress: {
+    minHeight: 76,
+    marginBottom: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    shadowColor: "#42F5A1",
+    shadowOpacity: 0.24,
+    shadowRadius: 12,
+    elevation: 5,
+  },
   safeArea: { flex: 1 },
   container: { padding: 20 },
   title: { fontSize: 22, fontWeight: "bold", textAlign: "center" },

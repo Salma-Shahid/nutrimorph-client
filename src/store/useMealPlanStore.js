@@ -51,10 +51,18 @@ export const useMealPlanStore = create((set) => ({
 
       if (res.data?.success) {
         set({ activeMealPlan: res.data.data, isLoading: false });
+        return { success: true, data: res.data.data };
       }
-    } catch (error) {
-      // If 404, it just means no active plan exists yet, which is normal
       set({ activeMealPlan: null, isLoading: false });
+      return { success: false, notFound: true };
+    } catch (error) {
+      const notFound = error.response?.status === 404;
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        "Could not load the active meal plan.";
+      set({ activeMealPlan: null, isLoading: false, error: message });
+      return { success: false, notFound, message };
     }
   },
 }));

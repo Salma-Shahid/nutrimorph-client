@@ -6,10 +6,15 @@ import {
   StyleSheet,
   Alert,
   Platform,
+  AppState,
 } from "react-native";
 import axios from "axios";
 import { Ionicons } from "@expo/vector-icons";
 import * as Pedometer from "expo-pedometer";
+import {
+  startBackgroundStepTracking,
+  stopBackgroundStepTracking,
+} from "../services/stepTrackingTask";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 
@@ -78,32 +83,45 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
         if (isBaseline) {
           previousSensorSteps = steps;
           acceptedSteps =
-            user?.stepUserId === userId && user?.stepCountDate === date
-              ? Number(user.dailySteps) || 0
+            activeUser?.stepUserId === userId &&
+            activeUser?.stepCountDate === date
+              ? Number(activeUser.dailySteps) || 0
               : 0;
           pendingStepDelta = 0;
           pendingSince = now;
           sampleDate = date;
           validSteps = acceptedSteps;
         } else {
-          const delta = steps - previousSensorSteps;
-          previousSensorSteps = steps;
-          if (delta < 0) {
+          const currentStoredSteps =
+            activeUser?.stepUserId === userId &&
+            activeUser?.stepCountDate === date
+              ? Number(activeUser.dailySteps) || 0
+              : 0;
+          if (currentStoredSteps !== acceptedSteps) {
+            acceptedSteps = currentStoredSteps;
+            previousSensorSteps = steps;
             pendingStepDelta = 0;
             pendingSince = now;
           } else {
-            if (pendingStepDelta === 0) pendingSince = lastSampleAt;
-            pendingStepDelta += delta;
-            if (pendingStepDelta >= MIN_VALID_STEP_DELTA) {
-              const elapsedSeconds = Math.max(
-                1,
-                (now - pendingSince) / 1000,
-              );
-              if (pendingStepDelta / elapsedSeconds <= MAX_STEPS_PER_SECOND) {
-                acceptedSteps = (acceptedSteps || 0) + pendingStepDelta;
-              }
+            const delta = steps - previousSensorSteps;
+            previousSensorSteps = steps;
+            if (delta < 0) {
               pendingStepDelta = 0;
               pendingSince = now;
+            } else {
+              if (pendingStepDelta === 0) pendingSince = lastSampleAt;
+              pendingStepDelta += delta;
+              if (pendingStepDelta >= MIN_VALID_STEP_DELTA) {
+                const elapsedSeconds = Math.max(
+                  1,
+                  (now - pendingSince) / 1000,
+                );
+                if (pendingStepDelta / elapsedSeconds <= MAX_STEPS_PER_SECOND) {
+                  acceptedSteps = (acceptedSteps || 0) + pendingStepDelta;
+                }
+                pendingStepDelta = 0;
+                pendingSince = now;
+              }
             }
           }
           validSteps = acceptedSteps || 0;
@@ -113,7 +131,7 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
         const updatedUser = await recordDailySteps(validSteps, date);
         if (isCancelled) return;
         const dailySteps = updatedUser?.dailySteps ?? validSteps;
-        if (isBaseline) acceptedSteps = dailySteps;
+        acceptedSteps = dailySteps;
         onSyncSuccessRef.current?.(dailySteps);
 
         if (token && dailySteps !== lastPushedSteps) {
@@ -172,6 +190,9 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
         }
 
         await refreshSteps();
+        await startBackgroundStepTracking().catch((error) => {
+          console.warn("Background step tracking is unavailable:", error.message);
+        });
         if (!isCancelled) {
           interval = setInterval(refreshSteps, STEP_SYNC_INTERVAL_MS);
         }
@@ -183,16 +204,26 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
     };
 
     startPolling();
+    const appStateSubscription = AppState.addEventListener(
+      "change",
+      (state) => {
+        if (state === "active") refreshSteps();
+      },
+    );
 
     return () => {
       isCancelled = true;
       if (interval) clearInterval(interval);
+      appStateSubscription.remove();
     };
   }, [isSynced, recordDailySteps, token, updateUserStats, userId]);
 
   const executeDisconnect = () => {
     setIsSynced(false);
     updateUserStats({ isDeviceSynced: false });
+    stopBackgroundStepTracking().catch((error) => {
+      console.error("Could not stop background step tracking:", error);
+    });
     onSyncSuccessRef.current?.(Number(user?.dailySteps) || 0);
     const msg = "Device successfully disconnected.";
     if (Platform.OS === "web") {
@@ -274,13 +305,25 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
               ? Number(activeUser.dailySteps) || 0
               : 0;
 
+          const backgroundEnabled = await startBackgroundStepTracking().catch(
+            (error) => {
+              console.warn(
+                "Background step tracking could not be enabled:",
+                error.message,
+              );
+              return false;
+            },
+          );
+          await updateUserStats({ isDeviceSynced: true });
           setIsSynced(true);
           setSyncing(false);
-          await updateUserStats({ isDeviceSynced: true });
           const updatedUser = await recordDailySteps(syncedSteps, date);
           onSyncSuccessRef.current?.(updatedUser?.dailySteps ?? syncedSteps);
 
-          const successMsg = `Successfully connected with ${providerName}! Pedometer active. Synced ${syncedSteps} steps.`;
+          const trackingStatus = backgroundEnabled
+            ? "Background tracking is enabled."
+            : "Step updates will sync while the app is active. Background access was not granted.";
+          const successMsg = `Successfully connected with ${providerName}. Synced ${syncedSteps} steps. ${trackingStatus}`;
 
           if (Platform.OS === "web") {
             alert(`Success \n${successMsg}`);

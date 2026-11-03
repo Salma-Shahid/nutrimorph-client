@@ -18,6 +18,8 @@ import { saveDataToCache, getDataFromCache } from "../utils/cache";
 
 export default function MealPlanScreen({ navigation }) {
   const user = useAuthStore((state) => state.user);
+  const userId = String(user?._id || user?.id || "");
+  const mealPlanCacheKey = `active_meal_plan:${encodeURIComponent(userId)}`;
   const refreshUserProfile = useAuthStore((state) => state.refreshUserProfile);
   const theme = useAuthStore((state) => state.theme);
   const colors = getThemeColors(theme);
@@ -59,26 +61,29 @@ export default function MealPlanScreen({ navigation }) {
   }, [user]);
 
   useEffect(() => {
+    useMealPlanStore.setState({ activeMealPlan: null });
     const loadMealPlan = async () => {
-      try {
-        await fetchActiveMealPlan();
-      } catch (error) {
-        console.log(" Network offline. Checking for cached meal plan...");
-        const cachedPlan = await getDataFromCache("active_meal_plan");
-        if (cachedPlan) {
+      const result = await fetchActiveMealPlan();
+      if (!result?.success && !result?.notFound) {
+        console.warn(
+          "Could not load the active meal plan:",
+          result?.message || "Unexpected response.",
+        );
+        const cachedPlan = await getDataFromCache(mealPlanCacheKey);
+        if (cachedPlan && String(cachedPlan.userId) === userId) {
           useMealPlanStore.setState({ activeMealPlan: cachedPlan });
         }
       }
     };
 
     loadMealPlan();
-  }, []);
+  }, [mealPlanCacheKey, userId]);
 
   useEffect(() => {
-    if (activeMealPlan) {
-      saveDataToCache("active_meal_plan", activeMealPlan);
+    if (activeMealPlan && String(activeMealPlan.userId) === userId) {
+      saveDataToCache(mealPlanCacheKey, activeMealPlan);
     }
-  }, [activeMealPlan]);
+  }, [activeMealPlan, mealPlanCacheKey, userId]);
 
   const handleGenerate = async () => {
     const res = await generateMealPlan({

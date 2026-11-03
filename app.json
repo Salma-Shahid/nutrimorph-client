@@ -75,7 +75,15 @@
           "iosAppId": "ca-app-pub-3940256099942544~1458002511"
         }
       ],
-      "expo-pedometer"
+      [
+        "expo-pedometer",
+        {
+          "iosHealthKitPermission": "Allow NutriMorph to read your Apple Health step count to show your daily walking progress.",
+          "iosHealthKitBackgroundDelivery": true,
+          "androidHealthConnectPrivacyPolicyUrl": "https://nutrimorph.app/privacy-policy",
+          "androidHealthConnectBackgroundRead": true
+        }
+      ]
     ],
     "extra": {
       "eas": {

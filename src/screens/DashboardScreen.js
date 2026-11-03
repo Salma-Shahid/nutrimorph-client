@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -26,6 +26,10 @@ import axios from "axios";
 export default function DashboardScreen({ navigation }) {
   const user = useAuthStore((state) => state.user);
   const userId = String(user?._id || user?.id || "");
+  const cacheScope = encodeURIComponent(userId || "signed-out");
+  const mealCacheKey = (date) => `meals:${cacheScope}:${date}`;
+  const waterCacheKey = (date) => `water:${cacheScope}:${date}`;
+  const weeklyCacheKey = `weekly_summary:${cacheScope}`;
   const theme = useAuthStore((state) => state.theme);
   const colors = getThemeColors(theme);
   const updateUserStats = useAuthStore((state) => state.updateUserStats);
@@ -59,8 +63,17 @@ export default function DashboardScreen({ navigation }) {
 
   // Exercise & Steps State
   const [stepCount, setStepCount] = useState(0);
+  const stepCountRef = useRef(0);
+  const pendingStepDeltasRef = useRef(0);
+  const stepSyncQueueRef = useRef(Promise.resolve());
+  const waterCountRef = useRef(waterIntake || 0);
+  const waterSyncQueueRef = useRef(Promise.resolve());
   const [caloriesBurned, setCaloriesBurned] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    waterCountRef.current = Math.max(0, Number(waterIntake) || 0);
+  }, [waterIntake, userId]);
 
   // Device local date in YYYY-MM-DD format
   const getLocalDate = () => {
@@ -72,24 +85,33 @@ export default function DashboardScreen({ navigation }) {
 
   useEffect(() => {
     const today = getLocalDate();
-    if (user?.stepCountDate === today) {
-      setStepCount(Number(user.dailySteps) || 0);
+    if (user?.stepUserId === userId && user?.stepCountDate === today) {
+      const dailySteps = Number(user.dailySteps) || 0;
+      stepCountRef.current = dailySteps;
+      setStepCount(dailySteps);
       return;
     }
 
+    stepCountRef.current = 0;
     setStepCount(0);
     if (!user?.isDeviceSynced) {
       recordDailySteps(0, today)
-        .then((updatedUser) => setStepCount(updatedUser?.dailySteps || 0))
+        .then((updatedUser) => {
+          const dailySteps = updatedUser?.dailySteps || 0;
+          stepCountRef.current = dailySteps;
+          setStepCount(dailySteps);
+        })
         .catch((error) =>
           console.error("Could not reset the local daily step count:", error),
         );
     }
   }, [
     recordDailySteps,
+    userId,
     user?.dailySteps,
     user?.isDeviceSynced,
     user?.stepCountDate,
+    user?.stepUserId,
   ]);
 
   // Fetch Exercise & Steps from backend
@@ -108,7 +130,9 @@ export default function DashboardScreen({ navigation }) {
           Number(res.data.data.steps) || 0,
           date,
         );
-        setStepCount(updatedUser?.dailySteps || 0);
+        const dailySteps = updatedUser?.dailySteps || 0;
+        stepCountRef.current = dailySteps;
+        setStepCount(dailySteps);
       }
     } catch (error) {
       console.log("Error fetching exercise data:", error.message);
@@ -140,47 +164,58 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  const handleAddSteps = async () => {
+  const handleAdjustSteps = (delta) => {
     const today = getLocalDate();
-    const previousSteps =
-      user?.stepCountDate === today ? Number(user?.dailySteps) || 0 : 0;
-    const newTotalSteps = previousSteps + 500;
+    const newTotalSteps = Math.max(0, stepCountRef.current + delta);
+    if (newTotalSteps === stepCountRef.current) return;
+    stepCountRef.current = newTotalSteps;
     setStepCount(newTotalSteps);
-    await recordDailySteps(newTotalSteps, today);
-    const activeUser = useAuthStore.getState().user;
-    if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
+    useAuthStore.getState().setDailySteps(newTotalSteps, today);
+    if (!token || !userId) return;
 
-    if (token) {
-      try {
-        const BASE_URL =
+    pendingStepDeltasRef.current += 1;
+    stepSyncQueueRef.current = stepSyncQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const activeUser = useAuthStore.getState().user;
+        if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
+        const baseUrl =
           process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
         const response = await axios.post(
-          `${BASE_URL}/api/exercise`,
-          { date: today, steps: 500 },
+          `${baseUrl}/api/exercise`,
+          { date: today, stepsDelta: delta },
           { headers: { Authorization: `Bearer ${token}` } },
         );
         const latestUser = useAuthStore.getState().user;
         if (
-          String(latestUser?._id || latestUser?.id || "") === userId &&
-          response.data?.userStats
-        ) {
-          await updateUserStats({
-            ...response.data.userStats,
-            dailySteps: response.data.data?.steps ?? newTotalSteps,
-            stepCountDate: today,
-          });
+          String(latestUser?._id || latestUser?.id || "") !== userId ||
+          !response.data?.userStats
+        ) return;
+        const serverSteps = Number(response.data.userStats.dailySteps) || 0;
+        await updateUserStats({
+          ...response.data.userStats,
+          dailySteps: serverSteps,
+          stepCountDate: today,
+          stepUserId: userId,
+        });
+        if (pendingStepDeltasRef.current === 1) {
+          stepCountRef.current = serverSteps;
+          setStepCount(serverSteps);
+          await useAuthStore.getState().setDailySteps(serverSteps, today);
         }
-      } catch (error) {
+      })
+      .catch((error) => {
         console.error(
-          "Could not sync manually added steps:",
+          "Could not sync manual step adjustment:",
           error?.response?.data?.message || error.message,
         );
-      }
-    }
-
-    if (previousSteps < 5000 && newTotalSteps >= 5000) {
-      Alert.alert("Milestone Unlocked!", "You've crossed 5,000 steps today!");
-    }
+      })
+      .finally(() => {
+        pendingStepDeltasRef.current = Math.max(
+          0,
+          pendingStepDeltasRef.current - 1,
+        );
+      });
   };
 
   // Save Exercise Handler (Backend Connected)
@@ -257,9 +292,9 @@ export default function DashboardScreen({ navigation }) {
             const currentWeekly = useMealStore.getState().weeklyHistory;
             const currentInsight = useMealStore.getState().weeklyAiInsight;
 
-            await saveDataToCache(`meals_${todayDate}`, currentMeals);
-            await saveDataToCache(`water_${todayDate}`, currentWater);
-            await saveDataToCache(`weekly_summary`, {
+            await saveDataToCache(mealCacheKey(todayDate), currentMeals);
+            await saveDataToCache(waterCacheKey(todayDate), currentWater);
+            await saveDataToCache(weeklyCacheKey, {
               weeklyHistory: currentWeekly,
               weeklyAiInsight: currentInsight,
             });
@@ -269,9 +304,9 @@ export default function DashboardScreen({ navigation }) {
             "Dashboard refresh failed; attempting to load cached data.",
           );
           if (isMounted) {
-            await getDataFromCache(`meals_${todayDate}`);
-            await getDataFromCache(`water_${todayDate}`);
-            await getDataFromCache(`weekly_summary`);
+            await getDataFromCache(mealCacheKey(todayDate));
+            await getDataFromCache(waterCacheKey(todayDate));
+            await getDataFromCache(weeklyCacheKey);
           }
         }
       };
@@ -281,20 +316,34 @@ export default function DashboardScreen({ navigation }) {
       return () => {
         isMounted = false;
       };
-    }, [refreshUserProfile]),
+    }, [refreshUserProfile, userId]),
   );
 
-  const handleWaterChange = async (newGlasses) => {
-    if (newGlasses < 0) return;
+  const handleWaterChange = (delta) => {
+    const newGlasses = Math.max(
+      0,
+      Math.floor(Number(waterCountRef.current) || 0) + delta,
+    );
+    if (newGlasses === waterCountRef.current) return;
+    waterCountRef.current = newGlasses;
     const todayDate = getLocalDate();
+    useMealStore.setState({ waterIntake: newGlasses });
 
-    const res = await updateWaterIntake(newGlasses, todayDate);
-    const badges = res?.unlockedBadges || res?.data?.unlockedBadges;
-    if (badges) {
-      updateUserStats({ unlockedBadges: badges });
-    }
-
-    await saveDataToCache(`water_${todayDate}`, newGlasses);
+    waterSyncQueueRef.current = waterSyncQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const res = await updateWaterIntake(newGlasses, todayDate);
+        if (!res?.success) {
+          throw new Error(res?.message || "Could not update water intake.");
+        }
+        const badges = res.unlockedBadges || res.data?.unlockedBadges;
+        if (badges) updateUserStats({ unlockedBadges: badges });
+        await saveDataToCache(waterCacheKey(todayDate), newGlasses);
+      })
+      .catch((error) => {
+        console.error("Could not sync water intake:", error.message);
+        fetchWaterIntake(todayDate);
+      });
   };
 
   const handleDeleteMeal = async (mealId, mealName) => {
@@ -328,12 +377,12 @@ export default function DashboardScreen({ navigation }) {
         setAiRecoveryTip(
           res.data.data?.guidance ||
             res.data.advice ||
-            "Focus on high-protein, low-calorie foods and hydrate with 500ml water for the rest of the day.",
+            `You have exceeded your daily calorie goal by ${Math.max(0, currentEaten - calorieGoal)} kcal. Return to your usual balanced routine tomorrow without skipping meals or overexercising.`,
         );
       }
     } catch (err) {
       setAiRecoveryTip(
-        " Rescue Tip: Keep your next meal light with leafy greens and lean protein. Drink an extra 2 glasses of water to stabilize metabolism.",
+        `You have exceeded your daily calorie goal by ${Math.max(0, currentEaten - calorieGoal)} kcal. There is no need to skip meals or overexercise. Return to your usual balanced routine tomorrow.`,
       );
     } finally {
       setRecoveryLoading(false);
@@ -345,7 +394,10 @@ export default function DashboardScreen({ navigation }) {
   const currentEaten = totalCalories || 0;
   const remainingCal = Math.max(0, calorieGoal - currentEaten);
   const isExceeded = currentEaten > calorieGoal;
-  const isPro = user?.subscriptionTier === "pro" || user?.isPro === true;
+  const isPro =
+    user?.role === "admin" ||
+    user?.subscriptionTier === "pro" ||
+    user?.isPro === true;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -534,7 +586,7 @@ export default function DashboardScreen({ navigation }) {
                     borderColor: colors.border,
                   },
                 ]}
-                onPress={() => handleWaterChange((waterIntake || 0) - 1)}
+                onPress={() => handleWaterChange(-1)}
               >
                 <Ionicons name="remove" size={16} color={colors.text} />
               </TouchableOpacity>
@@ -543,7 +595,7 @@ export default function DashboardScreen({ navigation }) {
               </Text>
               <TouchableOpacity
                 style={[styles.smallWaterBtn, { backgroundColor: "#38BDF8" }]}
-                onPress={() => handleWaterChange((waterIntake || 0) + 1)}
+                onPress={() => handleWaterChange(1)}
               >
                 <Ionicons name="add" size={16} color="#FFF" />
               </TouchableOpacity>
@@ -623,14 +675,34 @@ export default function DashboardScreen({ navigation }) {
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.stepActionBtn, { backgroundColor: colors.primary }]}
-            onPress={handleAddSteps}
-          >
-            <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 12 }}>
-              + Add Steps
+          <View style={styles.stepControls}>
+            <TouchableOpacity
+              style={[
+                styles.stepAdjustButton,
+                { borderColor: colors.border, backgroundColor: colors.inputBg },
+              ]}
+              onPress={() => handleAdjustSteps(-1)}
+              disabled={stepCount === 0}
+              accessibilityRole="button"
+              accessibilityLabel="Remove one step"
+            >
+              <Ionicons name="remove" size={20} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={[styles.stepAdjustLabel, { color: colors.textSecondary }]}>
+              Adjust by 1 step
             </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.stepAdjustButton,
+                { borderColor: colors.primary, backgroundColor: colors.glassGlow },
+              ]}
+              onPress={() => handleAdjustSteps(1)}
+              accessibilityRole="button"
+              accessibilityLabel="Add one step"
+            >
+              <Ionicons name="add" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Health & Device Sync Component */}
@@ -638,6 +710,7 @@ export default function DashboardScreen({ navigation }) {
           key={String(user?._id || user?.id || "signed-out")}
           colors={colors}
           onSyncSuccess={(syncedSteps) => {
+            stepCountRef.current = syncedSteps;
             setStepCount(syncedSteps);
           }}
         />
@@ -1122,6 +1195,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 10,
   },
+  stepControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 14,
+    marginTop: 12,
+  },
+  stepAdjustButton: {
+    width: 40,
+    height: 40,
+    borderWidth: 1,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepAdjustLabel: { fontSize: 12, fontWeight: "600" },
   graphPlaceholder: {
     height: 110,
     borderRadius: 10,

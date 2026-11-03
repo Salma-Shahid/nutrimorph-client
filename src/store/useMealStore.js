@@ -157,6 +157,11 @@ export const useMealStore = create((set, get) => ({
       return response.data;
     } catch (error) {
       console.error("Error updating water intake:", error);
+      return {
+        success: false,
+        message:
+          error.response?.data?.message || "Could not update water intake.",
+      };
     }
   },
 

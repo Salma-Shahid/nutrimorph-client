@@ -11,6 +11,7 @@ import {
   Alert,
   Image,
   Switch,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -35,6 +36,27 @@ export default function ProfileScreen({ navigation }) {
     refreshUserProfile,
   } = useAuthStore();
   const colors = getThemeColors(theme);
+
+  const openSupportEmail = async () => {
+    try {
+      await Linking.openURL("mailto:support@nutrimorph.app");
+    } catch (error) {
+      console.error("Could not open the support email app:", error);
+      Alert.alert(
+        "Support",
+        "Email support@nutrimorph.app for assistance.",
+      );
+    }
+  };
+
+  const openOfficialWebsite = async () => {
+    try {
+      await WebBrowser.openBrowserAsync("https://nutrimorph.app");
+    } catch (error) {
+      console.error("Could not open the NutriMorph website:", error);
+      Alert.alert("Website", "Visit https://nutrimorph.app.");
+    }
+  };
 
   const [name, setName] = useState(user?.name || "");
   const [email] = useState(user?.email || "");
@@ -61,7 +83,10 @@ export default function ProfileScreen({ navigation }) {
     }
   }, [user]);
 
-  const isPro = user?.subscriptionTier === "pro" || user?.isPro === true;
+  const isPro =
+    user?.role === "admin" ||
+    user?.subscriptionTier === "pro" ||
+    user?.isPro === true;
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -453,6 +478,37 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.cardBg, borderColor: colors.border },
+          ]}
+        >
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
+            Support
+          </Text>
+          <TouchableOpacity
+            style={styles.supportLink}
+            onPress={openSupportEmail}
+            accessibilityRole="button"
+          >
+            <Ionicons name="mail-outline" size={18} color={colors.primary} />
+            <Text style={[styles.supportLinkText, { color: colors.text }]}>
+              Contact support
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.supportLink}
+            onPress={openOfficialWebsite}
+            accessibilityRole="link"
+          >
+            <Ionicons name="globe-outline" size={18} color={colors.primary} />
+            <Text style={[styles.supportLinkText, { color: colors.text }]}>
+              Visit nutrimorph.app
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Logout */}
         <TouchableOpacity style={styles.logoutButton} onPress={logout}>
           <Ionicons name="log-out-outline" size={18} color="#EF4444" />
@@ -474,6 +530,13 @@ export default function ProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  supportLink: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  supportLinkText: { fontSize: 14, fontWeight: "600" },
   safeArea: { flex: 1 },
   container: { padding: 20, paddingBottom: 40 },
   headerTitle: {
