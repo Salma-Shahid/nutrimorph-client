@@ -3,6 +3,8 @@ import { View, StyleSheet, Platform } from "react-native";
 import Constants from "expo-constants";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
+import { isActiveProUser } from "../utils/subscription";
+import { areMobileAdsReady } from "../services/ads";
 
 let BannerAd, BannerAdSize, TestIds;
 try {
@@ -10,24 +12,28 @@ try {
   BannerAd = MobileAds.BannerAd;
   BannerAdSize = MobileAds.BannerAdSize;
   TestIds = MobileAds.TestIds;
-} catch (e) {
+} catch {
   console.log("AdMob native module not found in this runtime environment.");
 }
 
 export default function AdBanner() {
   const { user, theme } = useAuthStore();
   const colors = getThemeColors(theme);
-  const isPro = user?.subscriptionTier === "pro" || user?.isPro === true;
+  const isPro = isActiveProUser(user);
 
   // Check if running inside Expo Go or Web where native AdMob modules are unsupported
   const isExpoGo = Constants.appOwnership === "expo";
-  if (isPro || isExpoGo || Platform.OS === "web" || !BannerAd) {
+  if (
+    isPro ||
+    isExpoGo ||
+    Platform.OS === "web" ||
+    !BannerAd ||
+    !areMobileAdsReady()
+  ) {
     return null;
   }
 
-  const adUnitId = __DEV__
-    ? TestIds.BANNER
-    : "ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy";
+  const adUnitId = TestIds.BANNER;
 
   return (
     <View

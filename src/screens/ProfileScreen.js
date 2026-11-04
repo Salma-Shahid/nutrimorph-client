@@ -22,6 +22,8 @@ import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 import NotificationSettings from "../components/NotificationSettings";
 import DeviceSyncSection from "../components/DeviceSyncSection";
+import AdBanner from "../components/AdBanner";
+import { isActiveProUser } from "../utils/subscription";
 
 export default function ProfileScreen({ navigation }) {
   const {
@@ -39,12 +41,12 @@ export default function ProfileScreen({ navigation }) {
 
   const openSupportEmail = async () => {
     try {
-      await Linking.openURL("mailto:support@nutrimorph.app");
+      await Linking.openURL("mailto:nutrimorphsupport@gmail.com");
     } catch (error) {
       console.error("Could not open the support email app:", error);
       Alert.alert(
         "Support",
-        "Email support@nutrimorph.app for assistance.",
+        "Email nutrimorphsupport@gmail.com for assistance.",
       );
     }
   };
@@ -83,10 +85,7 @@ export default function ProfileScreen({ navigation }) {
     }
   }, [user]);
 
-  const isPro =
-    user?.role === "admin" ||
-    user?.subscriptionTier === "pro" ||
-    user?.isPro === true;
+  const isPro = isActiveProUser(user);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -525,6 +524,7 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.deleteText}>Delete Account</Text>
         </TouchableOpacity>
       </ScrollView>
+      <AdBanner />
     </SafeAreaView>
   );
 }

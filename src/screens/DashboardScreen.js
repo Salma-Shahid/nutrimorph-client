@@ -21,6 +21,7 @@ import AdBanner from "../components/AdBanner";
 import { saveDataToCache, getDataFromCache } from "../utils/cache";
 import StreakHeader from "../components/StreakHeader";
 import DeviceSyncSection from "../components/DeviceSyncSection";
+import { isActiveProUser } from "../utils/subscription";
 import axios from "axios";
 
 export default function DashboardScreen({ navigation }) {
@@ -394,10 +395,7 @@ export default function DashboardScreen({ navigation }) {
   const currentEaten = totalCalories || 0;
   const remainingCal = Math.max(0, calorieGoal - currentEaten);
   const isExceeded = currentEaten > calorieGoal;
-  const isPro =
-    user?.role === "admin" ||
-    user?.subscriptionTier === "pro" ||
-    user?.isPro === true;
+  const isPro = isActiveProUser(user);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>

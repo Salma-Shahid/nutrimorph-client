@@ -23,6 +23,7 @@ import { useMealPlanStore } from "./src/store/useMealPlanStore";
 import { getThemeColors } from "./src/theme/colors";
 import { ensureWaterReminderScheduled } from "./src/services/notificationService";
 import { stopBackgroundStepTracking } from "./src/services/stepTrackingTask";
+import { initializeMobileAds } from "./src/services/ads";
 
 import AppNavigator from "./src/navigation/AppNavigator";
 import LogFoodScreen from "./src/screens/LogFoodScreen";
@@ -74,6 +75,7 @@ export default function App() {
 
         //  Ensure water notification reminder is scheduled on app start
         await ensureWaterReminderScheduled();
+        await initializeMobileAds();
 
         //  Safety check: Firebase Crashlytics initialization guard
         try {

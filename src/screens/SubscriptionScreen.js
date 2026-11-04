@@ -17,11 +17,13 @@ import { getThemeColors } from "../theme/colors";
 const BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
 
-export default function SubscriptionScreen() {
+export default function SubscriptionScreen({ route }) {
   const { theme, user, token, setUser, refreshUserProfile } = useAuthStore();
   const colors = getThemeColors(theme || "dark");
   const [loading, setLoading] = useState(false);
   const [billingCycle, setBillingCycle] = useState("monthly");
+  const [startTrial] = useState(route?.params?.startTrial === true);
+  const trialAvailable = !user?.trialUsedAt;
   const checkoutPendingRef = useRef(false);
   const verificationInProgressRef = useRef(false);
 
@@ -41,6 +43,9 @@ export default function SubscriptionScreen() {
           subscriptionTier: verifiedUser.subscriptionTier,
           isPro: verifiedUser.isPro,
           subscriptionExpiresAt: verifiedUser.subscriptionExpiresAt,
+          subscriptionStatus: verifiedUser.subscriptionStatus,
+          trialEndDate: verifiedUser.trialEndDate,
+          trialUsedAt: verifiedUser.trialUsedAt,
         });
         const refreshed = await refreshUserProfile();
         if (!refreshed.success) {
@@ -82,7 +87,11 @@ export default function SubscriptionScreen() {
       setLoading(true);
       const response = await axios.post(
         `${BASE_URL}/api/payment/create-checkout-session`,
-        { plan: "pro", billingCycle },
+        {
+          plan: "pro",
+          billingCycle,
+          ...(startTrial && trialAvailable ? { trialDays: 3 } : {}),
+        },
         { headers: { Authorization: `Bearer ${token}` } },
       );
       const checkoutUrl = response.data?.url;
@@ -110,6 +119,9 @@ export default function SubscriptionScreen() {
             subscriptionTier: verifiedUser.subscriptionTier,
             isPro: verifiedUser.isPro,
             subscriptionExpiresAt: verifiedUser.subscriptionExpiresAt,
+            subscriptionStatus: verifiedUser.subscriptionStatus,
+            trialEndDate: verifiedUser.trialEndDate,
+            trialUsedAt: verifiedUser.trialUsedAt,
           });
           const refreshed = await refreshUserProfile();
           if (!refreshed.success) {
@@ -145,6 +157,12 @@ export default function SubscriptionScreen() {
         Unlock AI meal scanning, advanced analytics, and unlimited macro
         tracking.
       </Text>
+      {startTrial && trialAvailable && (
+        <Text style={[styles.trialNotice, { color: colors.primary }]}>
+          Your eligible account will receive a 3-day free trial through secure
+          Stripe checkout.
+        </Text>
+      )}
 
       {user?.subscriptionTier === "pro" || user?.isPro ? (
         <Text style={[styles.currentPlan, { color: colors.primary }]}>
@@ -197,7 +215,9 @@ export default function SubscriptionScreen() {
               <ActivityIndicator color="#FFF" />
             ) : (
               <Text style={styles.proButtonText}>
-                Continue to secure checkout
+                {startTrial && trialAvailable
+                  ? "Start 3-day free trial"
+                  : "Continue to secure checkout"}
               </Text>
             )}
           </TouchableOpacity>
@@ -221,6 +241,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   subtitle: { fontSize: 14, textAlign: "center", marginBottom: 24 },
+  trialNotice: {
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+    marginBottom: 18,
+  },
   currentPlan: { fontSize: 16, fontWeight: "bold", textAlign: "center" },
   planRow: {
     width: "100%",

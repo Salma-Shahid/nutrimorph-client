@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   StyleSheet,
   Text,
   View,
@@ -20,16 +21,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
+import { isActiveProUser } from "../utils/subscription";
+import UpgradeTrialModal from "../components/UpgradeTrialModal";
+import { useMealStore } from "../store/useMealStore";
 
 const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app"}/api`;
 
 export default function MealScannerScreen({ navigation }) {
-  const { theme, token: storeToken, user } = useAuthStore();
+  const { theme, token: storeToken, user, setUser } = useAuthStore();
   const colors = getThemeColors(theme);
-  const isPro =
-    user?.role === "admin" ||
-    user?.subscriptionTier === "pro" ||
-    user?.isPro === true;
+  const isPro = isActiveProUser(user);
+  const trialAvailable = !user?.trialUsedAt;
+  const fetchDailySummary = useMealStore((state) => state.fetchDailySummary);
 
   const [imageUri, setImageUri] = useState(null);
   const [imageBase64, setImageBase64] = useState(null);
@@ -50,6 +53,34 @@ export default function MealScannerScreen({ navigation }) {
   const [fats, setFats] = useState("");
   const [confidence, setConfidence] = useState("High");
   const [savingMeal, setSavingMeal] = useState(false);
+  const [showTrialModal, setShowTrialModal] = useState(false);
+  const scanLineProgress = useRef(new Animated.Value(0)).current;
+  const barcodeLockRef = useRef(false);
+
+  useEffect(() => {
+    const scanAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanLineProgress, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scanLineProgress, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    scanAnimation.start();
+    return () => scanAnimation.stop();
+  }, [scanLineProgress]);
+
+  const scanCount =
+    user?.dailyScanDate === new Date().toISOString().slice(0, 10)
+      ? Number(user?.dailyScanCount) || 0
+      : 0;
+  const scanAllowanceAvailable = isPro || scanCount < 1;
 
   const getAuthToken = async () => {
     let activeToken = storeToken;
@@ -60,21 +91,18 @@ export default function MealScannerScreen({ navigation }) {
   };
 
   const promptUpgrade = () => {
-    Alert.alert(
-      "Upgrade to Pro",
-      "AI meal scanning is available with NutriMorph Pro.",
-      [
-        { text: "Not now", style: "cancel" },
-        {
-          text: "View plans",
-          onPress: () => navigation.navigate("SubscriptionScreen"),
-        },
-      ],
-    );
+    setShowTrialModal(true);
+  };
+
+  const continueToTrial = () => {
+    setShowTrialModal(false);
+    navigation.navigate("SubscriptionScreen", {
+      startTrial: trialAvailable,
+    });
   };
 
   const pickImage = async (useCamera = false) => {
-    if (!isPro) {
+    if (!scanAllowanceAvailable) {
       promptUpgrade();
       return;
     }
@@ -112,7 +140,7 @@ export default function MealScannerScreen({ navigation }) {
 
   // 1. AI Image Analysis with Strict Non-Food Prevention
   const handleAnalyzePhoto = async () => {
-    if (!isPro) {
+    if (!scanAllowanceAvailable) {
       promptUpgrade();
       return;
     }
@@ -181,11 +209,12 @@ export default function MealScannerScreen({ navigation }) {
         }
 
         setFoodName(data.name || data.foodName || "Scanned Meal");
-        setCalories(String(data.calories || 0));
-        setProtein(String(data.protein || 0));
-        setCarbs(String(data.carbs || 0));
-        setFats(String(data.fats || 0));
+        setCalories(String(data.calories ?? data.kcal ?? 0));
+        setProtein(String(data.protein ?? 0));
+        setCarbs(String(data.carbs ?? 0));
+        setFats(String(data.fats ?? data.fat ?? 0));
         setConfidence(data.confidence || "High");
+        if (res.data?.usage) await setUser(res.data.usage);
 
         setModalVisible(true);
       } else {
@@ -213,10 +242,25 @@ export default function MealScannerScreen({ navigation }) {
 
   // 2. Barcode Product Lookup using Open Food Facts & AI Fallback
   const fetchProductByBarcode = async (barcode) => {
-    setShowBarcodeScanner(false);
     setAnalyzing(true);
     setScanStatus("Looking up product details…");
     try {
+      const activeToken = await getAuthToken();
+      if (!activeToken) {
+        Alert.alert(
+          "Authentication Error",
+          "Session expired. Please log in again.",
+        );
+        return;
+      }
+
+      const allowance = await axios.post(
+        `${API_BASE}/meals/scan-allowance`,
+        {},
+        { headers: { Authorization: `Bearer ${activeToken}` } },
+      );
+      if (allowance.data?.usage) await setUser(allowance.data.usage);
+
       const cleanBarcode = String(barcode).trim();
 
       const response = await axios.get(
@@ -249,19 +293,18 @@ export default function MealScannerScreen({ navigation }) {
 
         // If Open Food Facts returns zero values, trigger AI estimation fallback
         if (Number(cal) === 0 && Number(prot) === 0 && Number(carb) === 0) {
-          const activeToken = await getAuthToken();
           const aiRes = await axios.post(
-            `${API_BASE}/meals/estimate-text`,
-            { query: name },
+            `${API_BASE}/meals/parse-text`,
+            { text: name },
             { headers: { Authorization: `Bearer ${activeToken}` } },
           );
           if (aiRes.data?.success) {
             const aiData = aiRes.data.data;
             setFoodName(name);
-            setCalories(String(aiData.calories || 150));
-            setProtein(String(aiData.protein || 2));
-            setCarbs(String(aiData.carbs || 30));
-            setFats(String(aiData.fats || 1));
+            setCalories(String(aiData.calories ?? aiData.kcal ?? 150));
+            setProtein(String(aiData.protein ?? 2));
+            setCarbs(String(aiData.carbs ?? 30));
+            setFats(String(aiData.fats ?? aiData.fat ?? 1));
             setConfidence("High (AI Barcode Estimation)");
             setModalVisible(true);
             return;
@@ -297,17 +340,20 @@ export default function MealScannerScreen({ navigation }) {
       setAnalyzing(false);
       setIsScanningBarcode(false);
       setScanStatus("");
+      setShowBarcodeScanner(false);
+      barcodeLockRef.current = false;
     }
   };
 
   const handleBarCodeScanned = ({ data }) => {
-    if (isScanningBarcode || !data) return;
+    if (barcodeLockRef.current || !data) return;
+    barcodeLockRef.current = true;
     setIsScanningBarcode(true);
     fetchProductByBarcode(data);
   };
 
   const handleOpenBarcodeScanner = async () => {
-    if (!isPro) {
+    if (!scanAllowanceAvailable) {
       promptUpgrade();
       return;
     }
@@ -323,6 +369,7 @@ export default function MealScannerScreen({ navigation }) {
       }
     }
     setIsScanningBarcode(false);
+    barcodeLockRef.current = false;
     setShowBarcodeScanner(true);
   };
 
@@ -356,6 +403,7 @@ export default function MealScannerScreen({ navigation }) {
           "Content-Type": "application/json",
         },
       });
+      await fetchDailySummary(localDate);
 
       // 2. Automatically save as a recipe / saved meal
       try {
@@ -439,6 +487,29 @@ export default function MealScannerScreen({ navigation }) {
               <Text style={{ color: colors.textSecondary, marginTop: 8 }}>
                 No image selected
               </Text>
+            </View>
+          )}
+          {analyzing && imageUri && (
+            <View style={styles.laserOverlay} pointerEvents="none">
+              <Animated.View
+                style={[
+                  styles.laserLine,
+                  {
+                    transform: [
+                      {
+                        translateY: scanLineProgress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 180],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+              <View style={styles.cameraLoadingBadge}>
+                <ActivityIndicator color="#42F5A1" size="small" />
+                <Text style={styles.cameraLoadingText}>{scanStatus}</Text>
+              </View>
             </View>
           )}
         </View>
@@ -553,6 +624,31 @@ export default function MealScannerScreen({ navigation }) {
               barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "qr"],
             }}
           />
+          {isScanningBarcode && (
+            <View style={styles.laserOverlay} pointerEvents="none">
+              <Animated.View
+                style={[
+                  styles.laserLine,
+                  {
+                    transform: [
+                      {
+                        translateY: scanLineProgress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 240],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+              <View style={styles.cameraLoadingBadge}>
+                <ActivityIndicator color="#42F5A1" size="small" />
+                <Text style={styles.cameraLoadingText}>
+                  Looking up product details…
+                </Text>
+              </View>
+            </View>
+          )}
           <TouchableOpacity
             style={styles.closeBarcodeBtn}
             onPress={() => setShowBarcodeScanner(false)}
@@ -708,11 +804,50 @@ export default function MealScannerScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+      <UpgradeTrialModal
+        visible={showTrialModal}
+        colors={colors}
+        trialAvailable={trialAvailable}
+        onClose={() => setShowTrialModal(false)}
+        onContinue={continueToTrial}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  laserOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  laserLine: {
+    position: "absolute",
+    top: 8,
+    left: 12,
+    right: 12,
+    height: 2,
+    backgroundColor: "#42F5A1",
+    shadowColor: "#42F5A1",
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  cameraLoadingBadge: {
+    position: "absolute",
+    bottom: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    backgroundColor: "rgba(11,15,25,0.88)",
+    borderColor: "rgba(66,245,161,0.7)",
+    borderWidth: 1,
+  },
+  cameraLoadingText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
   scanProgress: {
     minHeight: 76,
     marginBottom: 16,

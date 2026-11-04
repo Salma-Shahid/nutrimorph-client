@@ -15,9 +15,14 @@ import { useMealPlanStore } from "../store/useMealPlanStore";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 import { saveDataToCache, getDataFromCache } from "../utils/cache";
+import { isActiveProUser } from "../utils/subscription";
+import UpgradeTrialModal from "../components/UpgradeTrialModal";
+import { showTestInterstitialAfterAction } from "../services/ads";
 
 export default function MealPlanScreen({ navigation }) {
   const user = useAuthStore((state) => state.user);
+  const isPro = isActiveProUser(user);
+  const trialAvailable = !user?.trialUsedAt;
   const userId = String(user?._id || user?.id || "");
   const mealPlanCacheKey = `active_meal_plan:${encodeURIComponent(userId)}`;
   const refreshUserProfile = useAuthStore((state) => state.refreshUserProfile);
@@ -31,7 +36,7 @@ export default function MealPlanScreen({ navigation }) {
     user?.goal || user?.fitnessGoal || "weight_loss",
   );
   const [dietType, setDietType] = useState("Desi / Pakistani Standard");
-  const [duration, setDuration] = useState(7);
+  const [duration, setDuration] = useState(3);
   const [targetCalories, setTargetCalories] = useState(
     user?.dailyCalorieGoal || user?.dailyCalories
       ? String(user.dailyCalorieGoal || user.dailyCalories)
@@ -39,6 +44,7 @@ export default function MealPlanScreen({ navigation }) {
   );
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [showTrialModal, setShowTrialModal] = useState(false);
 
   const globalDietOptions = [
     "Desi / Pakistani Standard",
@@ -50,6 +56,13 @@ export default function MealPlanScreen({ navigation }) {
   ];
 
   const durationOptions = [3, 5, 7, 15, 30];
+
+  const continueToTrial = () => {
+    setShowTrialModal(false);
+    navigation.navigate("SubscriptionScreen", {
+      startTrial: trialAvailable,
+    });
+  };
 
   useEffect(() => {
     if (user) {
@@ -86,6 +99,11 @@ export default function MealPlanScreen({ navigation }) {
   }, [activeMealPlan, mealPlanCacheKey, userId]);
 
   const handleGenerate = async () => {
+    if (!isPro && duration !== 3) {
+      setShowTrialModal(true);
+      return;
+    }
+
     const res = await generateMealPlan({
       goal,
       dietType,
@@ -95,6 +113,10 @@ export default function MealPlanScreen({ navigation }) {
     });
 
     if (!res.success) {
+      if (res.code === "TRIAL_REQUIRED" || res.status === 403) {
+        setShowTrialModal(true);
+        return;
+      }
       Alert.alert(
         "Pro Feature Required",
         res.message || "Please upgrade to access AI Meal Planner.",
@@ -107,6 +129,7 @@ export default function MealPlanScreen({ navigation }) {
         ],
       );
     } else {
+      if (!isPro) await showTestInterstitialAfterAction(user);
       Alert.alert(
         "Success",
         `Your ${duration}-day personalized meal plan is ready!`,
@@ -231,8 +254,21 @@ export default function MealPlanScreen({ navigation }) {
                     borderColor: colors.border,
                   },
                 ]}
-                onPress={() => setDuration(days)}
+                onPress={() => {
+                  if (days > 3 && !isPro) {
+                    setShowTrialModal(true);
+                    return;
+                  }
+                  setDuration(days);
+                }}
               >
+                {days > 3 && !isPro ? (
+                  <Ionicons
+                    name="lock-closed"
+                    size={12}
+                    color={duration === days ? "#FFF" : colors.textSecondary}
+                  />
+                ) : null}
                 <Text
                   style={{
                     color: duration === days ? "#FFF" : colors.text,
@@ -436,6 +472,13 @@ export default function MealPlanScreen({ navigation }) {
             </View>
           )}
       </ScrollView>
+      <UpgradeTrialModal
+        visible={showTrialModal}
+        colors={colors}
+        trialAvailable={trialAvailable}
+        onClose={() => setShowTrialModal(false)}
+        onContinue={continueToTrial}
+      />
     </SafeAreaView>
   );
 }

@@ -23,7 +23,9 @@ import { Ionicons } from "@expo/vector-icons";
 import ChatMessageItemModule from "./ChatMessageItem";
 import { useAuthStore } from "../store/useAuthStore";
 import CustomAppLoader from "../components/CustomAppLoader";
+import UpgradeTrialModal from "../components/UpgradeTrialModal";
 import { getThemeColors } from "../theme/colors";
+import { isActiveProUser } from "../utils/subscription";
 
 // Resolution for ChatMessageItem component
 const ChatMessageItem =
@@ -130,6 +132,8 @@ const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.a
 const ChatBotScreen = ({ navigation }) => {
   const { user, theme } = useAuthStore();
   const colors = getThemeColors(theme);
+  const isPro = isActiveProUser(user);
+  const trialAvailable = !user?.trialUsedAt;
 
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
@@ -137,9 +141,28 @@ const ChatBotScreen = ({ navigation }) => {
   const [fetchingHistory, setFetchingHistory] = useState(true);
   const [refreshingHistory, setRefreshingHistory] = useState(false);
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
+  const [dailyMessagesUsed, setDailyMessagesUsed] = useState(0);
+  const [showTrialModal, setShowTrialModal] = useState(false);
 
   const flatListRef = useRef(null);
   const currentUserId = user?._id || user?.id;
+
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const lastMessageDate = user?.lastChatDate
+      ? new Date(user.lastChatDate).toISOString().slice(0, 10)
+      : "";
+    setDailyMessagesUsed(
+      lastMessageDate === today ? Number(user?.dailyChatCount) || 0 : 0,
+    );
+  }, [currentUserId, user?.dailyChatCount, user?.lastChatDate]);
+
+  const continueToTrial = () => {
+    setShowTrialModal(false);
+    navigation.navigate("SubscriptionScreen", {
+      startTrial: trialAvailable,
+    });
+  };
 
   // Animation for round icons
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -256,6 +279,10 @@ const ChatBotScreen = ({ navigation }) => {
   const handleSend = async () => {
     const textToSend = inputText.trim();
     if (!textToSend || loading) return;
+    if (!isPro && dailyMessagesUsed >= 1) {
+      setShowTrialModal(true);
+      return;
+    }
 
     const token = await getToken();
     if (!token) {
@@ -289,6 +316,9 @@ const ChatBotScreen = ({ navigation }) => {
       });
 
       if (res.data?.success) {
+        if (!isPro) {
+          setDailyMessagesUsed(Number(res.data.dailyChatCount) || 1);
+        }
         const botMsg = {
           _id: `bot-${Date.now()}`,
           sender: "bot",
@@ -318,10 +348,14 @@ const ChatBotScreen = ({ navigation }) => {
       const errorData = error.response?.data;
       const status = error.response?.status;
 
-      if (status === 403 || errorData?.limitReached) {
+      if (
+        status === 403 &&
+        (errorData?.code === "TRIAL_REQUIRED" || errorData?.limitReached)
+      ) {
+        setShowTrialModal(true);
         const limitMessageText =
           errorData?.message ||
-          "Your daily limit of 5 free messages has been reached. Upgrade to the Pro plan for unlimited messaging!";
+          "Your free NutriBot message for today has been used. Start a 3-day free trial for unlimited AI support.";
 
         const limitBotMsg = {
           _id: `bot-limit-${Date.now()}`,
@@ -513,6 +547,13 @@ const ChatBotScreen = ({ navigation }) => {
             <Ionicons name="send" size={16} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
+        <UpgradeTrialModal
+          visible={showTrialModal}
+          colors={colors}
+          trialAvailable={trialAvailable}
+          onClose={() => setShowTrialModal(false)}
+          onContinue={continueToTrial}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

@@ -31,12 +31,17 @@ export const useMealPlanStore = create((set) => ({
 
       if (res.data?.success) {
         set({ activeMealPlan: res.data.data, isLoading: false });
-        return { success: true };
+        return { success: true, data: res.data.data };
       }
     } catch (error) {
       const errorMsg = error?.response?.data?.message || error.message;
       set({ error: errorMsg, isLoading: false });
-      return { success: false, message: errorMsg };
+      return {
+        success: false,
+        message: errorMsg,
+        code: error?.response?.data?.code,
+        status: error?.response?.status,
+      };
     }
   },
 
