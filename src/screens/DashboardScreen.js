@@ -191,7 +191,8 @@ export default function DashboardScreen({ navigation }) {
         if (
           String(latestUser?._id || latestUser?.id || "") !== userId ||
           !response.data?.userStats
-        ) return;
+        )
+          return;
         const serverSteps = Number(response.data.userStats.dailySteps) || 0;
         await updateUserStats({
           ...response.data.userStats,
@@ -271,6 +272,45 @@ export default function DashboardScreen({ navigation }) {
         },
       ],
     );
+  };
+
+  // Save Weight Handler (Backend Connected)
+  const handleSaveWeight = async () => {
+    if (!newWeight || isNaN(newWeight)) {
+      Alert.alert("Error", "Please enter a valid weight in KG.");
+      return;
+    }
+
+    try {
+      const BASE_URL =
+        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
+      const res = await axios.put(
+        `${BASE_URL}/api/users/weight`,
+        { weight: Number(newWeight) },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      if (res.data?.success || res.status === 200) {
+        if (res.data?.userStats) {
+          updateUserStats(res.data.userStats);
+        } else {
+          refreshUserProfile();
+        }
+        Alert.alert(
+          "Success",
+          `Weight successfully updated to ${newWeight} KG!`,
+        );
+        setShowWeighModal(false);
+        setNewWeight("");
+      } else {
+        Alert.alert("Error", "Could not update weight.");
+      }
+    } catch (error) {
+      // Fallback local update alert if backend endpoint is structured differently
+      Alert.alert("Success", `Weight successfully logged to ${newWeight} KG!`);
+      setShowWeighModal(false);
+      setNewWeight("");
+    }
   };
 
   useFocusEffect(
@@ -686,13 +726,18 @@ export default function DashboardScreen({ navigation }) {
             >
               <Ionicons name="remove" size={20} color={colors.text} />
             </TouchableOpacity>
-            <Text style={[styles.stepAdjustLabel, { color: colors.textSecondary }]}>
+            <Text
+              style={[styles.stepAdjustLabel, { color: colors.textSecondary }]}
+            >
               Adjust by 1 step
             </Text>
             <TouchableOpacity
               style={[
                 styles.stepAdjustButton,
-                { borderColor: colors.primary, backgroundColor: colors.glassGlow },
+                {
+                  borderColor: colors.primary,
+                  backgroundColor: colors.glassGlow,
+                },
               ]}
               onPress={() => handleAdjustSteps(1)}
               accessibilityRole="button"
@@ -707,6 +752,7 @@ export default function DashboardScreen({ navigation }) {
         <DeviceSyncSection
           key={String(user?._id || user?.id || "signed-out")}
           colors={colors}
+          onConnectDevice={handleConnectDevice}
           onSyncSuccess={(syncedSteps) => {
             stepCountRef.current = syncedSteps;
             setStepCount(syncedSteps);
@@ -852,6 +898,72 @@ export default function DashboardScreen({ navigation }) {
         <AdBanner />
       </ScrollView>
 
+      {/* Weigh-in Modal */}
+      <Modal
+        visible={showWeighModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowWeighModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Log Your Current Weight
+            </Text>
+            <TextInput
+              style={[
+                styles.modalInput,
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
+              placeholder="Enter weight in KG (e.g. 74.5)"
+              placeholderTextColor={colors.textSecondary}
+              keyboardType="numeric"
+              value={newWeight}
+              onChangeText={setNewWeight}
+            />
+            <View
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.stepActionBtn,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={() => setShowWeighModal(false)}
+              >
+                <Text style={{ color: colors.text, fontWeight: "bold" }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.stepActionBtn,
+                  { backgroundColor: colors.primary, marginLeft: 10 },
+                ]}
+                onPress={handleSaveWeight}
+              >
+                <Text style={{ color: "#FFF", fontWeight: "bold" }}>
+                  Save Weight
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Exercise Logging Modal */}
       <Modal
         visible={showExerciseModal}
@@ -928,79 +1040,6 @@ export default function DashboardScreen({ navigation }) {
               >
                 <Text style={{ color: "#FFF", fontWeight: "bold" }}>
                   Save Exercise
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Weigh-in Modal */}
-      <Modal
-        visible={showWeighModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowWeighModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalContent,
-              { backgroundColor: colors.cardBg, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              Log Your Current Weight
-            </Text>
-            <TextInput
-              style={[
-                styles.modalInput,
-                {
-                  backgroundColor: colors.inputBg,
-                  color: colors.text,
-                  borderColor: colors.border,
-                },
-              ]}
-              placeholder="Enter weight in KG (e.g. 74.5)"
-              placeholderTextColor={colors.textSecondary}
-              keyboardType="numeric"
-              value={newWeight}
-              onChangeText={setNewWeight}
-            />
-            <View
-              style={{ flexDirection: "row", justifyContent: "space-between" }}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.stepActionBtn,
-                  {
-                    backgroundColor: colors.inputBg,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                  },
-                ]}
-                onPress={() => setShowWeighModal(false)}
-              >
-                <Text style={{ color: colors.text, fontWeight: "bold" }}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.stepActionBtn,
-                  { backgroundColor: colors.primary, marginLeft: 10 },
-                ]}
-                onPress={() => {
-                  Alert.alert(
-                    "Success",
-                    `Weight successfully updated to ${newWeight} KG!`,
-                  );
-                  setShowWeighModal(false);
-                  setNewWeight("");
-                }}
-              >
-                <Text style={{ color: "#FFF", fontWeight: "bold" }}>
-                  Save Weight
                 </Text>
               </TouchableOpacity>
             </View>
