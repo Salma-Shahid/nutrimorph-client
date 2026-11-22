@@ -4,14 +4,13 @@ import Constants from "expo-constants";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 import { isActiveProUser } from "../utils/subscription";
-import { areMobileAdsReady } from "../services/ads";
+import { areMobileAdsReady, getBannerAdUnitId } from "../services/ads";
 
-let BannerAd, BannerAdSize, TestIds;
+let BannerAd, BannerAdSize;
 try {
   const MobileAds = require("react-native-google-mobile-ads");
   BannerAd = MobileAds.BannerAd;
   BannerAdSize = MobileAds.BannerAdSize;
-  TestIds = MobileAds.TestIds;
 } catch {
   console.log("AdMob native module not found in this runtime environment.");
 }
@@ -33,7 +32,7 @@ export default function AdBanner() {
     return null;
   }
 
-  const adUnitId = TestIds.BANNER;
+  const adUnitId = getBannerAdUnitId();
 
   return (
     <View

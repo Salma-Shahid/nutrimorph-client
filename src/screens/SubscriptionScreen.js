@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
-  AppState,
   View,
   Text,
   TouchableOpacity,
@@ -9,145 +8,81 @@ import {
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as WebBrowser from "expo-web-browser";
 import axios from "axios";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
+import { isActiveProUser } from "../utils/subscription";
+import PaddleCheckoutModal from "../components/PaddleCheckoutModal";
 
 const BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
 
-export default function SubscriptionScreen({ route }) {
+export default function SubscriptionScreen() {
   const { theme, user, token, setUser, refreshUserProfile } = useAuthStore();
   const colors = getThemeColors(theme || "dark");
   const [loading, setLoading] = useState(false);
   const [billingCycle, setBillingCycle] = useState("monthly");
-  const [startTrial] = useState(route?.params?.startTrial === true);
-  const trialAvailable = !user?.trialUsedAt;
-  const checkoutPendingRef = useRef(false);
-  const verificationInProgressRef = useRef(false);
+  const [checkoutVisible, setCheckoutVisible] = useState(false);
 
   const verifyCheckout = useCallback(async () => {
-    if (!token || verificationInProgressRef.current) return;
-
-    verificationInProgressRef.current = true;
+    if (!token) return;
+    setLoading(true);
     try {
-      const verification = await axios.post(
-        `${BASE_URL}/api/payment/verify-payment`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (verification.data?.user) {
-        const verifiedUser = verification.data.user;
-        await setUser({
-          subscriptionTier: verifiedUser.subscriptionTier,
-          isPro: verifiedUser.isPro,
-          subscriptionExpiresAt: verifiedUser.subscriptionExpiresAt,
-          subscriptionStatus: verifiedUser.subscriptionStatus,
-          trialEndDate: verifiedUser.trialEndDate,
-          trialUsedAt: verifiedUser.trialUsedAt,
-        });
-        const refreshed = await refreshUserProfile();
-        if (!refreshed.success) {
-          throw new Error(
-            refreshed.message || "Could not refresh the account profile.",
-          );
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         }
-      }
-    } catch (error) {
-      console.error("Could not verify subscription after checkout:", error);
-      Alert.alert(
-        "Subscription Status",
-        error?.response?.data?.message ||
-          "Could not refresh your subscription status. Please try again.",
-      );
-    } finally {
-      verificationInProgressRef.current = false;
-    }
-  }, [refreshUserProfile, setUser, token]);
-
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active" && checkoutPendingRef.current) {
-        checkoutPendingRef.current = false;
-        verifyCheckout();
-      }
-    });
-
-    return () => subscription.remove();
-  }, [verifyCheckout]);
-
-  const handleSubscribe = async () => {
-    if (!token) {
-      Alert.alert("Sign in required", "Please sign in before subscribing.");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const response = await axios.post(
-        `${BASE_URL}/api/payment/create-checkout-session`,
-        {
-          plan: "pro",
-          billingCycle,
-          ...(startTrial && trialAvailable ? { trialDays: 3 } : {}),
-        },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      const checkoutUrl = response.data?.url;
-      if (!checkoutUrl) {
-        throw new Error(
-          response.data?.message || "Could not initiate payment session.",
-        );
-      }
-
-      checkoutPendingRef.current = true;
-      const browserResult = await WebBrowser.openBrowserAsync(checkoutUrl);
-      if (
-        browserResult.type !== "opened" &&
-        checkoutPendingRef.current
-      ) {
-        checkoutPendingRef.current = false;
         const verification = await axios.post(
           `${BASE_URL}/api/payment/verify-payment`,
           {},
           { headers: { Authorization: `Bearer ${token}` } },
         );
-        if (verification.data?.user) {
-          const verifiedUser = verification.data.user;
+        const verifiedUser = verification.data?.user;
+        if (verifiedUser) {
           await setUser({
             subscriptionTier: verifiedUser.subscriptionTier,
             isPro: verifiedUser.isPro,
             subscriptionExpiresAt: verifiedUser.subscriptionExpiresAt,
             subscriptionStatus: verifiedUser.subscriptionStatus,
-            trialEndDate: verifiedUser.trialEndDate,
-            trialUsedAt: verifiedUser.trialUsedAt,
           });
-          const refreshed = await refreshUserProfile();
-          if (!refreshed.success) {
-            throw new Error(
-              refreshed.message || "Could not refresh the account profile.",
-            );
+          if (verifiedUser.isPro) {
+            const refreshed = await refreshUserProfile();
+            if (!refreshed.success) {
+              throw new Error(
+                refreshed.message || "Could not refresh the account profile.",
+              );
+            }
+            Alert.alert("NutriMorph Pro", "Your Pro subscription is active.");
+            return;
           }
         }
       }
-    } catch (error) {
-      checkoutPendingRef.current = false;
-      console.error("Stripe Checkout Error:", error);
       Alert.alert(
-        "Payment Error",
+        "Payment processing",
+        "Paddle confirmed checkout, but the verified webhook has not reached us yet. Pro access will update after the payment event is processed.",
+      );
+    } catch (error) {
+      console.error("Could not refresh subscription after Paddle checkout:", error);
+      Alert.alert(
+        "Subscription Status",
         error?.response?.data?.message ||
           error.message ||
-          "Something went wrong with Stripe checkout.",
+          "Could not refresh your subscription status. Please try again.",
       );
     } finally {
       setLoading(false);
     }
-  };
+  }, [refreshUserProfile, setUser, token]);
+
+  const isPro = isActiveProUser(user);
+  const configuredPriceId =
+    billingCycle === "yearly"
+      ? process.env.EXPO_PUBLIC_PADDLE_YEARLY_PRICE_ID
+      : process.env.EXPO_PUBLIC_PADDLE_MONTHLY_PRICE_ID;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <View style={styles.heading}>
         <Ionicons name="ribbon-outline" size={24} color={colors.primary} />
         <Text style={[styles.title, { color: colors.primary }]}>
           Upgrade to NutriMorph Pro
@@ -157,14 +92,7 @@ export default function SubscriptionScreen({ route }) {
         Unlock AI meal scanning, advanced analytics, and unlimited macro
         tracking.
       </Text>
-      {startTrial && trialAvailable && (
-        <Text style={[styles.trialNotice, { color: colors.primary }]}>
-          Your eligible account will receive a 3-day free trial through secure
-          Stripe checkout.
-        </Text>
-      )}
-
-      {user?.subscriptionTier === "pro" || user?.isPro ? (
+      {isPro ? (
         <Text style={[styles.currentPlan, { color: colors.primary }]}>
           Your Pro subscription is active.
         </Text>
@@ -172,8 +100,8 @@ export default function SubscriptionScreen({ route }) {
         <>
           <View style={styles.planRow}>
             {[
-              { id: "monthly", title: "Monthly", price: "$9.99 / month" },
-              { id: "yearly", title: "Yearly", price: "$99 / year" },
+              { id: "monthly", title: "Monthly" },
+              { id: "yearly", title: "Yearly" },
             ].map((plan) => (
               <TouchableOpacity
                 key={plan.id}
@@ -181,13 +109,9 @@ export default function SubscriptionScreen({ route }) {
                   styles.planOption,
                   {
                     backgroundColor:
-                      billingCycle === plan.id
-                        ? colors.glassGlow
-                        : colors.cardBg,
+                      billingCycle === plan.id ? colors.glassGlow : colors.cardBg,
                     borderColor:
-                      billingCycle === plan.id
-                        ? colors.primary
-                        : colors.border,
+                      billingCycle === plan.id ? colors.primary : colors.border,
                   },
                 ]}
                 onPress={() => setBillingCycle(plan.id)}
@@ -197,32 +121,46 @@ export default function SubscriptionScreen({ route }) {
                 <Text style={[styles.planTitle, { color: colors.text }]}>
                   {plan.title}
                 </Text>
-                <Text
-                  style={[styles.planPrice, { color: colors.textSecondary }]}
-                >
-                  {plan.price}
+                <Text style={[styles.planPrice, { color: colors.textSecondary }]}>
+                  Secure Paddle billing
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
-
           <TouchableOpacity
-            style={[styles.proButton, { backgroundColor: colors.primary }]}
-            onPress={handleSubscribe}
-            disabled={loading}
+            style={[
+              styles.proButton,
+              { backgroundColor: colors.primary, opacity: configuredPriceId ? 1 : 0.6 },
+            ]}
+            onPress={() => setCheckoutVisible(true)}
+            disabled={loading || !configuredPriceId}
           >
             {loading ? (
               <ActivityIndicator color="#FFF" />
             ) : (
               <Text style={styles.proButtonText}>
-                {startTrial && trialAvailable
-                  ? "Start 3-day free trial"
-                  : "Continue to secure checkout"}
+                Continue to secure checkout
               </Text>
             )}
           </TouchableOpacity>
+          {!configuredPriceId && (
+            <Text style={[styles.configNotice, { color: colors.textSecondary }]}>
+              This billing option is not configured yet.
+            </Text>
+          )}
         </>
       )}
+      <PaddleCheckoutModal
+        visible={checkoutVisible}
+        token={token}
+        billingCycle={billingCycle}
+        theme={theme}
+        onClose={() => setCheckoutVisible(false)}
+        onComplete={() => {
+          setCheckoutVisible(false);
+          verifyCheckout();
+        }}
+      />
     </View>
   );
 }
@@ -234,6 +172,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  heading: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: {
     fontSize: 24,
     fontWeight: "bold",
@@ -241,19 +180,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   subtitle: { fontSize: 14, textAlign: "center", marginBottom: 24 },
-  trialNotice: {
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: "center",
-    marginBottom: 18,
-  },
   currentPlan: { fontSize: 16, fontWeight: "bold", textAlign: "center" },
-  planRow: {
-    width: "100%",
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 20,
-  },
+  planRow: { width: "100%", flexDirection: "row", gap: 12, marginBottom: 20 },
   planOption: {
     flex: 1,
     minHeight: 86,
@@ -272,4 +200,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   proButtonText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
+  configNotice: { fontSize: 12, marginTop: 10, textAlign: "center" },
 });

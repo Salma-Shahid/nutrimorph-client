@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Modal,
   Alert,
   RefreshControl,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -27,6 +28,7 @@ const CATEGORIES = [
 ];
 
 const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Late-night"];
+const CUISINES = ["All", "Arabic", "American", "Italian"];
 
 export default function ExploreScreen({ navigation }) {
   const theme = useAuthStore((state) => state.theme) || "dark";
@@ -36,9 +38,13 @@ export default function ExploreScreen({ navigation }) {
   const fetchTodayMeals = useMealStore((state) => state.fetchTodayMeals);
 
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedCuisine, setSelectedCuisine] = useState("All");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const recipeRequestId = useRef(0);
 
   // Meal Type Modal States
   const [showMealModal, setShowMealModal] = useState(false);
@@ -47,26 +53,39 @@ export default function ExploreScreen({ navigation }) {
   const [submitting, setSubmitting] = useState(false);
 
   // Fetch Categorized Recipes from Backend
-  const loadRecipes = async (category, isRefresh = false) => {
+  const loadRecipes = async (
+    category,
+    cuisine,
+    search,
+    isRefresh = false,
+  ) => {
+    const requestId = ++recipeRequestId.current;
     if (!isRefresh) setLoading(true);
     try {
       const BASE_URL =
         process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
-      const catQuery =
-        category !== "All" ? `?category=${encodeURIComponent(category)}` : "";
+      const query = [];
+      if (category !== "All") {
+        query.push(`category=${encodeURIComponent(category)}`);
+      }
+      if (cuisine !== "All") {
+        query.push(`cuisine=${encodeURIComponent(cuisine)}`);
+      }
+      if (search.trim()) query.push(`q=${encodeURIComponent(search.trim())}`);
+      const suffix = query.length ? `?${query.join("&")}` : "";
 
-      const res = await axios.get(`${BASE_URL}/api/recipes${catQuery}`, {
+      const res = await axios.get(`${BASE_URL}/api/recipes${suffix}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (res.data?.success) {
+      if (res.data?.success && requestId === recipeRequestId.current) {
         setRecipes(res.data.recipes || res.data.data || []);
         return true;
       }
-      return false;
+      return res.data?.success === true;
     } catch (err) {
       console.log("Error loading recipes:", err.message);
-      if (isRefresh) {
+      if (isRefresh && requestId === recipeRequestId.current) {
         Alert.alert(
           "Refresh failed",
           err?.response?.data?.message || "Could not refresh recipes.",
@@ -74,22 +93,41 @@ export default function ExploreScreen({ navigation }) {
       }
       return false;
     } finally {
-      if (!isRefresh) setLoading(false);
+      if (requestId === recipeRequestId.current) {
+        setLoading(false);
+      }
     }
   };
+
+  useEffect(
+    () => () => {
+      recipeRequestId.current += 1;
+    },
+    [],
+  );
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await loadRecipes(selectedCategory, true);
+      await loadRecipes(
+        selectedCategory,
+        selectedCuisine,
+        searchQuery,
+        true,
+      );
     } finally {
       setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    loadRecipes(selectedCategory);
-  }, [selectedCategory]);
+    const timeout = setTimeout(() => setSearchQuery(searchInput), 300);
+    return () => clearTimeout(timeout);
+  }, [searchInput]);
+
+  useEffect(() => {
+    loadRecipes(selectedCategory, selectedCuisine, searchQuery);
+  }, [selectedCategory, selectedCuisine, searchQuery]);
 
   // Trigger Modal on"Add To Diary"
   const handleOpenMealModal = (recipe) => {
@@ -152,6 +190,57 @@ export default function ExploreScreen({ navigation }) {
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           Explore & Recipe Library
         </Text>
+      </View>
+
+      <TextInput
+        style={[
+          styles.searchInput,
+          {
+            backgroundColor: colors.cardBg,
+            borderColor: colors.border,
+            color: colors.text,
+          },
+        ]}
+        placeholder="Search English recipe titles"
+        placeholderTextColor={colors.textSecondary}
+        value={searchInput}
+        onChangeText={setSearchInput}
+        accessibilityLabel="Search recipes by English title"
+      />
+
+      <View style={{ height: 44, marginBottom: 8 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+        >
+          {CUISINES.map((cuisine) => {
+            const isSelected = selectedCuisine === cuisine;
+            return (
+              <TouchableOpacity
+                key={cuisine}
+                style={[
+                  styles.categoryPill,
+                  {
+                    backgroundColor: isSelected ? colors.primary : colors.cardBg,
+                    borderColor: isSelected ? colors.primary : colors.border,
+                  },
+                ]}
+                onPress={() => setSelectedCuisine(cuisine)}
+              >
+                <Text
+                  style={{
+                    color: isSelected ? "#FFF" : colors.textSecondary,
+                    fontWeight: "bold",
+                    fontSize: 12,
+                  }}
+                >
+                  {cuisine}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Horizontal Category Pill Selector */}
@@ -232,7 +321,7 @@ export default function ExploreScreen({ navigation }) {
               color={colors.textSecondary}
             />
             <Text style={{ color: colors.textSecondary, marginTop: 10 }}>
-              No recipes found in this category.
+              No recipes match these filters.
             </Text>
           </View>
         </ScrollView>
@@ -428,6 +517,15 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: 16, paddingVertical: 14 },
   headerTitle: { fontSize: 20, fontWeight: "bold" },
+  searchInput: {
+    minHeight: 44,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderRadius: 12,
+    fontSize: 14,
+  },
   categoryPill: {
     paddingHorizontal: 16,
     paddingVertical: 8,

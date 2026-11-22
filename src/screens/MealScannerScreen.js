@@ -26,12 +26,19 @@ import UpgradeTrialModal from "../components/UpgradeTrialModal";
 import { useMealStore } from "../store/useMealStore";
 
 const API_BASE = `${process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app"}/api`;
+const getNutrientNumber = (...values) => {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+    const number = Number.parseFloat(String(value));
+    if (Number.isFinite(number) && number >= 0) return number;
+  }
+  return 0;
+};
 
 export default function MealScannerScreen({ navigation }) {
   const { theme, token: storeToken, user, setUser } = useAuthStore();
   const colors = getThemeColors(theme);
   const isPro = isActiveProUser(user);
-  const trialAvailable = !user?.trialUsedAt;
   const fetchDailySummary = useMealStore((state) => state.fetchDailySummary);
 
   const [imageUri, setImageUri] = useState(null);
@@ -51,7 +58,8 @@ export default function MealScannerScreen({ navigation }) {
   const [protein, setProtein] = useState("");
   const [carbs, setCarbs] = useState("");
   const [fats, setFats] = useState("");
-  const [confidence, setConfidence] = useState("High");
+  const [servingSize, setServingSize] = useState("");
+  const [confidence, setConfidence] = useState("AI estimate");
   const [savingMeal, setSavingMeal] = useState(false);
   const [showTrialModal, setShowTrialModal] = useState(false);
   const scanLineProgress = useRef(new Animated.Value(0)).current;
@@ -94,11 +102,9 @@ export default function MealScannerScreen({ navigation }) {
     setShowTrialModal(true);
   };
 
-  const continueToTrial = () => {
+  const continueToPro = () => {
     setShowTrialModal(false);
-    navigation.navigate("SubscriptionScreen", {
-      startTrial: trialAvailable,
-    });
+    navigation.navigate("SubscriptionScreen");
   };
 
   const pickImage = async (useCamera = false) => {
@@ -213,7 +219,8 @@ export default function MealScannerScreen({ navigation }) {
         setProtein(String(data.protein ?? 0));
         setCarbs(String(data.carbs ?? 0));
         setFats(String(data.fats ?? data.fat ?? 0));
-        setConfidence(data.confidence || "High");
+        setServingSize(data.servingSize || "One visible serving (estimate)");
+        setConfidence("AI estimate");
         if (res.data?.usage) await setUser(res.data.usage);
 
         setModalVisible(true);
@@ -279,17 +286,29 @@ export default function MealScannerScreen({ navigation }) {
           "Packaged Food";
 
         // Comprehensive fallback key checking for macros
+        const kcalPer100g = getNutrientNumber(
+          nutriments["energy-kcal_100g"],
+        );
+        const kjPer100g = getNutrientNumber(
+          nutriments["energy-kj_100g"],
+          nutriments.energy_100g,
+        );
         const cal =
-          nutriments["energy-kcal_100g"] ||
-          nutriments["energy-kcal"] ||
-          nutriments["energy-kcal_value"] ||
-          nutriments["energy_100g"] ||
-          0;
-
-        const prot = nutriments.proteins_100g || nutriments.proteins || 0;
-        const carb =
-          nutriments.carbohydrates_100g || nutriments.carbohydrates || 0;
-        const fat = nutriments.fat_100g || nutriments.fat || 0;
+          kcalPer100g ||
+          (kjPer100g ? kjPer100g / 4.184 : 0) ||
+          getNutrientNumber(
+            nutriments["energy-kcal"],
+            nutriments["energy-kcal_value"],
+          );
+        const prot = getNutrientNumber(
+          nutriments.proteins_100g,
+          nutriments.proteins,
+        );
+        const carb = getNutrientNumber(
+          nutriments.carbohydrates_100g,
+          nutriments.carbohydrates,
+        );
+        const fat = getNutrientNumber(nutriments.fat_100g, nutriments.fat);
 
         // If Open Food Facts returns zero values, trigger AI estimation fallback
         if (Number(cal) === 0 && Number(prot) === 0 && Number(carb) === 0) {
@@ -305,7 +324,8 @@ export default function MealScannerScreen({ navigation }) {
             setProtein(String(aiData.protein ?? 2));
             setCarbs(String(aiData.carbs ?? 30));
             setFats(String(aiData.fats ?? aiData.fat ?? 1));
-            setConfidence("High (AI Barcode Estimation)");
+            setServingSize(aiData.servingSize || "One serving (AI estimate)");
+            setConfidence("AI estimate");
             setModalVisible(true);
             return;
           }
@@ -313,10 +333,15 @@ export default function MealScannerScreen({ navigation }) {
 
         setFoodName(name);
         setCalories(String(Math.round(cal)));
-        setProtein(String(Math.round(prot)));
-        setCarbs(String(Math.round(carb)));
-        setFats(String(Math.round(fat)));
-        setConfidence("High (Barcode)");
+        setProtein(String(Number(prot.toFixed(1))));
+        setCarbs(String(Number(carb.toFixed(1))));
+        setFats(String(Number(fat.toFixed(1))));
+        setServingSize(
+          kcalPer100g || kjPer100g
+            ? "Per 100 g (Open Food Facts)"
+            : "Product listing basis (Open Food Facts)",
+        );
+        setConfidence("Open Food Facts");
         setModalVisible(true);
       } else {
         Alert.alert(
@@ -374,10 +399,15 @@ export default function MealScannerScreen({ navigation }) {
   };
 
   const handleConfirmAndSave = async () => {
-    if (!foodName.trim() || !calories.trim()) {
+    const calorieValue = Number(calories);
+    if (
+      !foodName.trim() ||
+      !Number.isFinite(calorieValue) ||
+      calorieValue < 0
+    ) {
       Alert.alert(
         "Missing Details",
-        "Please provide at least a food item name and calorie count.",
+        "Please provide a food item name and a valid non-negative calorie count.",
       );
       return;
     }
@@ -389,10 +419,11 @@ export default function MealScannerScreen({ navigation }) {
 
       const payload = {
         name: foodName.trim(),
-        calories: Number(calories) || 0,
+        calories: calorieValue,
         protein: Number(protein) || 0,
         carbs: Number(carbs) || 0,
         fats: Number(fats) || 0,
+        servingSize: servingSize || "1 serving",
         date: localDate,
       };
 
@@ -415,6 +446,7 @@ export default function MealScannerScreen({ navigation }) {
             protein: Number(protein) || 0,
             carbs: Number(carbs) || 0,
             fats: Number(fats) || 0,
+            servingSize: servingSize || "1 serving",
           },
           {
             headers: {
@@ -701,6 +733,10 @@ export default function MealScannerScreen({ navigation }) {
               onChangeText={setFoodName}
             />
 
+            <Text style={[styles.servingInfo, { color: colors.textSecondary }]}>
+              Nutrition basis: {servingSize || "one serving estimate"}
+            </Text>
+
             <Text style={[styles.label, { color: colors.textSecondary }]}>
               Total Calories (kcal)
             </Text>
@@ -807,9 +843,8 @@ export default function MealScannerScreen({ navigation }) {
       <UpgradeTrialModal
         visible={showTrialModal}
         colors={colors}
-        trialAvailable={trialAvailable}
         onClose={() => setShowTrialModal(false)}
-        onContinue={continueToTrial}
+        onContinue={continueToPro}
       />
     </SafeAreaView>
   );
@@ -963,6 +998,7 @@ const styles = StyleSheet.create({
   },
   confidenceText: { fontSize: 11, fontWeight: "bold" },
   label: { fontSize: 12, fontWeight: "600", marginBottom: 4 },
+  servingInfo: { fontSize: 11, lineHeight: 16, marginBottom: 12 },
   input: {
     borderWidth: 1,
     borderRadius: 12,

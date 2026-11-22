@@ -23,6 +23,7 @@ import { getThemeColors } from "../theme/colors";
 import NotificationSettings from "../components/NotificationSettings";
 import DeviceSyncSection from "../components/DeviceSyncSection";
 import AdBanner from "../components/AdBanner";
+import PaddleCheckoutModal from "../components/PaddleCheckoutModal";
 import { isActiveProUser } from "../utils/subscription";
 
 export default function ProfileScreen({ navigation }) {
@@ -70,7 +71,7 @@ export default function ProfileScreen({ navigation }) {
   const [profileImage, setProfileImage] = useState(
     user?.avatar || user?.profileImage || null,
   );
-  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [checkoutVisible, setCheckoutVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -102,8 +103,7 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  // Stripe Payment Gateway Integration via expo-web-browser
-  const handleStripeCheckout = async () => {
+  const handlePaddleCheckout = () => {
     if (isPro) {
       Alert.alert(
         "Pro Plan",
@@ -111,38 +111,34 @@ export default function ProfileScreen({ navigation }) {
       );
       return;
     }
+    setCheckoutVisible(true);
+  };
 
+  const handlePaddleCheckoutComplete = async () => {
+    setCheckoutVisible(false);
     try {
-      setPaymentLoading(true);
       const BASE_URL =
         process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
-
       const response = await axios.post(
-        `${BASE_URL}/api/payment/create-checkout-session`,
-        { userId: user?._id || user?.id, email: user?.email },
+        `${BASE_URL}/api/payment/verify-payment`,
+        {},
         { headers: { Authorization: `Bearer ${token}` } },
       );
-
-      const checkoutUrl = response.data?.url;
-
-      if (checkoutUrl) {
-        setPaymentLoading(false);
-        const result = await WebBrowser.openBrowserAsync(checkoutUrl);
-        if (result.type === "dismiss") {
-          console.log("User returned from Stripe checkout session.");
-          await refreshUserProfile();
-        }
-      } else {
-        setPaymentLoading(false);
-        Alert.alert("Error", "Could not initiate Stripe payment session.");
+      if (response.data?.user) {
+        await refreshUserProfile();
       }
-    } catch (error) {
-      setPaymentLoading(false);
-      console.log("Stripe Checkout Error:", error);
       Alert.alert(
-        "Payment Error",
+        "Payment submitted",
+        response.data?.user?.isPro
+          ? "Your Pro subscription is active."
+          : "Your payment is awaiting Paddle webhook verification. Pro access will update when the verified event is processed.",
+      );
+    } catch (error) {
+      console.error("Could not refresh Paddle subscription status:", error);
+      Alert.alert(
+        "Subscription Status",
         error?.response?.data?.message ||
-          "Failed to connect to Stripe payment gateway.",
+          "Payment was submitted, but subscription status could not be refreshed.",
       );
     }
   };
@@ -428,7 +424,7 @@ export default function ProfileScreen({ navigation }) {
         {/* Health & Device Sync Section */}
         <DeviceSyncSection />
 
-        {/* Stripe Subscription Plan Box */}
+        {/* Paddle Subscription Plan Box */}
         <View
           style={[
             styles.card,
@@ -457,23 +453,17 @@ export default function ProfileScreen({ navigation }) {
               styles.planToggleBtn,
               { backgroundColor: isPro ? "#64748B" : colors.primary },
             ]}
-            onPress={handleStripeCheckout}
-            disabled={paymentLoading || isPro}
+            onPress={handlePaddleCheckout}
+            disabled={isPro}
           >
-            {paymentLoading ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <>
-                <Ionicons
-                  name={isPro ? "checkmark-circle-outline" : "star-outline"}
-                  size={18}
-                  color="#FFF"
-                />
-                <Text style={styles.planToggleText}>
-                  {isPro ? "Pro Plan Active" : "Upgrade to Pro ($9.99/mo)"}
-                </Text>
-              </>
-            )}
+            <Ionicons
+              name={isPro ? "checkmark-circle-outline" : "star-outline"}
+              size={18}
+              color="#FFF"
+            />
+            <Text style={styles.planToggleText}>
+              {isPro ? "Pro Plan Active" : "Upgrade to Pro"}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -525,6 +515,14 @@ export default function ProfileScreen({ navigation }) {
         </TouchableOpacity>
       </ScrollView>
       <AdBanner />
+      <PaddleCheckoutModal
+        visible={checkoutVisible}
+        token={token}
+        billingCycle="monthly"
+        theme={theme}
+        onClose={() => setCheckoutVisible(false)}
+        onComplete={handlePaddleCheckoutComplete}
+      />
     </SafeAreaView>
   );
 }

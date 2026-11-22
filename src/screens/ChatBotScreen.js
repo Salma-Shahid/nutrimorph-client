@@ -133,7 +133,6 @@ const ChatBotScreen = ({ navigation }) => {
   const { user, theme } = useAuthStore();
   const colors = getThemeColors(theme);
   const isPro = isActiveProUser(user);
-  const trialAvailable = !user?.trialUsedAt;
 
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
@@ -157,11 +156,9 @@ const ChatBotScreen = ({ navigation }) => {
     );
   }, [currentUserId, user?.dailyChatCount, user?.lastChatDate]);
 
-  const continueToTrial = () => {
+  const continueToPro = () => {
     setShowTrialModal(false);
-    navigation.navigate("SubscriptionScreen", {
-      startTrial: trialAvailable,
-    });
+    navigation.navigate("SubscriptionScreen");
   };
 
   // Animation for round icons
@@ -355,7 +352,7 @@ const ChatBotScreen = ({ navigation }) => {
         setShowTrialModal(true);
         const limitMessageText =
           errorData?.message ||
-          "Your free NutriBot message for today has been used. Start a 3-day free trial for unlimited AI support.";
+          "Your free NutriBot message for today has been used. Upgrade to Pro for unlimited AI support.";
 
         const limitBotMsg = {
           _id: `bot-limit-${Date.now()}`,
@@ -550,9 +547,8 @@ const ChatBotScreen = ({ navigation }) => {
         <UpgradeTrialModal
           visible={showTrialModal}
           colors={colors}
-          trialAvailable={trialAvailable}
           onClose={() => setShowTrialModal(false)}
-          onContinue={continueToTrial}
+          onContinue={continueToPro}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>

@@ -163,42 +163,6 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  // Real-time DB Sync & Plan Update
-  toggleSubscriptionTier: async (tier) => {
-    const currentUser = get().user;
-    if (!currentUser) return;
-
-    const newTier =
-      tier || (currentUser.subscriptionTier === "pro" ? "free" : "pro");
-    const updatedUser = {
-      ...currentUser,
-      subscriptionTier: newTier,
-      isPro: newTier === "pro",
-      plan: newTier,
-    };
-
-    // 1. Local state and storage update
-    await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
-    set({ user: updatedUser });
-
-    // 2. Direct API call to update Backend / MongoDB Atlas
-    try {
-      const token = get().token;
-      if (token) {
-        await axios.put(
-          `${API_URL}/profile`,
-          {
-            subscriptionTier: newTier,
-            isPro: newTier === "pro",
-          },
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-      }
-    } catch (e) {
-      console.error("Plan DB sync failed:", e.response?.data || e.message);
-    }
-  },
-
   // Onboarding Wizard Complete Handler
   completeOnboarding: async (onboardingData) => {
     set({ isLoading: true, error: null });

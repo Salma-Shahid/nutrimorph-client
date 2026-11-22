@@ -23,7 +23,12 @@ export const initializeMobileAds = async () => {
 
 export const areMobileAdsReady = () => adsReady;
 
-export const showTestInterstitialAfterAction = async (user) => {
+export const getBannerAdUnitId = () => {
+  const { TestIds } = require("react-native-google-mobile-ads");
+  return process.env.EXPO_PUBLIC_ADMOB_BANNER_ID || TestIds.BANNER;
+};
+
+const showInterstitialAfterAction = async (user) => {
   if (
     !adsReady ||
     isActiveProUser(user) ||
@@ -37,9 +42,12 @@ export const showTestInterstitialAfterAction = async (user) => {
     const { AdEventType, InterstitialAd, TestIds } = require(
       "react-native-google-mobile-ads",
     );
-    const ad = InterstitialAd.createForAdRequest(TestIds.INTERSTITIAL, {
+    const ad = InterstitialAd.createForAdRequest(
+      process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID || TestIds.INTERSTITIAL,
+      {
       requestNonPersonalizedAdsOnly: true,
-    });
+      },
+    );
 
     return await new Promise((resolve) => {
       let completed = false;
@@ -73,3 +81,5 @@ export const showTestInterstitialAfterAction = async (user) => {
     return false;
   }
 };
+
+export const showTestInterstitialAfterAction = showInterstitialAfterAction;

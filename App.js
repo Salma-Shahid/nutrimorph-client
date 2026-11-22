@@ -6,7 +6,6 @@ import {
   StyleSheet,
   View,
   ActivityIndicator,
-  Platform,
 } from "react-native";
 import {
   NavigationContainer,
@@ -15,7 +14,6 @@ import {
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import Purchases from "react-native-purchases";
 import crashlytics from "@react-native-firebase/crashlytics";
 import { useAuthStore } from "./src/store/useAuthStore";
 import { useMealStore } from "./src/store/useMealStore";
@@ -93,31 +91,6 @@ export default function App() {
           );
         }
 
-        //  Safety check: Safe RevenueCat guard for standard Expo Go
-        const isRevenueCatAvailable =
-          typeof Purchases?.isConfigured === "function" &&
-          typeof Purchases?.configure === "function";
-
-        if (isRevenueCatAvailable) {
-          const apiKey =
-            process.env.EXPO_PUBLIC_REVENUECAT_KEY ||
-            (__DEV__
-              ? process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY
-              : Platform.OS === "android"
-                ? process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY
-                : process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY);
-
-          if (apiKey) {
-            const isConfigured = await Purchases.isConfigured();
-            if (!isConfigured) {
-              Purchases.configure({ apiKey });
-            }
-          }
-        } else {
-          console.log(
-            "RevenueCat native modules are not available in standard Expo Go. Skipping RevenueCat initialization.",
-          );
-        }
       } catch (err) {
         console.error("Boot Load Error:", err);
       } finally {

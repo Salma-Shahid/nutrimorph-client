@@ -8,14 +8,14 @@ export const getThemeColors = (theme) => {
     text: isDark ? "#F4F7FA" : "#101827",
     textSecondary: isDark ? "#9AA9BC" : "#5D6B7D",
     border: isDark ? "#263449" : "#D7E0EA",
-    primary: "#42F5A1",
-    secondary: "#43D9F5",
+    primary: isDark ? "#34D399" : "#047857",
+    secondary: isDark ? "#38BDF8" : "#0369A1",
     glassGlow: isDark
-      ? "rgba(66, 245, 161, 0.12)"
-      : "rgba(28, 180, 118, 0.08)",
+      ? "rgba(52, 211, 153, 0.12)"
+      : "rgba(4, 120, 87, 0.08)",
     neonGlow: isDark
-      ? "rgba(66, 245, 161, 0.3)"
-      : "rgba(28, 180, 118, 0.16)",
+      ? "rgba(52, 211, 153, 0.3)"
+      : "rgba(4, 120, 87, 0.16)",
     cardBgGlow: isDark ? "#151F2E" : "#F8FAFC",
   };
 };

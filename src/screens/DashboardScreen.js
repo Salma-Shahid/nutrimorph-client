@@ -21,7 +21,9 @@ import AdBanner from "../components/AdBanner";
 import { saveDataToCache, getDataFromCache } from "../utils/cache";
 import StreakHeader from "../components/StreakHeader";
 import DeviceSyncSection from "../components/DeviceSyncSection";
+import WeightProgressCard from "../components/WeightProgressCard";
 import { isActiveProUser } from "../utils/subscription";
+import { getBmiInfo } from "../utils/bmi";
 import axios from "axios";
 
 export default function DashboardScreen({ navigation }) {
@@ -35,6 +37,7 @@ export default function DashboardScreen({ navigation }) {
   const colors = getThemeColors(theme);
   const updateUserStats = useAuthStore((state) => state.updateUserStats);
   const recordDailySteps = useAuthStore((state) => state.recordDailySteps);
+  const setDailySteps = useAuthStore((state) => state.setDailySteps);
   const refreshUserProfile = useAuthStore((state) => state.refreshUserProfile);
   const token = useAuthStore((state) => state.token);
 
@@ -64,6 +67,8 @@ export default function DashboardScreen({ navigation }) {
 
   // Exercise & Steps State
   const [stepCount, setStepCount] = useState(0);
+  const [manualStepTotal, setManualStepTotal] = useState("0");
+  const [weightHistory, setWeightHistory] = useState([]);
   const stepCountRef = useRef(0);
   const pendingStepDeltasRef = useRef(0);
   const stepSyncQueueRef = useRef(Promise.resolve());
@@ -75,6 +80,10 @@ export default function DashboardScreen({ navigation }) {
   useEffect(() => {
     waterCountRef.current = Math.max(0, Number(waterIntake) || 0);
   }, [waterIntake, userId]);
+
+  useEffect(() => {
+    setManualStepTotal(String(stepCount));
+  }, [stepCount]);
 
   // Device local date in YYYY-MM-DD format
   const getLocalDate = () => {
@@ -127,7 +136,7 @@ export default function DashboardScreen({ navigation }) {
       if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
       if (res.data?.success) {
         setCaloriesBurned(res.data.data.caloriesBurned || 0);
-        const updatedUser = await recordDailySteps(
+        const updatedUser = await setDailySteps(
           Number(res.data.data.steps) || 0,
           date,
         );
@@ -137,6 +146,26 @@ export default function DashboardScreen({ navigation }) {
       }
     } catch (error) {
       console.log("Error fetching exercise data:", error.message);
+    }
+  };
+
+  const fetchWeightHistory = async () => {
+    try {
+      const baseUrl =
+        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
+      const response = await axios.get(`${baseUrl}/api/weight`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const activeUser = useAuthStore.getState().user;
+      if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
+      if (response.data?.success) {
+        setWeightHistory(response.data.data || []);
+      }
+    } catch (error) {
+      console.error(
+        "Could not load weight history:",
+        error?.response?.data?.message || error.message,
+      );
     }
   };
 
@@ -154,6 +183,7 @@ export default function DashboardScreen({ navigation }) {
         fetchWaterIntake(todayDate),
         fetchWeeklySummary(),
         fetchExerciseData(todayDate),
+        fetchWeightHistory(),
       ]);
     } catch (error) {
       Alert.alert(
@@ -220,6 +250,68 @@ export default function DashboardScreen({ navigation }) {
       });
   };
 
+  const handleSetManualSteps = () => {
+    const total = Number(manualStepTotal);
+    if (!Number.isInteger(total) || total < 0 || total > 1000000) {
+      Alert.alert(
+        "Invalid step total",
+        "Enter a whole number from 0 to 1,000,000.",
+      );
+      return;
+    }
+
+    const today = getLocalDate();
+    stepCountRef.current = total;
+    setStepCount(total);
+    setDailySteps(total, today);
+    if (!token || !userId) return;
+
+    stepSyncQueueRef.current = stepSyncQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const activeUser = useAuthStore.getState().user;
+        if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
+        const baseUrl =
+          process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
+        const response = await axios.post(
+          `${baseUrl}/api/exercise`,
+          { date: today, stepsTotal: total },
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        const latestUser = useAuthStore.getState().user;
+        if (
+          String(latestUser?._id || latestUser?.id || "") !== userId ||
+          !response.data?.success
+        ) {
+          return;
+        }
+
+        const serverSteps = Number(response.data.data?.steps ?? total);
+        stepCountRef.current = serverSteps;
+        setStepCount(serverSteps);
+        await setDailySteps(serverSteps, today);
+        if (response.data.userStats) {
+          await updateUserStats({
+            ...response.data.userStats,
+            dailySteps: serverSteps,
+            stepCountDate: today,
+            stepUserId: userId,
+          });
+        }
+      })
+      .catch((error) => {
+        console.error(
+          "Could not sync manual step total:",
+          error?.response?.data?.message || error.message,
+        );
+        fetchExerciseData(today);
+        Alert.alert(
+          "Step sync failed",
+          error?.response?.data?.message || "Could not save your step total.",
+        );
+      });
+  };
+
   // Save Exercise Handler (Backend Connected)
   const handleSaveExercise = async () => {
     if (!caloriesInput) {
@@ -239,6 +331,8 @@ export default function DashboardScreen({ navigation }) {
         },
         { headers: { Authorization: `Bearer ${token}` } },
       );
+      const activeUser = useAuthStore.getState().user;
+      if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
       if (res.data?.success) {
         setCaloriesBurned(res.data.data.caloriesBurned);
         if (res.data?.userStats) {
@@ -254,51 +348,31 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  // Connect Device Handler with confirmation prompt
-  const handleConnectDevice = () => {
-    Alert.alert(
-      "Connect Fitness Provider",
-      "NutriMorph needs permission to read your step count and daily active calories from Google Fit / Apple Health.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Allow & Connect",
-          onPress: () => {
-            Alert.alert(
-              "Success",
-              "Google Fit / Apple Health connected successfully! Steps will sync automatically.",
-            );
-          },
-        },
-      ],
-    );
-  };
-
   // Save Weight Handler (Backend Connected)
   const handleSaveWeight = async () => {
-    if (!newWeight || isNaN(newWeight)) {
+    const weight = Number(newWeight);
+    if (!Number.isFinite(weight) || weight < 15 || weight > 500) {
       Alert.alert("Error", "Please enter a valid weight in KG.");
       return;
     }
 
     try {
-      const BASE_URL =
+      const baseUrl =
         process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
-      const res = await axios.put(
-        `${BASE_URL}/api/users/weight`,
-        { weight: Number(newWeight) },
+      const res = await axios.post(
+        `${baseUrl}/api/weight`,
+        { weight },
         { headers: { Authorization: `Bearer ${token}` } },
       );
+      const activeUser = useAuthStore.getState().user;
+      if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
 
-      if (res.data?.success || res.status === 200) {
-        if (res.data?.userStats) {
-          updateUserStats(res.data.userStats);
-        } else {
-          refreshUserProfile();
-        }
+      if (res.data?.success) {
+        await updateUserStats({ weight, ...(res.data.user || {}) });
+        setWeightHistory((current) => [...current, res.data.data]);
         Alert.alert(
           "Success",
-          `Weight successfully updated to ${newWeight} KG!`,
+          `Weight successfully updated to ${weight} KG!`,
         );
         setShowWeighModal(false);
         setNewWeight("");
@@ -306,10 +380,10 @@ export default function DashboardScreen({ navigation }) {
         Alert.alert("Error", "Could not update weight.");
       }
     } catch (error) {
-      // Fallback local update alert if backend endpoint is structured differently
-      Alert.alert("Success", `Weight successfully logged to ${newWeight} KG!`);
-      setShowWeighModal(false);
-      setNewWeight("");
+      Alert.alert(
+        "Error",
+        error?.response?.data?.message || "Could not save weight.",
+      );
     }
   };
 
@@ -373,6 +447,8 @@ export default function DashboardScreen({ navigation }) {
     waterSyncQueueRef.current = waterSyncQueueRef.current
       .catch(() => undefined)
       .then(async () => {
+        const activeUser = useAuthStore.getState().user;
+        if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
         const res = await updateWaterIntake(newGlasses, todayDate);
         if (!res?.success) {
           throw new Error(res?.message || "Could not update water intake.");
@@ -436,6 +512,7 @@ export default function DashboardScreen({ navigation }) {
   const remainingCal = Math.max(0, calorieGoal - currentEaten);
   const isExceeded = currentEaten > calorieGoal;
   const isPro = isActiveProUser(user);
+  const bmiInfo = getBmiInfo(user?.weight, user?.height);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -507,6 +584,50 @@ export default function DashboardScreen({ navigation }) {
         </View>
 
         <StreakHeader streakCount={user?.streakCount || 1} colors={colors} />
+
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.cardBg,
+              borderColor: colors.border,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            },
+          ]}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Ionicons name="body-outline" size={22} color={colors.primary} />
+            <View style={{ marginLeft: 10 }}>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>
+                Your BMI
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                Estimate based on profile height and weight
+              </Text>
+            </View>
+          </View>
+          {bmiInfo ? (
+            <View
+              style={[
+                styles.bmiBadge,
+                { backgroundColor: colors.glassGlow, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.bmiValue, { color: colors.primary }]}>
+                {bmiInfo.value}
+              </Text>
+              <Text style={[styles.bmiCategory, { color: colors.textSecondary }]}>
+                {bmiInfo.category}
+              </Text>
+            </View>
+          ) : (
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              Add height and weight
+            </Text>
+          )}
+        </View>
 
         {/* Calorie Deviation Alert & AI Recovery Assistant Trigger */}
         {isExceeded && (
@@ -746,70 +867,59 @@ export default function DashboardScreen({ navigation }) {
               <Ionicons name="add" size={20} color={colors.primary} />
             </TouchableOpacity>
           </View>
+          <View style={styles.manualStepsRow}>
+            <TextInput
+              style={[
+                styles.manualStepsInput,
+                {
+                  backgroundColor: colors.inputBg,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+              accessibilityLabel="Enter today's total steps"
+              placeholder="Enter today's total"
+              placeholderTextColor={colors.textSecondary}
+              keyboardType="number-pad"
+              value={manualStepTotal}
+              onChangeText={setManualStepTotal}
+            />
+            <TouchableOpacity
+              style={[
+                styles.manualStepsButton,
+                { backgroundColor: colors.primary },
+              ]}
+              onPress={handleSetManualSteps}
+            >
+              <Text style={{ color: "#FFF", fontWeight: "700" }}>Set total</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Health & Device Sync Component */}
         <DeviceSyncSection
           key={String(user?._id || user?.id || "signed-out")}
-          colors={colors}
-          onConnectDevice={handleConnectDevice}
           onSyncSuccess={(syncedSteps) => {
             stepCountRef.current = syncedSteps;
             setStepCount(syncedSteps);
           }}
         />
 
-        {/* Weight Loss Progress Graph Card */}
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: colors.cardBg, borderColor: colors.border },
-          ]}
+        <WeightProgressCard
+          colors={colors}
+          entries={weightHistory}
+          currentWeight={user?.weight}
+          targetWeight={user?.targetWeight}
+        />
+        <TouchableOpacity
+          style={[styles.weighInButton, { backgroundColor: colors.primary }]}
+          onPress={() => setShowWeighModal(true)}
         >
-          <Text style={[styles.cardTitle, { color: colors.text }]}>
-            Track your Loss
+          <Ionicons name="add" size={18} color="#FFF" />
+          <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 14 }}>
+            Weigh-in
           </Text>
-          <Text
-            style={{
-              color: colors.textSecondary,
-              fontSize: 12,
-              marginBottom: 10,
-            }}
-          >
-            Log Weight & monitor your target trajectory!
-          </Text>
-          <View
-            style={[
-              styles.graphPlaceholder,
-              { backgroundColor: colors.glassGlow },
-            ]}
-          >
-            <View
-              style={[
-                styles.targetLineBadge,
-                { backgroundColor: colors.primary },
-              ]}
-            >
-              <Text style={{ color: "#FFF", fontSize: 11, fontWeight: "bold" }}>
-                Target: {user?.targetWeight || 75} KG
-              </Text>
-            </View>
-            <Ionicons
-              name="analytics"
-              size={48}
-              color={colors.primary}
-              style={{ opacity: 0.8, marginVertical: 10 }}
-            />
-          </View>
-          <TouchableOpacity
-            style={[styles.weighInBtn, { backgroundColor: colors.primary }]}
-            onPress={() => setShowWeighModal(true)}
-          >
-            <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 14 }}>
-              Weigh-in
-            </Text>
-          </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
 
         {/* Calorie Progress Card */}
         <View
@@ -1248,26 +1358,40 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stepAdjustLabel: { fontSize: 12, fontWeight: "600" },
-  graphPlaceholder: {
-    height: 110,
+  manualStepsRow: { flexDirection: "row", gap: 8, marginTop: 12 },
+  manualStepsInput: {
+    flex: 1,
+    minHeight: 42,
+    borderWidth: 1,
     borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+  },
+  manualStepsButton: {
+    minHeight: 42,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bmiBadge: {
+    minWidth: 92,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  bmiValue: { fontSize: 17, fontWeight: "800" },
+  bmiCategory: { fontSize: 10, fontWeight: "600", marginTop: 1 },
+  weighInButton: {
+    minHeight: 44,
+    flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginVertical: 10,
-    position: "relative",
-  },
-  targetLineBadge: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  weighInBtn: {
-    paddingVertical: 10,
+    gap: 4,
     borderRadius: 10,
-    alignItems: "center",
+    marginBottom: 12,
   },
   statsRow: {
     flexDirection: "row",

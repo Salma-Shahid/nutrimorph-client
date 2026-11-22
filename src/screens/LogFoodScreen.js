@@ -18,6 +18,8 @@ import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 
 const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Late-night"];
+const inputValue = (value) =>
+  value === null || value === undefined ? "" : String(value);
 
 export default function LogFoodScreen({ navigation, route }) {
   const initialData = route.params?.initialData || {};
@@ -26,17 +28,12 @@ export default function LogFoodScreen({ navigation, route }) {
   const colors = getThemeColors(theme);
 
   const [name, setName] = useState(initialData.name || "");
-  const [calories, setCalories] = useState(
-    initialData.calories ? String(initialData.calories) : "",
-  );
-  const [protein, setProtein] = useState(
-    initialData.protein ? String(initialData.protein) : "",
-  );
-  const [carbs, setCarbs] = useState(
-    initialData.carbs ? String(initialData.carbs) : "",
-  );
-  const [fats, setFats] = useState(
-    initialData.fats ? String(initialData.fats) : "",
+  const [calories, setCalories] = useState(inputValue(initialData.calories));
+  const [protein, setProtein] = useState(inputValue(initialData.protein));
+  const [carbs, setCarbs] = useState(inputValue(initialData.carbs));
+  const [fats, setFats] = useState(inputValue(initialData.fats));
+  const [servingSize, setServingSize] = useState(
+    initialData.servingSize || "1 serving",
   );
 
   const [mealType, setMealType] = useState("Lunch");
@@ -82,33 +79,32 @@ export default function LogFoodScreen({ navigation, route }) {
   };
 
   const handleSave = async () => {
-    if (!name.trim() || !calories) {
+    const calorieValue = Number(calories);
+    const macroValues = [protein, carbs, fats].map((value) =>
+      value.trim() === "" ? 0 : Number(value),
+    );
+    if (
+      !name.trim() ||
+      !Number.isFinite(calorieValue) ||
+      calorieValue < 0
+    ) {
       Alert.alert("Error", "Please enter Food name and calories.");
       return;
     }
-
-    // Include the image in FormData when one is available.
-    const formData = new FormData();
-    formData.append("name", name.trim());
-    formData.append("calories", Number(calories));
-    formData.append("protein", Number(protein) || 0);
-    formData.append("carbs", Number(carbs) || 0);
-    formData.append("fats", Number(fats) || 0);
-    formData.append("mealType", mealType);
-
-    if (imageUri) {
-      const filename = imageUri.split("/").pop();
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : `image/jpeg`;
-
-      formData.append("image", {
-        uri: imageUri,
-        name: filename || "meal.jpg",
-        type,
-      });
+    if (macroValues.some((value) => !Number.isFinite(value) || value < 0)) {
+      Alert.alert("Error", "Please enter valid non-negative macro values.");
+      return;
     }
 
-    const res = await logMeal(formData, true); // True indicating multipart/form-data if store supports it
+    const res = await logMeal({
+      name: name.trim(),
+      calories: calorieValue,
+      protein: macroValues[0],
+      carbs: macroValues[1],
+      fats: macroValues[2],
+      servingSize: servingSize.trim() || "1 serving",
+      mealType,
+    });
 
     if (res?.success) {
       Alert.alert("Success ", "Meal is successfully logged!");
@@ -186,6 +182,24 @@ export default function LogFoodScreen({ navigation, route }) {
           placeholderTextColor={colors.textSecondary}
           value={name}
           onChangeText={setName}
+        />
+
+        <Text style={[styles.label, { color: colors.textSecondary }]}>
+          Serving Size
+        </Text>
+        <TextInput
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.inputBg,
+              color: colors.text,
+              borderColor: colors.border,
+            },
+          ]}
+          placeholder="e.g. 1 bowl, 100 g"
+          placeholderTextColor={colors.textSecondary}
+          value={servingSize}
+          onChangeText={setServingSize}
         />
 
         {/* AI Auto-Fill Action Button */}

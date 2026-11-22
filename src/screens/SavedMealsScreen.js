@@ -66,6 +66,7 @@ export default function SavedMealsScreen({ navigation }) {
       protein: meal.protein,
       carbs: meal.carbs,
       fats: meal.fats,
+      servingSize: meal.servingSize || "1 serving",
     });
 
     if (result.success) {

@@ -22,7 +22,6 @@ import { showTestInterstitialAfterAction } from "../services/ads";
 export default function MealPlanScreen({ navigation }) {
   const user = useAuthStore((state) => state.user);
   const isPro = isActiveProUser(user);
-  const trialAvailable = !user?.trialUsedAt;
   const userId = String(user?._id || user?.id || "");
   const mealPlanCacheKey = `active_meal_plan:${encodeURIComponent(userId)}`;
   const refreshUserProfile = useAuthStore((state) => state.refreshUserProfile);
@@ -57,11 +56,9 @@ export default function MealPlanScreen({ navigation }) {
 
   const durationOptions = [3, 5, 7, 15, 30];
 
-  const continueToTrial = () => {
+  const continueToPro = () => {
     setShowTrialModal(false);
-    navigation.navigate("SubscriptionScreen", {
-      startTrial: trialAvailable,
-    });
+    navigation.navigate("SubscriptionScreen");
   };
 
   useEffect(() => {
@@ -475,9 +472,8 @@ export default function MealPlanScreen({ navigation }) {
       <UpgradeTrialModal
         visible={showTrialModal}
         colors={colors}
-        trialAvailable={trialAvailable}
         onClose={() => setShowTrialModal(false)}
-        onContinue={continueToTrial}
+        onContinue={continueToPro}
       />
     </SafeAreaView>
   );

@@ -1,6 +1,7 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Direct Clean Imports
 import DashboardScreen from "../screens/DashboardScreen";
@@ -23,6 +24,7 @@ export default function AppNavigator() {
     (state) => state.user?._id || state.user?.id || "signed-out",
   );
   const colors = getThemeColors(theme);
+  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -32,9 +34,12 @@ export default function AppNavigator() {
         tabBarStyle: {
           backgroundColor: colors?.cardBg || "#1E293B",
           borderTopColor: colors?.border || "#334155",
-          height: 65,
-          paddingBottom: 8,
+          display: "flex",
+          justifyContent: "space-around",
+          height: 64 + insets.bottom,
+          paddingBottom: Math.max(insets.bottom, 8),
           paddingTop: 8,
+          marginBottom: 0,
         },
         tabBarActiveTintColor: colors?.primary || "#42F5A1",
         tabBarInactiveTintColor: colors?.textSecondary || "#64748B",

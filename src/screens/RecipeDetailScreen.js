@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import axios from "axios";
 
 export default function RecipeDetailScreen({ route, navigation }) {
   const { recipe } = route.params || {};
+  const [imageFailed, setImageFailed] = useState(false);
   const theme = useAuthStore((state) => state.theme) || "dark";
   const colors = getThemeColors(theme);
   const token = useAuthStore((state) => state.token);
@@ -62,12 +63,14 @@ export default function RecipeDetailScreen({ route, navigation }) {
         {/* Banner Image & Back Button */}
         <View style={{ position: "relative" }}>
           <Image
-            source={{
-              uri:
-                recipe?.image ||
-                "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=600",
-            }}
+            source={
+              !imageFailed && recipe?.image
+                ? { uri: recipe.image }
+                : require("../../assets/icon.png")
+            }
             style={styles.bannerImage}
+            resizeMode={imageFailed || !recipe?.image ? "contain" : "cover"}
+            onError={() => setImageFailed(true)}
           />
           <TouchableOpacity
             style={styles.backBtn}

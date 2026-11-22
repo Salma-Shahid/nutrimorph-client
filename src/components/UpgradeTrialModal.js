@@ -12,7 +12,6 @@ import { Ionicons } from "@expo/vector-icons";
 export default function UpgradeTrialModal({
   visible,
   colors,
-  trialAvailable,
   loading = false,
   onClose,
   onContinue,
@@ -48,12 +47,10 @@ export default function UpgradeTrialModal({
             <Ionicons name="sparkles" size={28} color={colors.primary} />
           </View>
           <Text style={[styles.title, { color: colors.text }]}>
-            {trialAvailable ? "Start Your 3-Day Free Trial" : "Upgrade to Pro"}
+            Upgrade to Pro
           </Text>
           <Text style={[styles.description, { color: colors.textSecondary }]}>
-            {trialAvailable
-              ? "Unlock unlimited NutriBot support, meal scans, and longer personalized plans. Your trial starts through secure billing."
-              : "Unlock unlimited NutriBot support, meal scans, and longer personalized plans with NutriMorph Pro."}
+            Unlock premium NutriBot support, meal scans, and longer personalized plans with NutriMorph Pro.
           </Text>
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: colors.primary }]}
@@ -64,7 +61,7 @@ export default function UpgradeTrialModal({
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <Text style={styles.primaryText}>
-                {trialAvailable ? "Continue to free trial" : "View Pro plans"}
+                View Pro plans
               </Text>
             )}
           </TouchableOpacity>

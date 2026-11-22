@@ -20,7 +20,7 @@ import { getThemeColors } from "../theme/colors";
 
 const BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
-const STEP_SYNC_INTERVAL_MS = 30000;
+const STEP_SYNC_INTERVAL_MS = 5000;
 const MIN_VALID_STEP_DELTA = 3;
 const MAX_STEPS_PER_SECOND = 3;
 
@@ -186,6 +186,8 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
         if (isCancelled) return;
         if (!isAvailable) {
           console.warn("Pedometer is unavailable on this device.");
+          setIsSynced(false);
+          await updateUserStats({ isDeviceSynced: false });
           return;
         }
 
@@ -199,6 +201,8 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
       } catch (error) {
         if (!isCancelled) {
           console.error("Could not start device step synchronization:", error);
+          setIsSynced(false);
+          await updateUserStats({ isDeviceSynced: false });
         }
       }
     };
