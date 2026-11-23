@@ -10,13 +10,22 @@ import {
 } from "react-native";
 import axios from "axios";
 import { Ionicons } from "@expo/vector-icons";
-import * as Pedometer from "expo-pedometer";
 import {
   startBackgroundStepTracking,
   stopBackgroundStepTracking,
 } from "../services/stepTrackingTask";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
+
+// Safe import for Expo Go compatibility
+let Pedometer = null;
+try {
+  Pedometer = require("expo-pedometer");
+} catch (e) {
+  console.warn(
+    "expo-pedometer native module is unavailable in this environment (e.g. Expo Go).",
+  );
+}
 
 const BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
@@ -49,7 +58,7 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
   }, [user?.isDeviceSynced]);
 
   useEffect(() => {
-    if (!isSynced) return undefined;
+    if (!isSynced || !Pedometer) return undefined;
 
     let isCancelled = false;
     let isRefreshing = false;
@@ -63,7 +72,7 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
     let interval;
 
     const refreshSteps = async () => {
-      if (isRefreshing || !userId) return;
+      if (isRefreshing || !userId || !Pedometer) return;
       isRefreshing = true;
 
       try {
@@ -112,10 +121,7 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
               if (pendingStepDelta === 0) pendingSince = lastSampleAt;
               pendingStepDelta += delta;
               if (pendingStepDelta >= MIN_VALID_STEP_DELTA) {
-                const elapsedSeconds = Math.max(
-                  1,
-                  (now - pendingSince) / 1000,
-                );
+                const elapsedSeconds = Math.max(1, (now - pendingSince) / 1000);
                 if (pendingStepDelta / elapsedSeconds <= MAX_STEPS_PER_SECOND) {
                   acceptedSteps = (acceptedSteps || 0) + pendingStepDelta;
                 }
@@ -174,6 +180,12 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
 
     const startPolling = async () => {
       try {
+        if (!Pedometer) {
+          setIsSynced(false);
+          await updateUserStats({ isDeviceSynced: false });
+          return;
+        }
+
         const permission = await Pedometer.getPermissionsAsync();
         if (isCancelled) return;
         if (permission.status !== "granted") {
@@ -193,7 +205,10 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
 
         await refreshSteps();
         await startBackgroundStepTracking().catch((error) => {
-          console.warn("Background step tracking is unavailable:", error.message);
+          console.warn(
+            "Background step tracking is unavailable:",
+            error.message,
+          );
         });
         if (!isCancelled) {
           interval = setInterval(refreshSteps, STEP_SYNC_INTERVAL_MS);
@@ -238,6 +253,17 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
   };
 
   const handleToggleSync = async () => {
+    if (!Pedometer) {
+      const message =
+        "Step tracking native module is unavailable in Expo Go. Please test on a native dev/preview build.";
+      if (Platform.OS === "web") {
+        alert(message);
+      } else {
+        Alert.alert("Native Feature Unavailable", message);
+      }
+      return;
+    }
+
     if (isSynced) {
       if (Platform.OS === "web") {
         const confirmDisconnect = window.confirm(

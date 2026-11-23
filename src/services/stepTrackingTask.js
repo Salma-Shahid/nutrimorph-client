@@ -1,7 +1,16 @@
 import * as TaskManager from "expo-task-manager";
-import * as Pedometer from "expo-pedometer";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
+
+// Safe import for Expo Go support
+let Pedometer = null;
+try {
+  Pedometer = require("expo-pedometer");
+} catch (e) {
+  console.warn(
+    "expo-pedometer native module is unavailable in this environment (e.g. Expo Go).",
+  );
+}
 
 export const STEP_COUNT_TASK = "nutrimorph-step-count-updates";
 
@@ -61,9 +70,7 @@ TaskManager.defineTask(STEP_COUNT_TASK, async ({ data, error }) => {
           ? Math.max(0, Math.floor(Number(user.dailySteps) || 0))
           : 0;
     let acceptedDelta = 0;
-    let sensorState = sensorStateValue
-      ? JSON.parse(sensorStateValue)
-      : null;
+    let sensorState = sensorStateValue ? JSON.parse(sensorStateValue) : null;
 
     if (!sensorState || !Number.isFinite(sensorState.lastSensorSteps)) {
       sensorState = {
@@ -85,7 +92,8 @@ TaskManager.defineTask(STEP_COUNT_TASK, async ({ data, error }) => {
         sensorState.pendingSteps = 0;
         sensorState.pendingSince = observedAt;
       } else if (delta > 0) {
-        if (!sensorState.pendingSteps) sensorState.pendingSince = observedAt - elapsedSeconds * 1000;
+        if (!sensorState.pendingSteps)
+          sensorState.pendingSince = observedAt - elapsedSeconds * 1000;
         sensorState.pendingSteps += delta;
 
         if (sensorState.pendingSteps >= MIN_VALID_STEP_DELTA) {
@@ -93,7 +101,10 @@ TaskManager.defineTask(STEP_COUNT_TASK, async ({ data, error }) => {
             1,
             (observedAt - sensorState.pendingSince) / 1000,
           );
-          if (sensorState.pendingSteps / pendingSeconds <= MAX_STEPS_PER_SECOND) {
+          if (
+            sensorState.pendingSteps / pendingSeconds <=
+            MAX_STEPS_PER_SECOND
+          ) {
             acceptedDelta = sensorState.pendingSteps;
             dailySteps += acceptedDelta;
             const response = await axios.post(
@@ -131,7 +142,8 @@ TaskManager.defineTask(STEP_COUNT_TASK, async ({ data, error }) => {
     }
     latestUser.steps = user.steps;
     latestUser.streakCount = user.streakCount;
-    latestUser.unlockedBadges = user.unlockedBadges || latestUser.unlockedBadges;
+    latestUser.unlockedBadges =
+      user.unlockedBadges || latestUser.unlockedBadges;
     latestUser.dailySteps = dailySteps;
     latestUser.stepCountDate = date;
     latestUser.stepUserId = userId;
@@ -146,18 +158,29 @@ TaskManager.defineTask(STEP_COUNT_TASK, async ({ data, error }) => {
 });
 
 export const startBackgroundStepTracking = async () => {
-  if (!(await TaskManager.isAvailableAsync())) return false;
-  if (!(await Pedometer.isBackgroundAvailableAsync())) return false;
-  const permission = await Pedometer.requestBackgroundPermissionsAsync();
-  if (permission.status !== "granted") return false;
-  if (!(await TaskManager.isTaskRegisteredAsync(STEP_COUNT_TASK))) {
-    await Pedometer.startStepCountUpdatesAsync(STEP_COUNT_TASK);
+  if (!Pedometer) return false;
+  try {
+    if (!(await TaskManager.isAvailableAsync())) return false;
+    if (!(await Pedometer.isBackgroundAvailableAsync())) return false;
+    const permission = await Pedometer.requestBackgroundPermissionsAsync();
+    if (permission.status !== "granted") return false;
+    if (!(await TaskManager.isTaskRegisteredAsync(STEP_COUNT_TASK))) {
+      await Pedometer.startStepCountUpdatesAsync(STEP_COUNT_TASK);
+    }
+    return true;
+  } catch (e) {
+    console.warn("Background step tracking unavailable:", e.message);
+    return false;
   }
-  return true;
 };
 
 export const stopBackgroundStepTracking = async () => {
-  if (!(await TaskManager.isAvailableAsync())) return;
-  if (!(await TaskManager.isTaskRegisteredAsync(STEP_COUNT_TASK))) return;
-  await Pedometer.stopStepCountUpdatesAsync(STEP_COUNT_TASK);
+  if (!Pedometer) return;
+  try {
+    if (!(await TaskManager.isAvailableAsync())) return;
+    if (!(await TaskManager.isTaskRegisteredAsync(STEP_COUNT_TASK))) return;
+    await Pedometer.stopStepCountUpdatesAsync(STEP_COUNT_TASK);
+  } catch (e) {
+    console.warn("Stop background tracking error:", e.message);
+  }
 };
