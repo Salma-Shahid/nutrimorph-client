@@ -16,7 +16,6 @@ import axios from "axios";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 import { getPlanLabel, isActiveProUser } from "../utils/subscription";
-import PaddleCheckoutModal from "../components/PaddleCheckoutModal";
 import NeonCard from "../components/NeonCard";
 import LottieFeedback from "../components/LottieFeedback";
 import {
@@ -51,8 +50,6 @@ export default function SubscriptionScreen({ navigation }) {
   const userId = String(user?._id || user?.id || "");
   const isPro = isActiveProUser(user);
 
-  const [config, setConfig] = useState(null);
-  const [configState, setConfigState] = useState("loading"); // loading | ready | error
   const [packages, setPackages] = useState([]);
   // Product IDs whose trial this user can't get (iOS StoreKit check).
   const [trialIneligible, setTrialIneligible] = useState(() => new Set());
@@ -62,8 +59,6 @@ export default function SubscriptionScreen({ navigation }) {
   const [busy, setBusy] = useState(""); // "" | purchase | restore | verify
   const [notice, setNotice] = useState("");
   const [celebrate, setCelebrate] = useState(false);
-  const [billingCycle, setBillingCycle] = useState("monthly");
-  const [checkoutVisible, setCheckoutVisible] = useState(false);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -74,14 +69,6 @@ export default function SubscriptionScreen({ navigation }) {
   }, []);
 
   const useRevenueCat = isRevenueCatAvailable();
-  const paddleAvailable =
-    !useRevenueCat &&
-    Boolean(config?.paddle?.configured) &&
-    Boolean(
-      billingCycle === "yearly"
-        ? process.env.EXPO_PUBLIC_PADDLE_YEARLY_PRICE_ID
-        : process.env.EXPO_PUBLIC_PADDLE_MONTHLY_PRICE_ID,
-    );
 
   // Ask the server to verify the RevenueCat entitlement and update the
   // account. Retries briefly because store receipts can take a few seconds.
@@ -132,28 +119,6 @@ export default function SubscriptionScreen({ navigation }) {
     [refreshUserProfile, setUser, token, userId],
   );
 
-  // Billing capability flags (no secrets) so unavailable options are hidden.
-  // Only gates the optional Paddle fallback; RevenueCat never waits on it.
-  const loadConfig = useCallback(() => {
-    setConfigState("loading");
-    axios
-      .get(`${BASE_URL}/api/payment/config`, { timeout: 10000 })
-      .then((res) => {
-        if (!mounted.current) return;
-        setConfig(res.data?.data || null);
-        setConfigState("ready");
-      })
-      .catch(() => {
-        if (!mounted.current) return;
-        setConfig(null);
-        setConfigState("error");
-      });
-  }, []);
-
-  useEffect(() => {
-    loadConfig();
-  }, [loadConfig]);
-
   const loadOfferings = useCallback(async () => {
     if (!useRevenueCat) {
       setOfferingsState("unavailable");
@@ -198,7 +163,6 @@ export default function SubscriptionScreen({ navigation }) {
   }, [loadOfferings]);
 
   const retryBilling = () => {
-    loadConfig();
     loadOfferings();
   };
 
@@ -268,39 +232,6 @@ export default function SubscriptionScreen({ navigation }) {
     const activated = await syncWithServer();
     if (activated && mounted.current) setCelebrate(true);
   };
-
-  // Paddle fallback (web checkout) — kept for existing subscribers.
-  const verifyPaddleCheckout = useCallback(async () => {
-    if (!token) return;
-    setBusy("verify");
-    try {
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        if (attempt > 0) await wait(2000);
-        const verification = await axios.post(
-          `${BASE_URL}/api/payment/verify-payment`,
-          {},
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        const verifiedUser = verification.data?.user;
-        if (verifiedUser) await setUser(verifiedUser);
-        if (verifiedUser?.isPro) {
-          await refreshUserProfile({ force: true });
-          setCelebrate(true);
-          return;
-        }
-      }
-      setNotice(
-        "Payment received. Pro access will switch on as soon as Paddle confirms it.",
-      );
-    } catch (error) {
-      setNotice(
-        error?.response?.data?.message ||
-          "Could not refresh your subscription status. Please try again.",
-      );
-    } finally {
-      if (mounted.current) setBusy("");
-    }
-  }, [refreshUserProfile, setUser, token]);
 
   const manageUrl =
     Platform.OS === "ios"
@@ -479,45 +410,6 @@ export default function SubscriptionScreen({ navigation }) {
               )}
             </TouchableOpacity>
           </>
-        ) : paddleAvailable ? (
-          <>
-            <View style={styles.cycleRow}>
-              {["monthly", "yearly"].map((cycle) => (
-                <NeonCard
-                  key={cycle}
-                  containerStyle={styles.cycleItem}
-                  active={billingCycle === cycle}
-                  onPress={() => setBillingCycle(cycle)}
-                  accessibilityRole="radio"
-                >
-                  <Text style={[styles.packageTitle, { color: colors.text }]}>
-                    {cycle === "yearly" ? "Yearly" : "Monthly"}
-                  </Text>
-                  <Text style={[styles.muted, { color: colors.textSecondary }]}>
-                    Secure web checkout
-                  </Text>
-                </NeonCard>
-              ))}
-            </View>
-            <TouchableOpacity
-              style={[styles.proButton, { backgroundColor: colors.primary, opacity: busy ? 0.6 : 1 }]}
-              onPress={() => setCheckoutVisible(true)}
-              disabled={Boolean(busy)}
-            >
-              {busy ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.proButtonText}>Continue to secure checkout</Text>
-              )}
-            </TouchableOpacity>
-          </>
-        ) : configState === "loading" ? (
-          <View style={styles.centerRow}>
-            <ActivityIndicator color={colors.primary} />
-            <Text style={[styles.muted, { color: colors.textSecondary }]}>
-              Checking subscription options…
-            </Text>
-          </View>
         ) : (
           <NeonCard accent="sky">
             <Text style={[styles.noticeTitle, { color: colors.text }]}>
@@ -531,11 +423,6 @@ export default function SubscriptionScreen({ navigation }) {
               {getUnavailableReason() ||
                 "Pro will be available to purchase soon. Your free features keep working in the meantime."}
             </Text>
-            {configState === "error" ? (
-              <TouchableOpacity onPress={retryBilling} style={styles.inlineAction}>
-                <Text style={{ color: colors.primary, fontWeight: "700" }}>Retry</Text>
-              </TouchableOpacity>
-            ) : null}
           </NeonCard>
         )}
 
@@ -565,17 +452,6 @@ export default function SubscriptionScreen({ navigation }) {
         )}
       </ScrollView>
 
-      <PaddleCheckoutModal
-        visible={checkoutVisible}
-        token={token}
-        billingCycle={billingCycle}
-        theme={theme}
-        onClose={() => setCheckoutVisible(false)}
-        onComplete={() => {
-          setCheckoutVisible(false);
-          verifyPaddleCheckout();
-        }}
-      />
     </SafeAreaView>
   );
 }
@@ -636,7 +512,5 @@ const styles = StyleSheet.create({
   muted: { fontSize: 13, lineHeight: 19 },
   noticeTitle: { fontSize: 15, fontWeight: "700", marginBottom: 4 },
   inlineAction: { marginTop: 8, alignSelf: "flex-start" },
-  cycleRow: { flexDirection: "row", gap: 10 },
-  cycleItem: { flex: 1 },
   legal: { fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 4 },
 });

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { stopBackgroundStepTracking } from "../services/stepTrackingTask";
@@ -469,6 +470,14 @@ export const useAuthStore = create((set, get) => ({
         error: null,
       });
 
+      // Signing in during the 30-day recovery window cancels deletion.
+      if (userData.accountRestored) {
+        Alert.alert(
+          "Welcome back",
+          "Your account has been restored and its scheduled deletion was cancelled.",
+        );
+      }
+
       return { success: true, user: formattedUser };
     } catch (err) {
       const message = err.response?.data?.message || "Login failed.";
@@ -500,7 +509,9 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  deleteAccount: async () => {
+  // Deactivates the account (30-day recovery window, then permanent deletion).
+  // `password` is the in-app confirmation; the server verifies it.
+  deleteAccount: async ({ password } = {}) => {
     set({ isLoading: true, error: null });
     try {
       const token = get().token || (await AsyncStorage.getItem("token"));
@@ -512,6 +523,8 @@ export const useAuthStore = create((set, get) => ({
 
       const res = await axios.delete(`${API_URL}/me`, {
         headers: { Authorization: `Bearer ${token}` },
+        data: password !== undefined ? { password } : undefined,
+        timeout: 20000,
       });
 
       if (res.data?.success) {
@@ -540,7 +553,7 @@ export const useAuthStore = create((set, get) => ({
       const message =
         err.response?.data?.message || "Failed to delete account. Try again.";
       set({ isLoading: false, error: message });
-      return { success: false, message };
+      return { success: false, message, code: err.response?.data?.code };
     }
   },
 }));

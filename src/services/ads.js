@@ -83,3 +83,69 @@ const showInterstitialAfterAction = async (user) => {
 };
 
 export const showTestInterstitialAfterAction = showInterstitialAfterAction;
+
+// Rewarded ads need the native AdMob module (dev/preview/production builds).
+export const canShowRewardedAds = () =>
+  adsReady && Platform.OS !== "web" && Constants.appOwnership !== "expo";
+
+// Shows a rewarded ad. Resolves { rewarded: true } only when AdMob reports the
+// reward was earned (the user watched to the end); never rejects.
+// `userId` is attached for AdMob server-side verification (SSV).
+export const showRewardedAd = async ({ userId } = {}) => {
+  if (!canShowRewardedAds()) {
+    return { rewarded: false, reason: "unavailable" };
+  }
+  try {
+    const { AdEventType, RewardedAd, RewardedAdEventType, TestIds } = require(
+      "react-native-google-mobile-ads",
+    );
+    const ad = RewardedAd.createForAdRequest(
+      process.env.EXPO_PUBLIC_ADMOB_REWARDED_ID || TestIds.REWARDED,
+      {
+        requestNonPersonalizedAdsOnly: true,
+        ...(userId
+          ? { serverSideVerificationOptions: { userId: String(userId) } }
+          : {}),
+      },
+    );
+
+    return await new Promise((resolve) => {
+      let completed = false;
+      let earned = false;
+      const subscriptions = [];
+      const finish = (result) => {
+        if (completed) return;
+        completed = true;
+        clearTimeout(loadTimeout);
+        subscriptions.forEach((subscription) => subscription.remove());
+        resolve(result);
+      };
+      // Only the load is time-limited; watching the ad is not.
+      const loadTimeout = setTimeout(
+        () => finish({ rewarded: false, reason: "timeout" }),
+        15000,
+      );
+
+      subscriptions.push(
+        ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
+          clearTimeout(loadTimeout);
+          ad.show().catch(() => finish({ rewarded: false, reason: "show_failed" }));
+        }),
+        ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => {
+          earned = true;
+        }),
+        ad.addAdEventListener(AdEventType.CLOSED, () =>
+          finish(earned ? { rewarded: true } : { rewarded: false, reason: "closed_early" }),
+        ),
+        ad.addAdEventListener(AdEventType.ERROR, (error) => {
+          console.warn("Rewarded ad failed:", error?.message);
+          finish({ rewarded: false, reason: "no_fill" });
+        }),
+      );
+      ad.load();
+    });
+  } catch (error) {
+    console.warn("Rewarded ads are unavailable in this build:", error?.message);
+    return { rewarded: false, reason: "unavailable" };
+  }
+};

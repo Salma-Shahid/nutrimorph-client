@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -20,6 +20,7 @@ import { getThemeColors } from "../theme/colors";
 import AdBanner from "../components/AdBanner";
 import { saveDataToCache, getDataFromCache } from "../utils/cache";
 import StreakHeader from "../components/StreakHeader";
+import GemsStreakCard from "../components/GemsStreakCard";
 import DeviceSyncSection from "../components/DeviceSyncSection";
 import WeightProgressCard from "../components/WeightProgressCard";
 import { isActiveProUser, getPlanLabel } from "../utils/subscription";
@@ -73,17 +74,18 @@ export default function DashboardScreen({ navigation }) {
   const [aiRecoveryTip, setAiRecoveryTip] = useState(null);
 
   // Modals & Interactive States
-  const [showWeighModal, setShowWeighModal] = useState(false);
-  const [newWeight, setNewWeight] = useState("");
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [exerciseName, setExerciseName] = useState("");
   const [caloriesInput, setCaloriesInput] = useState("");
 
   // Exercise & Steps State
-  const [manualStepTotal, setManualStepTotal] = useState("0");
+  const [manualStepsToAdd, setManualStepsToAdd] = useState("");
   const [weightHistory, setWeightHistory] = useState([]);
   const [caloriesBurned, setCaloriesBurned] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  // Gems/streak status from the server; refreshKey re-fetches it.
+  const [gemStatus, setGemStatus] = useState(null);
+  const [gemsRefreshKey, setGemsRefreshKey] = useState(0);
 
   // Device local date in YYYY-MM-DD format
   const getLocalDate = () => {
@@ -102,6 +104,11 @@ export default function DashboardScreen({ navigation }) {
       ? Number(user.dailySteps) || 0
       : 0;
 
+  // Steps are cumulative: the app sends only the change since the last
+  // server-confirmed total (`stepsDelta`), so a stale or reset local count can
+  // never overwrite steps already saved today (other device, device sync).
+  const stepsBaseRef = useRef(storedDailySteps);
+
   const syncSteps = useCallback(
     async (total) => {
       const today = getLocalDate();
@@ -109,9 +116,11 @@ export default function DashboardScreen({ navigation }) {
       // Local persistence first (user-scoped AsyncStorage key), then server.
       await setDailySteps(total, today);
       if (!token) return total;
+      const delta = total - stepsBaseRef.current;
+      if (delta === 0) return total;
       const response = await axios.post(
         `${API_BASE_URL}/api/exercise`,
-        { date: today, stepsTotal: total },
+        { date: today, stepsDelta: delta },
         authHeaders,
       );
       if (!response.data?.success) {
@@ -119,6 +128,7 @@ export default function DashboardScreen({ navigation }) {
       }
       if (!isStillActiveUser()) return undefined;
       const serverSteps = Number(response.data.data?.steps ?? total);
+      stepsBaseRef.current = serverSteps;
       if (response.data.userStats) {
         await updateUserStats({
           ...response.data.userStats,
@@ -141,9 +151,18 @@ export default function DashboardScreen({ navigation }) {
   });
   const stepCount = steps.count;
 
+  // Whenever nothing is pending, the shown count is the confirmed baseline
+  // (server fetch, device sync, or a completed sync).
   useEffect(() => {
-    setManualStepTotal(String(stepCount));
+    if (!steps.isDirty()) stepsBaseRef.current = stepCount;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepCount]);
+
+  // New day / account: today's baseline restarts from the stored value.
+  useEffect(() => {
+    stepsBaseRef.current = storedDailySteps;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, todayKey]);
 
   // New day / account without a synced device: start today's local count.
   useEffect(() => {
@@ -226,6 +245,7 @@ export default function DashboardScreen({ navigation }) {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    setGemsRefreshKey((key) => key + 1);
     try {
       const todayDate = getLocalDate();
       const [profileRefresh] = await Promise.all([
@@ -256,17 +276,19 @@ export default function DashboardScreen({ navigation }) {
 
   const handleAdjustSteps = (delta) => steps.set((current) => current + delta);
 
-  const handleSetManualSteps = () => {
-    const total = Number(String(manualStepTotal).replace(/[,\s]/g, ""));
-    if (!Number.isInteger(total) || total < 0 || total > 1000000) {
+  // Adds the entered steps on top of today's saved total.
+  const handleAddManualSteps = () => {
+    const added = Number(String(manualStepsToAdd).replace(/[,\s]/g, ""));
+    if (!Number.isInteger(added) || added <= 0 || added > 100000) {
       Alert.alert(
-        "Invalid step total",
-        "Enter a whole number from 0 to 1,000,000.",
+        "Invalid step count",
+        "Enter the steps to add, a whole number from 1 to 100,000.",
       );
       return;
     }
-    steps.set(total);
+    steps.set((current) => current + added);
     steps.flush();
+    setManualStepsToAdd("");
   };
 
   // Save Exercise Handler (Backend Connected)
@@ -305,48 +327,12 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  // Save Weight Handler (Backend Connected)
-  const handleSaveWeight = async () => {
-    const weight = Number(newWeight);
-    if (!Number.isFinite(weight) || weight < 15 || weight > 500) {
-      Alert.alert("Error", "Please enter a valid weight in KG.");
-      return;
-    }
-
-    try {
-      const baseUrl =
-        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
-      const res = await axios.post(
-        `${baseUrl}/api/weight`,
-        { weight },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      const activeUser = useAuthStore.getState().user;
-      if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
-
-      if (res.data?.success) {
-        await updateUserStats({ weight, ...(res.data.user || {}) });
-        setWeightHistory((current) => [...current, res.data.data]);
-        Alert.alert(
-          "Success",
-          `Weight successfully updated to ${weight} KG!`,
-        );
-        setShowWeighModal(false);
-        setNewWeight("");
-      } else {
-        Alert.alert("Error", "Could not update weight.");
-      }
-    } catch (error) {
-      Alert.alert(
-        "Error",
-        error?.response?.data?.message || "Could not save weight.",
-      );
-    }
-  };
-
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
+      // Re-check gems/streak each time the dashboard is shown (a meal logged
+      // elsewhere can reset or continue the streak).
+      setGemsRefreshKey((key) => key + 1);
       const loadDashboardData = async () => {
         const todayDate = getLocalDate();
         const isCurrent = () => isMounted && isStillActiveUser();
@@ -566,7 +552,16 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        <StreakHeader streakCount={user?.streakCount || 1} colors={colors} />
+        <StreakHeader
+          streakCount={gemStatus?.streak?.count ?? (user?.streakCount || 1)}
+          colors={colors}
+        />
+        <GemsStreakCard
+          colors={colors}
+          refreshKey={gemsRefreshKey}
+          onStatus={setGemStatus}
+          onUpgrade={() => navigation.navigate("SubscriptionScreen")}
+        />
 
         {/* BMI: text column shrinks, score badge never does, so the badge
             can't be pushed past the card's right edge on narrow screens. */}
@@ -871,21 +866,22 @@ export default function DashboardScreen({ navigation }) {
                   color: colors.text,
                 },
               ]}
-              accessibilityLabel="Enter today's total steps"
-              placeholder="Enter today's total"
+              accessibilityLabel="Steps to add to today's total"
+              placeholder="Steps to add (e.g. 2500)"
               placeholderTextColor={colors.textSecondary}
               keyboardType="number-pad"
-              value={manualStepTotal}
-              onChangeText={setManualStepTotal}
+              value={manualStepsToAdd}
+              onChangeText={setManualStepsToAdd}
+              onSubmitEditing={handleAddManualSteps}
             />
             <TouchableOpacity
               style={[
                 styles.manualStepsButton,
                 { backgroundColor: colors.primary },
               ]}
-              onPress={handleSetManualSteps}
+              onPress={handleAddManualSteps}
             >
-              <Text style={{ color: "#FFF", fontWeight: "700" }}>Set total</Text>
+              <Text style={{ color: "#FFF", fontWeight: "700" }}>Add steps</Text>
             </TouchableOpacity>
           </View>
         </NeonCard>
@@ -893,11 +889,9 @@ export default function DashboardScreen({ navigation }) {
         {/* Health & Device Sync Component */}
         <DeviceSyncSection
           key={String(user?._id || user?.id || "signed-out")}
-          onSyncSuccess={(syncedSteps) => {
-            // Device totals are authoritative; adopt them unless the user is
-            // mid-adjustment, in which case their pending total syncs next.
-            if (!steps.isDirty()) steps.set(syncedSteps);
-          }}
+          // Device sync records + uploads its own step delta; the counter
+          // picks the stored total up automatically (no second upload here).
+          onSyncSuccess={() => {}}
         />
 
         <WeightProgressCard
@@ -905,17 +899,8 @@ export default function DashboardScreen({ navigation }) {
           entries={weightHistory}
           currentWeight={user?.weight}
           targetWeight={user?.targetWeight}
-          onAddWeighIn={() => setShowWeighModal(true)}
+          onAddWeighIn={() => navigation.navigate("Profile")}
         />
-        <TouchableOpacity
-          style={[styles.weighInButton, { backgroundColor: colors.primary }]}
-          onPress={() => setShowWeighModal(true)}
-        >
-          <Ionicons name="add" size={18} color="#FFF" />
-          <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 14 }}>
-            Weigh-in
-          </Text>
-        </TouchableOpacity>
 
         {/* Calorie Progress Card */}
         <NeonCard accent={isExceeded ? "red" : "green"} active={isExceeded}>
@@ -1005,72 +990,6 @@ export default function DashboardScreen({ navigation }) {
         {/* AdMob Banner Component */}
         <AdBanner />
       </ScrollView>
-
-      {/* Weigh-in Modal */}
-      <Modal
-        visible={showWeighModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowWeighModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalContent,
-              { backgroundColor: colors.cardBg, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              Log Your Current Weight
-            </Text>
-            <TextInput
-              style={[
-                styles.modalInput,
-                {
-                  backgroundColor: colors.inputBg,
-                  color: colors.text,
-                  borderColor: colors.border,
-                },
-              ]}
-              placeholder="Enter weight in KG (e.g. 74.5)"
-              placeholderTextColor={colors.textSecondary}
-              keyboardType="numeric"
-              value={newWeight}
-              onChangeText={setNewWeight}
-            />
-            <View
-              style={{ flexDirection: "row", justifyContent: "space-between" }}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.stepActionBtn,
-                  {
-                    backgroundColor: colors.inputBg,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                  },
-                ]}
-                onPress={() => setShowWeighModal(false)}
-              >
-                <Text style={{ color: colors.text, fontWeight: "bold" }}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.stepActionBtn,
-                  { backgroundColor: colors.primary, marginLeft: 10 },
-                ]}
-                onPress={handleSaveWeight}
-              >
-                <Text style={{ color: "#FFF", fontWeight: "bold" }}>
-                  Save Weight
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Exercise Logging Modal */}
       <Modal
@@ -1427,15 +1346,6 @@ const styles = StyleSheet.create({
   },
   bmiValue: { fontSize: 17, fontWeight: "800" },
   bmiCategory: { fontSize: 10, fontWeight: "600", marginTop: 1 },
-  weighInButton: {
-    minHeight: 44,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 4,
-    borderRadius: 10,
-    marginBottom: 12,
-  },
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-between",

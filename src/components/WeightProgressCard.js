@@ -15,6 +15,8 @@ const CHART_POINTS = 14;
 // Chart padding. The right gutter holds the target label and latest value so
 // they never collide with (or clip against) the line.
 const PAD = { top: 14, bottom: 12, left: 12, right: 58 };
+const MIN_CARD_HEIGHT = 248;
+const FACE_PADDING = 14;
 
 const formatDate = (value) => {
   const date = new Date(value);
@@ -33,8 +35,13 @@ export default function WeightProgressCard({
   onAddWeighIn,
 }) {
   const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
-  const [flipped, setFlipped] = useState(false);
-  const rotation = useRef(new Animated.Value(0)).current;
+  // Progress stats face is shown by default; tap to flip to the chart.
+  const [flipped, setFlipped] = useState(true);
+  const rotation = useRef(new Animated.Value(1)).current;
+  // Both faces are absolutely positioned, so the card is sized to the stats
+  // content (which grows with font scaling) instead of a fixed height.
+  const [statsHeight, setStatsHeight] = useState(0);
+  const cardHeight = Math.max(MIN_CARD_HEIGHT, statsHeight + FACE_PADDING * 2);
 
   // Full account history, oldest → newest, with invalid rows dropped.
   const history = useMemo(() => {
@@ -245,6 +252,7 @@ export default function WeightProgressCard({
       style={({ pressed, hovered }) => [
         styles.card,
         {
+          height: cardHeight,
           backgroundColor: colors.cardBg,
           borderColor:
             pressed || hovered
@@ -383,7 +391,7 @@ export default function WeightProgressCard({
             <View style={styles.emptyOverlay}>
               <Ionicons name="scale-outline" size={22} color={colors.textSecondary} />
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                Log a weigh-in to start your progress graph.
+                Update your weight in Profile to start your progress graph.
               </Text>
             </View>
           )}
@@ -392,7 +400,7 @@ export default function WeightProgressCard({
               style={[styles.sparseText, { color: colors.textSecondary }]}
               numberOfLines={2}
             >
-              Log another weigh-in to draw your trend line.
+              Update your weight again to draw your trend line.
             </Text>
           )}
         </View>
@@ -417,6 +425,12 @@ export default function WeightProgressCard({
         style={[styles.face, backStyle]}
         pointerEvents={flipped ? "auto" : "none"}
       >
+        <View
+          onLayout={(event) => {
+            const height = Math.ceil(event.nativeEvent.layout.height);
+            if (Math.abs(height - statsHeight) > 1) setStatsHeight(height);
+          }}
+        >
         <View style={styles.heading}>
           <View style={styles.headingText}>
             <Text style={[styles.title, { color: colors.text }]}>Progress stats</Text>
@@ -454,11 +468,11 @@ export default function WeightProgressCard({
               onPress={onAddWeighIn}
               style={[styles.disclaimer, { color: colors.primary, fontWeight: "700" }]}
             >
-              + Add a weigh-in to unlock trend stats
+              + Update your weight to unlock trend stats
             </Text>
           ) : (
             <Text style={[styles.disclaimer, { color: colors.textSecondary }]}>
-              Add a weigh-in to unlock trend stats.
+              Update your weight in Profile to unlock trend stats.
             </Text>
           )
         ) : (
@@ -466,6 +480,7 @@ export default function WeightProgressCard({
             Day-to-day changes are normal; watch the weekly trend.
           </Text>
         )}
+        </View>
       </Animated.View>
     </Pressable>
   );
@@ -473,7 +488,7 @@ export default function WeightProgressCard({
 
 const styles = StyleSheet.create({
   card: {
-    height: 248,
+    // Height is set at render time from the measured stats content.
     borderRadius: 16,
     borderWidth: 1,
     marginBottom: 12,
@@ -481,7 +496,7 @@ const styles = StyleSheet.create({
   },
   face: {
     ...StyleSheet.absoluteFillObject,
-    padding: 14,
+    padding: FACE_PADDING,
     backfaceVisibility: "hidden",
   },
   heading: {

@@ -100,6 +100,8 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
           pendingSince = now;
           sampleDate = date;
           validSteps = acceptedSteps;
+          // Only steps walked from here on are uploaded (as a delta).
+          lastPushedSteps = acceptedSteps;
         } else {
           const currentStoredSteps =
             activeUser?.stepUserId === userId &&
@@ -107,7 +109,10 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
               ? Number(activeUser.dailySteps) || 0
               : 0;
           if (currentStoredSteps !== acceptedSteps) {
+            // Changed elsewhere (manual add, server refresh) and already
+            // saved there: continue counting on top of it.
             acceptedSteps = currentStoredSteps;
+            lastPushedSteps = currentStoredSteps;
             previousSensorSteps = steps;
             pendingStepDelta = 0;
             pendingSince = now;
@@ -140,14 +145,18 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
         acceptedSteps = dailySteps;
         onSyncSuccessRef.current?.(dailySteps);
 
-        if (token && dailySteps !== lastPushedSteps) {
+        if (token && lastPushedSteps !== null && dailySteps !== lastPushedSteps) {
           try {
+            // Cumulative: upload only the newly walked steps, so the device
+            // never overwrites steps added manually or on another device.
             const response = await axios.post(
               `${BASE_URL}/api/exercise`,
-              { date, stepsTotal: dailySteps },
+              { date, stepsDelta: dailySteps - lastPushedSteps },
               { headers: { Authorization: `Bearer ${token}` } },
             );
-            lastPushedSteps = dailySteps;
+            const serverSteps = Number(response.data?.data?.steps);
+            lastPushedSteps = Number.isFinite(serverSteps) ? serverSteps : dailySteps;
+            if (Number.isFinite(serverSteps)) acceptedSteps = serverSteps;
 
             const activeUser = useAuthStore.getState().user;
             if (

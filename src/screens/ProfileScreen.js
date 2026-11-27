@@ -12,18 +12,19 @@ import {
   Image,
   Switch,
   Linking,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as WebBrowser from "expo-web-browser";
-import axios from "axios";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 import NotificationSettings from "../components/NotificationSettings";
 import DeviceSyncSection from "../components/DeviceSyncSection";
 import AdBanner from "../components/AdBanner";
-import PaddleCheckoutModal from "../components/PaddleCheckoutModal";
 import { isActiveProUser, getPlanLabel } from "../utils/subscription";
 
 export default function ProfileScreen({ navigation }) {
@@ -35,7 +36,6 @@ export default function ProfileScreen({ navigation }) {
     logout,
     deleteAccount,
     isLoading,
-    token,
     refreshUserProfile,
   } = useAuthStore();
   const colors = getThemeColors(theme);
@@ -71,7 +71,6 @@ export default function ProfileScreen({ navigation }) {
   const [profileImage, setProfileImage] = useState(
     user?.avatar || user?.profileImage || null,
   );
-  const [checkoutVisible, setCheckoutVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [dietPreference, setDietPreference] = useState(user?.dietPreference || "");
 
@@ -105,39 +104,10 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  // RevenueCat-first: the subscription screen shows store offerings,
-  // restore, and falls back to Paddle only where it is configured.
-  const handlePaddleCheckout = () => {
+  // RevenueCat is the billing flow: the subscription screen shows store
+  // offerings, restore, and subscription management.
+  const openSubscription = () => {
     navigation.navigate("SubscriptionScreen");
-  };
-
-  const handlePaddleCheckoutComplete = async () => {
-    setCheckoutVisible(false);
-    try {
-      const BASE_URL =
-        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
-      const response = await axios.post(
-        `${BASE_URL}/api/payment/verify-payment`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (response.data?.user) {
-        await refreshUserProfile({ force: true });
-      }
-      Alert.alert(
-        "Payment submitted",
-        response.data?.user?.isPro
-          ? "Your Pro subscription is active."
-          : "Your payment is awaiting Paddle webhook verification. Pro access will update when the verified event is processed.",
-      );
-    } catch (error) {
-      console.error("Could not refresh Paddle subscription status:", error);
-      Alert.alert(
-        "Subscription Status",
-        error?.response?.data?.message ||
-          "Payment was submitted, but subscription status could not be refreshed.",
-      );
-    }
   };
 
   const handlePickImage = async () => {
@@ -188,33 +158,66 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  // Same lifecycle as the website/backend: immediate deactivation, 30-day
+  // recovery by signing in, then permanent deletion. Step 1 explains it,
+  // step 2 confirms with the account password.
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const closeDeleteConfirm = () => {
+    if (deleting) return;
+    setDeleteConfirmVisible(false);
+    setDeletePassword("");
+    setDeleteError("");
+  };
+
   const handleDeleteAccountPress = () => {
+    const storeNote =
+      user?.billingProvider === "revenuecat" && isPro
+        ? "\n\nYour Google Play / App Store subscription is not cancelled automatically. Cancel it in the store to stop future charges."
+        : "";
     Alert.alert(
-      "Delete Account",
-      "Are you sure you want to permanently delete your account? This will erase all your profile data, chat history, and preferences. This action cannot be undone.",
+      "Delete your account?",
+      "Your account will be deactivated right away and you'll be signed out.\n\n" +
+        "You have 30 days to change your mind: just sign in again to restore everything.\n\n" +
+        "After 30 days, your profile, meals, weight history, and chats are permanently deleted." +
+        storeNote,
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Delete Permanently",
+          text: "Continue",
           style: "destructive",
-          onPress: async () => {
-            const res = await deleteAccount();
-            if (res?.success) {
-              Alert.alert(
-                "Account Deleted",
-                res.message ||
-                  "Your account is deactivated and will be permanently deleted in 30 days.",
-              );
-            } else {
-              Alert.alert(
-                "Error",
-                res?.message || "Failed to delete account. Please try again.",
-              );
-            }
+          onPress: () => {
+            setDeletePassword("");
+            setDeleteError("");
+            setDeleteConfirmVisible(true);
           },
         },
       ],
     );
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletePassword) {
+      setDeleteError("Enter your password to confirm.");
+      return;
+    }
+    setDeleting(true);
+    setDeleteError("");
+    const res = await deleteAccount({ password: deletePassword });
+    setDeleting(false);
+    if (res?.success) {
+      // deleteAccount already signed out; this screen is unmounting.
+      Alert.alert(
+        "Account deactivated",
+        res.message ||
+          "Your account is deactivated. Sign in within 30 days to restore it.",
+      );
+      return;
+    }
+    setDeleteError(res?.message || "Failed to delete account. Please try again.");
   };
 
   return (
@@ -465,7 +468,7 @@ export default function ProfileScreen({ navigation }) {
         {/* Health & Device Sync Section */}
         <DeviceSyncSection />
 
-        {/* Paddle Subscription Plan Box */}
+        {/* Subscription Plan Box (RevenueCat) */}
         <View
           style={[
             styles.card,
@@ -499,7 +502,7 @@ export default function ProfileScreen({ navigation }) {
               { backgroundColor: isPro ? colors.cardBgGlow : colors.primary },
               isPro && { borderWidth: 1, borderColor: colors.primary },
             ]}
-            onPress={handlePaddleCheckout}
+            onPress={openSubscription}
           >
             <Ionicons
               name={isPro ? "settings-outline" : "star-outline"}
@@ -562,19 +565,111 @@ export default function ProfileScreen({ navigation }) {
         </TouchableOpacity>
       </ScrollView>
       <AdBanner />
-      <PaddleCheckoutModal
-        visible={checkoutVisible}
-        token={token}
-        billingCycle="monthly"
-        theme={theme}
-        onClose={() => setCheckoutVisible(false)}
-        onComplete={handlePaddleCheckoutComplete}
-      />
+      {/* Step 2 of account deletion: password confirmation */}
+      <Modal
+        visible={deleteConfirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDeleteConfirm}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalOverlay}
+        >
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.cardBg, borderColor: "#EF4444" },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Confirm account deletion
+            </Text>
+            <Text style={[styles.modalBody, { color: colors.textSecondary }]}>
+              Enter the password for {user?.email || "your account"}. You can
+              restore the account by signing in within 30 days.
+            </Text>
+            <TextInput
+              value={deletePassword}
+              onChangeText={(value) => {
+                setDeletePassword(value);
+                if (deleteError) setDeleteError("");
+              }}
+              placeholder="Password"
+              placeholderTextColor={colors.textSecondary}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!deleting}
+              onSubmitEditing={handleConfirmDelete}
+              style={[
+                styles.modalInput,
+                {
+                  color: colors.text,
+                  borderColor: deleteError ? "#EF4444" : colors.border,
+                  backgroundColor: colors.inputBg,
+                },
+              ]}
+            />
+            {deleteError ? (
+              <Text style={styles.modalError}>{deleteError}</Text>
+            ) : null}
+            <TouchableOpacity
+              style={[styles.modalDanger, { opacity: deleting ? 0.6 : 1 }]}
+              onPress={handleConfirmDelete}
+              disabled={deleting}
+              accessibilityRole="button"
+            >
+              {deleting ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.modalDangerText}>Deactivate account</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={closeDeleteConfirm}
+              disabled={deleting}
+            >
+              <Text style={{ color: colors.textSecondary, fontWeight: "600" }}>
+                Keep my account
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 24,
+    backgroundColor: "rgba(0,0,0,0.72)",
+  },
+  modalCard: { borderWidth: 1, borderRadius: 18, padding: 20 },
+  modalTitle: { fontSize: 18, fontWeight: "800", marginBottom: 8 },
+  modalBody: { fontSize: 14, lineHeight: 20, marginBottom: 14 },
+  modalInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+  },
+  modalError: { color: "#EF4444", fontSize: 13, marginTop: 8 },
+  modalDanger: {
+    marginTop: 16,
+    minHeight: 46,
+    borderRadius: 12,
+    backgroundColor: "#DC2626",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalDangerText: { color: "#FFFFFF", fontWeight: "800" },
+  modalCancel: { alignItems: "center", padding: 12, marginTop: 4 },
   dietRow: {
     flexDirection: "row",
     flexWrap: "wrap",
