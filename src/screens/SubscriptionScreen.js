@@ -23,6 +23,7 @@ import {
   addRevenueCatListener,
   describePackage,
   getCurrentPackages,
+  getIneligibleTrialProductIds,
   getUnavailableReason,
   hasProEntitlement,
   identifyRevenueCatUser,
@@ -50,6 +51,8 @@ export default function SubscriptionScreen({ navigation }) {
 
   const [config, setConfig] = useState(null);
   const [packages, setPackages] = useState([]);
+  // Product IDs whose trial this user can't get (iOS StoreKit check).
+  const [trialIneligible, setTrialIneligible] = useState(() => new Set());
   const [selectedId, setSelectedId] = useState(null);
   const [offeringsState, setOfferingsState] = useState("loading"); // loading | ready | empty | error | unavailable
   const [busy, setBusy] = useState(""); // "" | purchase | restore | verify
@@ -137,7 +140,9 @@ export default function SubscriptionScreen({ navigation }) {
     try {
       await identifyRevenueCatUser(userId);
       const { packages: list } = await getCurrentPackages();
+      const ineligible = await getIneligibleTrialProductIds(list);
       if (!mounted.current) return;
+      setTrialIneligible(ineligible);
       setPackages(list);
       setSelectedId(
         (list.find((p) => p.packageType === "ANNUAL") || list[0])?.identifier || null,
@@ -164,6 +169,15 @@ export default function SubscriptionScreen({ navigation }) {
   }, [syncWithServer, useRevenueCat]);
 
   const selectedPackage = packages.find((p) => p.identifier === selectedId);
+  // A trial is offered only if the store says so, the user is eligible, and
+  // the server has no record of an earlier trial.
+  const packageInfo = (aPackage) =>
+    describePackage(aPackage, {
+      trialEligible:
+        !user?.trialUsedAt &&
+        !trialIneligible.has(aPackage?.product?.identifier),
+    });
+  const selectedInfo = selectedPackage ? packageInfo(selectedPackage) : null;
 
   const handlePurchase = async () => {
     if (!selectedPackage || busy) return;
@@ -276,7 +290,7 @@ export default function SubscriptionScreen({ navigation }) {
       );
     }
     return packages.map((aPackage) => {
-      const info = describePackage(aPackage);
+      const info = packageInfo(aPackage);
       const selected = aPackage.identifier === selectedId;
       return (
         <NeonCard
@@ -296,11 +310,15 @@ export default function SubscriptionScreen({ navigation }) {
             <Text style={[styles.packageTitle, { color: colors.text }]} numberOfLines={1}>
               {info.title}
             </Text>
-            {info.hasTrial && (
+            {info.hasTrial ? (
               <Text style={[styles.trialTag, { color: colors.primary }]}>
-                Free trial included
+                {info.trialLabel}, then {info.price} {info.period}
               </Text>
-            )}
+            ) : info.introLabel ? (
+              <Text style={[styles.trialTag, { color: colors.primary }]}>
+                {info.introLabel}
+              </Text>
+            ) : null}
           </View>
           <Text style={[styles.packagePrice, { color: colors.text }]} numberOfLines={1}>
             {info.price}
@@ -403,7 +421,13 @@ export default function SubscriptionScreen({ navigation }) {
                   </Text>
                 </View>
               ) : (
-                <Text style={styles.proButtonText}>Continue</Text>
+                <Text style={styles.proButtonText}>
+                  {selectedInfo?.hasTrial
+                    ? selectedInfo.trialDays
+                      ? `Start ${selectedInfo.trialDays}-day free trial`
+                      : "Start free trial"
+                    : "Continue"}
+                </Text>
               )}
             </TouchableOpacity>
           </>

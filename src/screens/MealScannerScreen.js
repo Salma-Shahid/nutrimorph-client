@@ -274,14 +274,10 @@ export default function MealScannerScreen({ navigation }) {
         return;
       }
 
-      const allowance = await axios.post(
-        `${API_BASE}/meals/scan-allowance`,
-        {},
-        { headers: { Authorization: `Bearer ${activeToken}` } },
-      );
-      if (allowance.data?.usage) await setUser(allowance.data.usage);
-
-      const cleanBarcode = String(barcode).trim();
+      // Look the product up BEFORE spending the free daily scan, so unknown
+      // barcodes and network failures never cost the user their scan.
+      const cleanBarcode = encodeURIComponent(String(barcode).trim());
+      const authHeaders = { headers: { Authorization: `Bearer ${activeToken}` } };
 
       const response = await axios.get(
         `https://world.openfoodfacts.org/api/v2/product/${cleanBarcode}.json`,
@@ -323,13 +319,16 @@ export default function MealScannerScreen({ navigation }) {
         );
         const fat = getNutrientNumber(nutriments.fat_100g, nutriments.fat);
 
-        // If Open Food Facts returns zero values, trigger AI estimation fallback
+        // If Open Food Facts returns zero values, trigger AI estimation fallback.
+        // `source: "barcode"` lets free users use it; the server spends their
+        // daily scan only when the estimate succeeds (so no separate allowance).
         if (Number(cal) === 0 && Number(prot) === 0 && Number(carb) === 0) {
           const aiRes = await axios.post(
             `${API_BASE}/meals/parse-text`,
-            { text: name },
-            { headers: { Authorization: `Bearer ${activeToken}` } },
+            { text: name.slice(0, 150), source: "barcode" },
+            authHeaders,
           );
+          if (aiRes.data?.usage) await setUser(aiRes.data.usage);
           if (aiRes.data?.success) {
             const aiData = aiRes.data.data;
             setFoodName(name);
@@ -342,7 +341,20 @@ export default function MealScannerScreen({ navigation }) {
             setModalVisible(true);
             return;
           }
+          Alert.alert(
+            "Nutrition Not Available",
+            "We found this product but couldn't estimate its nutrition. Please take a photo of the food or its nutrition label instead.",
+          );
+          return;
         }
+
+        // Product found with nutrition data: spend the daily scan now.
+        const allowance = await axios.post(
+          `${API_BASE}/meals/scan-allowance`,
+          {},
+          authHeaders,
+        );
+        if (allowance.data?.usage) await setUser(allowance.data.usage);
 
         setFoodName(name);
         setCalories(String(Math.round(cal)));
@@ -365,7 +377,8 @@ export default function MealScannerScreen({ navigation }) {
       }
     } catch (error) {
       console.error("Barcode Fetch Error:", error);
-      if (error.response?.status === 403 || error.response?.data?.code === "PRO_REQUIRED") {
+      const code = error.response?.data?.code;
+      if (code === "TRIAL_REQUIRED" || code === "PRO_REQUIRED") {
         promptUpgrade();
       } else {
         Alert.alert(

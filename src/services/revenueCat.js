@@ -128,8 +128,119 @@ export const addRevenueCatListener = (listener) => {
   return () => Purchases.removeCustomerInfoUpdateListener(listener);
 };
 
+// --- Free trial / intro offer detection -----------------------------------
+// iOS reports trials on `product.introPrice`. Google Play reports them as
+// pricing phases on `product.defaultOption` / `product.subscriptionOptions`
+// (`freePhase` for free trials, `introPhase` for discounted intro prices).
+
+const UNIT_DAYS = { DAY: 1, WEEK: 7, MONTH: 30, YEAR: 365 };
+
+const toDays = (unit, value, cycles = 1) => {
+  const days = UNIT_DAYS[String(unit || "").toUpperCase()];
+  const count = Number(value) || 0;
+  return days && count ? days * count * (Number(cycles) || 1) : 0;
+};
+
+const isZeroPhase = (phase) =>
+  phase?.price?.amountMicros != null && Number(phase.price.amountMicros) === 0;
+
+// Returns { days, isFree, priceString } for the first trial/intro phase, or null.
+export const getTrialOffer = (product) => {
+  if (!product) return null;
+
+  // Android: the default option first, then any other option with a free phase.
+  const options = [
+    product.defaultOption,
+    ...(Array.isArray(product.subscriptionOptions) ? product.subscriptionOptions : []),
+  ].filter(Boolean);
+  for (const option of options) {
+    const phase = option.freePhase || (isZeroPhase(option.introPhase) ? option.introPhase : null);
+    if (phase) {
+      return {
+        days: toDays(
+          phase.billingPeriod?.unit,
+          phase.billingPeriod?.value,
+          phase.billingCycleCount,
+        ),
+        isFree: true,
+        priceString: null,
+      };
+    }
+  }
+  const introPhase = product.defaultOption?.introPhase;
+  if (introPhase) {
+    return {
+      days: toDays(
+        introPhase.billingPeriod?.unit,
+        introPhase.billingPeriod?.value,
+        introPhase.billingCycleCount,
+      ),
+      isFree: false,
+      priceString: introPhase.price?.formatted || null,
+    };
+  }
+
+  // iOS (and Android fallback): introPrice.
+  const intro = product.introPrice;
+  if (intro) {
+    const isFree = Number(intro.price) === 0;
+    return {
+      days: toDays(intro.periodUnit, intro.periodNumberOfUnits, intro.cycles),
+      isFree,
+      priceString: isFree ? null : intro.priceString || null,
+    };
+  }
+  return null;
+};
+
+// "3-day free trial", or null when the product has no free trial.
+export const formatTrialLabel = (offer) => {
+  if (!offer?.isFree) return null;
+  return offer.days ? `${offer.days}-day free trial` : "Free trial";
+};
+
+// Product identifiers the user is NOT eligible to get a trial for.
+// iOS answers via StoreKit; Google Play only returns offers the user is
+// eligible for, so Android needs no extra check (status is UNKNOWN there).
+export const getIneligibleTrialProductIds = async (packages = []) => {
+  const ineligible = new Set();
+  if (!isRevenueCatAvailable() || Platform.OS !== "ios" || !packages.length) {
+    return ineligible;
+  }
+  try {
+    const ids = packages.map((p) => p?.product?.identifier).filter(Boolean);
+    const result = await Purchases.checkTrialOrIntroductoryPriceEligibility(ids);
+    const INELIGIBLE = Purchases.INTRO_ELIGIBILITY_STATUS?.INTRO_ELIGIBILITY_STATUS_INELIGIBLE ?? 1;
+    Object.entries(result || {}).forEach(([id, value]) => {
+      if (value?.status === INELIGIBLE) ineligible.add(id);
+    });
+  } catch {
+    // Unknown eligibility: let the store decide at purchase time.
+  }
+  return ineligible;
+};
+
+// Best eligible free trial in the current offering, e.g. { days: 3, label }.
+// `trialUsedAt` (from the server) hides trial copy for users who already had one.
+export const getAvailableFreeTrial = async ({ trialUsedAt } = {}) => {
+  if (trialUsedAt || !isRevenueCatAvailable()) return null;
+  try {
+    const { packages } = await getCurrentPackages();
+    const ineligible = await getIneligibleTrialProductIds(packages);
+    for (const aPackage of packages) {
+      if (ineligible.has(aPackage?.product?.identifier)) continue;
+      const offer = getTrialOffer(aPackage.product);
+      const label = formatTrialLabel(offer);
+      if (label) return { days: offer.days || null, label };
+    }
+  } catch {
+    // Offerings unavailable: fall back to generic upgrade copy.
+  }
+  return null;
+};
+
 // Human-readable price/period for a package, e.g. "Rs 900 / month".
-export const describePackage = (aPackage) => {
+export const describePackage = (aPackage, { trialEligible = true } = {}) => {
   const product = aPackage?.product || {};
   const period = {
     MONTHLY: "month",
@@ -152,6 +263,19 @@ export const describePackage = (aPackage) => {
       }[aPackage?.packageType] || product.title || "Pro",
     price: product.priceString || "",
     period: period && period !== "one-time" ? `/ ${period}` : period || "",
-    hasTrial: Boolean(product.introPrice && Number(product.introPrice.price) === 0),
+    ...(() => {
+      const offer = trialEligible ? getTrialOffer(product) : null;
+      const trialLabel = formatTrialLabel(offer);
+      return {
+        hasTrial: Boolean(trialLabel),
+        trialDays: trialLabel ? offer.days || null : null,
+        trialLabel,
+        // Paid intro price (not free), e.g. "Rs 300 for the first month".
+        introLabel:
+          offer && !offer.isFree && offer.priceString
+            ? `${offer.priceString} intro price${offer.days ? ` for ${offer.days} days` : ""}`
+            : null,
+      };
+    })(),
   };
 };

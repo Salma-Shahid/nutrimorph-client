@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -8,6 +8,8 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useAuthStore } from "../store/useAuthStore";
+import { getAvailableFreeTrial } from "../services/revenueCat";
 
 export default function UpgradeTrialModal({
   visible,
@@ -16,6 +18,33 @@ export default function UpgradeTrialModal({
   onClose,
   onContinue,
 }) {
+  const trialUsedAt = useAuthStore((state) => state.user?.trialUsedAt);
+  // Eligible store free trial, e.g. { days: 3, label: "3-day free trial" }.
+  const [trial, setTrial] = useState(null);
+
+  useEffect(() => {
+    if (!visible) return undefined;
+    let active = true;
+    getAvailableFreeTrial({ trialUsedAt }).then((offer) => {
+      if (active) setTrial(offer);
+    });
+    return () => {
+      active = false;
+    };
+  }, [visible, trialUsedAt]);
+
+  const trialDays = trial?.days;
+  const title = trial
+    ? trialDays
+      ? `Try Pro free for ${trialDays} days`
+      : "Try Pro free"
+    : "Upgrade to Pro";
+  const cta = trial
+    ? trialDays
+      ? `Start ${trialDays}-day free trial`
+      : "Start free trial"
+    : "View Pro plans";
+
   return (
     <Modal
       visible={visible}
@@ -46,12 +75,16 @@ export default function UpgradeTrialModal({
           >
             <Ionicons name="sparkles" size={28} color={colors.primary} />
           </View>
-          <Text style={[styles.title, { color: colors.text }]}>
-            Upgrade to Pro
-          </Text>
+          <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
           <Text style={[styles.description, { color: colors.textSecondary }]}>
             Unlock premium NutriBot support, meal scans, and longer personalized plans with NutriMorph Pro.
           </Text>
+          {trial ? (
+            <Text style={[styles.trialNote, { color: colors.textSecondary }]}>
+              No charge today. Your subscription starts after the {trial.label}{" "}
+              unless you cancel before it ends in Google Play or the App Store.
+            </Text>
+          ) : null}
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: colors.primary }]}
             onPress={onContinue}
@@ -60,9 +93,7 @@ export default function UpgradeTrialModal({
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.primaryText}>
-                View Pro plans
-              </Text>
+              <Text style={styles.primaryText}>{cta}</Text>
             )}
           </TouchableOpacity>
           <TouchableOpacity
@@ -111,6 +142,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 10,
     marginBottom: 20,
+  },
+  trialNote: {
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+    marginTop: -10,
+    marginBottom: 18,
   },
   primaryButton: {
     alignSelf: "stretch",
