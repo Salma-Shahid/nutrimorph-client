@@ -138,10 +138,10 @@ export default function MealPlanScreen({ navigation }) {
     setRefreshing(true);
     try {
       const [profileResult] = await Promise.all([
-        refreshUserProfile(),
+        refreshUserProfile({ force: true }),
         fetchActiveMealPlan(),
       ]);
-      if (!profileResult.success) {
+      if (!profileResult.success && !profileResult.sessionExpired) {
         Alert.alert(
           "Refresh failed",
           profileResult.message || "Could not refresh your profile.",
@@ -447,9 +447,7 @@ export default function MealPlanScreen({ navigation }) {
                               marginTop: 2,
                             }}
                           >
-                            P: {mealInfo.protein}g | C: {mealInfo.carbs}g | F:
-                            {""}
-                            {mealInfo.fats}g
+                            {`P: ${mealInfo.protein}g | C: ${mealInfo.carbs}g | F: ${mealInfo.fats}g`}
                           </Text>
                         </View>
                         <Text

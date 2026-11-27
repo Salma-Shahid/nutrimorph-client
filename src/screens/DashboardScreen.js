@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   StyleSheet,
   Text,
@@ -22,9 +22,23 @@ import { saveDataToCache, getDataFromCache } from "../utils/cache";
 import StreakHeader from "../components/StreakHeader";
 import DeviceSyncSection from "../components/DeviceSyncSection";
 import WeightProgressCard from "../components/WeightProgressCard";
-import { isActiveProUser } from "../utils/subscription";
+import { isActiveProUser, getPlanLabel } from "../utils/subscription";
 import { getBmiInfo } from "../utils/bmi";
+import NeonCard from "../components/NeonCard";
+import useSyncedCounter from "../hooks/useSyncedCounter";
 import axios from "axios";
+
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
+const idOf = (user) => String(user?._id || user?.id || "");
+const formatKcal = (value) =>
+  Math.max(0, Math.round(Number(value) || 0)).toLocaleString("en-US");
+const BMI_COLORS = {
+  Underweight: "#F59E0B",
+  Normal: null, // uses theme primary
+  Overweight: "#F97316",
+  Obese: null, // uses theme danger
+};
 
 export default function DashboardScreen({ navigation }) {
   const user = useAuthStore((state) => state.user);
@@ -66,24 +80,10 @@ export default function DashboardScreen({ navigation }) {
   const [caloriesInput, setCaloriesInput] = useState("");
 
   // Exercise & Steps State
-  const [stepCount, setStepCount] = useState(0);
   const [manualStepTotal, setManualStepTotal] = useState("0");
   const [weightHistory, setWeightHistory] = useState([]);
-  const stepCountRef = useRef(0);
-  const pendingStepDeltasRef = useRef(0);
-  const stepSyncQueueRef = useRef(Promise.resolve());
-  const waterCountRef = useRef(waterIntake || 0);
-  const waterSyncQueueRef = useRef(Promise.resolve());
   const [caloriesBurned, setCaloriesBurned] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-
-  useEffect(() => {
-    waterCountRef.current = Math.max(0, Number(waterIntake) || 0);
-  }, [waterIntake, userId]);
-
-  useEffect(() => {
-    setManualStepTotal(String(stepCount));
-  }, [stepCount]);
 
   // Device local date in YYYY-MM-DD format
   const getLocalDate = () => {
@@ -92,166 +92,172 @@ export default function DashboardScreen({ navigation }) {
     const day = String(date.getDate()).padStart(2, "0");
     return `${date.getFullYear()}-${month}-${day}`;
   };
+  const todayKey = getLocalDate();
+  const authHeaders = { headers: { Authorization: `Bearer ${token}` } };
+  const isStillActiveUser = () => idOf(useAuthStore.getState().user) === userId;
 
-  useEffect(() => {
-    const today = getLocalDate();
-    if (user?.stepUserId === userId && user?.stepCountDate === today) {
-      const dailySteps = Number(user.dailySteps) || 0;
-      stepCountRef.current = dailySteps;
-      setStepCount(dailySteps);
-      return;
-    }
+  // ---- Steps: instant taps, debounced absolute-total sync ----------------
+  const storedDailySteps =
+    user?.stepUserId === userId && user?.stepCountDate === todayKey
+      ? Number(user.dailySteps) || 0
+      : 0;
 
-    stepCountRef.current = 0;
-    setStepCount(0);
-    if (!user?.isDeviceSynced) {
-      recordDailySteps(0, today)
-        .then((updatedUser) => {
-          const dailySteps = updatedUser?.dailySteps || 0;
-          stepCountRef.current = dailySteps;
-          setStepCount(dailySteps);
-        })
-        .catch((error) =>
-          console.error("Could not reset the local daily step count:", error),
-        );
-    }
-  }, [
-    recordDailySteps,
-    userId,
-    user?.dailySteps,
-    user?.isDeviceSynced,
-    user?.stepCountDate,
-    user?.stepUserId,
-  ]);
-
-  // Fetch Exercise & Steps from backend
-  const fetchExerciseData = async (date) => {
-    try {
-      const BASE_URL =
-        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
-      const res = await axios.get(`${BASE_URL}/api/exercise?date=${date}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const activeUser = useAuthStore.getState().user;
-      if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
-      if (res.data?.success) {
-        setCaloriesBurned(res.data.data.caloriesBurned || 0);
-        const updatedUser = await setDailySteps(
-          Number(res.data.data.steps) || 0,
-          date,
-        );
-        const dailySteps = updatedUser?.dailySteps || 0;
-        stepCountRef.current = dailySteps;
-        setStepCount(dailySteps);
-      }
-    } catch (error) {
-      console.log("Error fetching exercise data:", error.message);
-    }
-  };
-
-  const fetchWeightHistory = async () => {
-    try {
-      const baseUrl =
-        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
-      const response = await axios.get(`${baseUrl}/api/weight`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const activeUser = useAuthStore.getState().user;
-      if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
-      if (response.data?.success) {
-        setWeightHistory(response.data.data || []);
-      }
-    } catch (error) {
-      console.error(
-        "Could not load weight history:",
-        error?.response?.data?.message || error.message,
+  const syncSteps = useCallback(
+    async (total) => {
+      const today = getLocalDate();
+      if (!isStillActiveUser()) return undefined;
+      // Local persistence first (user-scoped AsyncStorage key), then server.
+      await setDailySteps(total, today);
+      if (!token) return total;
+      const response = await axios.post(
+        `${API_BASE_URL}/api/exercise`,
+        { date: today, stepsTotal: total },
+        authHeaders,
       );
-    }
-  };
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    try {
-      const profileRefresh = await refreshUserProfile();
-      if (!profileRefresh.success) {
-        throw new Error(profileRefresh.message);
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || "Step sync failed.");
       }
-
-      const todayDate = getLocalDate();
-      await Promise.all([
-        fetchTodayMeals(todayDate),
-        fetchWaterIntake(todayDate),
-        fetchWeeklySummary(),
-        fetchExerciseData(todayDate),
-        fetchWeightHistory(),
-      ]);
-    } catch (error) {
-      Alert.alert(
-        "Refresh failed",
-        error.message || "Could not refresh your dashboard data.",
-      );
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const handleAdjustSteps = (delta) => {
-    const today = getLocalDate();
-    const newTotalSteps = Math.max(0, stepCountRef.current + delta);
-    if (newTotalSteps === stepCountRef.current) return;
-    stepCountRef.current = newTotalSteps;
-    setStepCount(newTotalSteps);
-    useAuthStore.getState().setDailySteps(newTotalSteps, today);
-    if (!token || !userId) return;
-
-    pendingStepDeltasRef.current += 1;
-    stepSyncQueueRef.current = stepSyncQueueRef.current
-      .catch(() => undefined)
-      .then(async () => {
-        const activeUser = useAuthStore.getState().user;
-        if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
-        const baseUrl =
-          process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
-        const response = await axios.post(
-          `${baseUrl}/api/exercise`,
-          { date: today, stepsDelta: delta },
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        const latestUser = useAuthStore.getState().user;
-        if (
-          String(latestUser?._id || latestUser?.id || "") !== userId ||
-          !response.data?.userStats
-        )
-          return;
-        const serverSteps = Number(response.data.userStats.dailySteps) || 0;
+      if (!isStillActiveUser()) return undefined;
+      const serverSteps = Number(response.data.data?.steps ?? total);
+      if (response.data.userStats) {
         await updateUserStats({
           ...response.data.userStats,
           dailySteps: serverSteps,
           stepCountDate: today,
           stepUserId: userId,
         });
-        if (pendingStepDeltasRef.current === 1) {
-          stepCountRef.current = serverSteps;
-          setStepCount(serverSteps);
-          await useAuthStore.getState().setDailySteps(serverSteps, today);
+      }
+      return serverSteps;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [setDailySteps, token, updateUserStats, userId],
+  );
+
+  const steps = useSyncedCounter({
+    value: storedDailySteps,
+    sync: syncSteps,
+    max: 1000000,
+    resetKey: `${userId}:${todayKey}`,
+  });
+  const stepCount = steps.count;
+
+  useEffect(() => {
+    setManualStepTotal(String(stepCount));
+  }, [stepCount]);
+
+  // New day / account without a synced device: start today's local count.
+  useEffect(() => {
+    if (!userId || user?.isDeviceSynced) return;
+    if (user?.stepUserId === userId && user?.stepCountDate === todayKey) return;
+    recordDailySteps(0, todayKey).catch((error) =>
+      console.error("Could not reset the local daily step count:", error),
+    );
+  }, [
+    recordDailySteps,
+    todayKey,
+    userId,
+    user?.isDeviceSynced,
+    user?.stepCountDate,
+    user?.stepUserId,
+  ]);
+
+  // ---- Water: same pattern, glasses persisted as an absolute count -------
+  const water = useSyncedCounter({
+    value: waterIntake,
+    max: 100,
+    delay: 600,
+    resetKey: `${userId}:${todayKey}`,
+    onLocalChange: (glasses) => useMealStore.setState({ waterIntake: glasses }),
+    onPendingChange: (pending) =>
+      useMealStore.setState({ waterPendingSync: pending }),
+    sync: async (glasses) => {
+      const today = getLocalDate();
+      if (!isStillActiveUser()) return undefined;
+      const res = await updateWaterIntake(glasses, today, { applyResult: false });
+      if (!res?.success) {
+        throw new Error(res?.message || "Could not update water intake.");
+      }
+      await saveDataToCache(waterCacheKey(today), glasses);
+      return glasses;
+    },
+  });
+  const waterGlasses = water.count;
+
+  // Fetch Exercise & Steps from backend
+  const fetchExerciseData = async (date) => {
+    try {
+      const res = await axios.get(
+        `${API_BASE_URL}/api/exercise?date=${date}`,
+        authHeaders,
+      );
+      if (!isStillActiveUser()) return;
+      if (res.data?.success) {
+        setCaloriesBurned(res.data.data.caloriesBurned || 0);
+        // Never let a fetch overwrite step taps that are still syncing.
+        if (!steps.isDirty()) {
+          await setDailySteps(Number(res.data.data.steps) || 0, date);
         }
-      })
-      .catch((error) => {
-        console.error(
-          "Could not sync manual step adjustment:",
-          error?.response?.data?.message || error.message,
-        );
-      })
-      .finally(() => {
-        pendingStepDeltasRef.current = Math.max(
-          0,
-          pendingStepDeltasRef.current - 1,
-        );
-      });
+      }
+    } catch (error) {
+      if (__DEV__) console.log("Exercise data unavailable:", error.message);
+    }
   };
 
+  const fetchWeightHistory = async () => {
+    try {
+      // Full account history (server caps it); the card charts the latest.
+      const response = await axios.get(
+        `${API_BASE_URL}/api/weight?limit=365`,
+        authHeaders,
+      );
+      if (!isStillActiveUser()) return;
+      if (response.data?.success) {
+        setWeightHistory(response.data.data || []);
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.log(
+          "Weight history unavailable:",
+          error?.response?.data?.message || error.message,
+        );
+      }
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const todayDate = getLocalDate();
+      const [profileRefresh] = await Promise.all([
+        refreshUserProfile({ force: true }),
+        fetchTodayMeals(todayDate),
+        fetchWaterIntake(todayDate),
+        fetchWeeklySummary(),
+        fetchExerciseData(todayDate),
+        fetchWeightHistory(),
+        steps.flush(),
+        water.flush(),
+      ]);
+      if (profileRefresh?.offline) {
+        Alert.alert(
+          "You're offline",
+          "Showing your last synced data. Changes will sync when you're back online.",
+        );
+      } else if (!profileRefresh?.success && !profileRefresh?.sessionExpired) {
+        Alert.alert(
+          "Refresh incomplete",
+          profileRefresh?.message || "Some dashboard data could not be refreshed.",
+        );
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleAdjustSteps = (delta) => steps.set((current) => current + delta);
+
   const handleSetManualSteps = () => {
-    const total = Number(manualStepTotal);
+    const total = Number(String(manualStepTotal).replace(/[,\s]/g, ""));
     if (!Number.isInteger(total) || total < 0 || total > 1000000) {
       Alert.alert(
         "Invalid step total",
@@ -259,57 +265,8 @@ export default function DashboardScreen({ navigation }) {
       );
       return;
     }
-
-    const today = getLocalDate();
-    stepCountRef.current = total;
-    setStepCount(total);
-    setDailySteps(total, today);
-    if (!token || !userId) return;
-
-    stepSyncQueueRef.current = stepSyncQueueRef.current
-      .catch(() => undefined)
-      .then(async () => {
-        const activeUser = useAuthStore.getState().user;
-        if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
-        const baseUrl =
-          process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
-        const response = await axios.post(
-          `${baseUrl}/api/exercise`,
-          { date: today, stepsTotal: total },
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        const latestUser = useAuthStore.getState().user;
-        if (
-          String(latestUser?._id || latestUser?.id || "") !== userId ||
-          !response.data?.success
-        ) {
-          return;
-        }
-
-        const serverSteps = Number(response.data.data?.steps ?? total);
-        stepCountRef.current = serverSteps;
-        setStepCount(serverSteps);
-        await setDailySteps(serverSteps, today);
-        if (response.data.userStats) {
-          await updateUserStats({
-            ...response.data.userStats,
-            dailySteps: serverSteps,
-            stepCountDate: today,
-            stepUserId: userId,
-          });
-        }
-      })
-      .catch((error) => {
-        console.error(
-          "Could not sync manual step total:",
-          error?.response?.data?.message || error.message,
-        );
-        fetchExerciseData(today);
-        Alert.alert(
-          "Step sync failed",
-          error?.response?.data?.message || "Could not save your step total.",
-        );
-      });
+    steps.set(total);
+    steps.flush();
   };
 
   // Save Exercise Handler (Backend Connected)
@@ -392,76 +349,78 @@ export default function DashboardScreen({ navigation }) {
       let isMounted = true;
       const loadDashboardData = async () => {
         const todayDate = getLocalDate();
-        try {
-          await Promise.all([
-            refreshUserProfile(),
-            fetchTodayMeals(todayDate),
-            fetchWaterIntake(todayDate),
-            fetchWeeklySummary(),
-            fetchExerciseData(todayDate),
+        const isCurrent = () => isMounted && isStillActiveUser();
+
+        // 1. Show this user's cached data instantly (offline-friendly). Only
+        //    fills empty state, so it never overwrites fresher data.
+        const store = useMealStore.getState();
+        if (!store.meals?.length) {
+          const [cachedMeals, cachedWater, cachedWeekly] = await Promise.all([
+            getDataFromCache(mealCacheKey(todayDate)),
+            getDataFromCache(waterCacheKey(todayDate)),
+            getDataFromCache(weeklyCacheKey),
           ]);
-
-          if (isMounted) {
-            const currentMeals = useMealStore.getState().meals;
-            const currentWater = useMealStore.getState().waterIntake;
-            const currentWeekly = useMealStore.getState().weeklyHistory;
-            const currentInsight = useMealStore.getState().weeklyAiInsight;
-
-            await saveDataToCache(mealCacheKey(todayDate), currentMeals);
-            await saveDataToCache(waterCacheKey(todayDate), currentWater);
-            await saveDataToCache(weeklyCacheKey, {
-              weeklyHistory: currentWeekly,
-              weeklyAiInsight: currentInsight,
+          if (isCurrent() && Array.isArray(cachedMeals) && cachedMeals.length) {
+            const total = cachedMeals.reduce(
+              (sum, meal) => sum + (Number(meal.calories) || 0),
+              0,
+            );
+            useMealStore.setState({
+              meals: cachedMeals,
+              todayMeals: cachedMeals,
+              totalCalories: total,
             });
           }
-        } catch (error) {
-          console.warn(
-            "Dashboard refresh failed; attempting to load cached data.",
-          );
-          if (isMounted) {
-            await getDataFromCache(mealCacheKey(todayDate));
-            await getDataFromCache(waterCacheKey(todayDate));
-            await getDataFromCache(weeklyCacheKey);
+          if (isCurrent() && Number.isFinite(cachedWater) && !water.isDirty()) {
+            useMealStore.setState({ waterIntake: cachedWater });
           }
+          if (isCurrent() && cachedWeekly?.weeklyHistory) {
+            useMealStore.setState({
+              weeklyHistory: cachedWeekly.weeklyHistory,
+              weeklyAiInsight: cachedWeekly.weeklyAiInsight || "",
+            });
+          }
+        }
+
+        // 2. Refresh from the server. Each fetch keeps existing data on
+        //    failure, so offline/CORS errors never blank the dashboard.
+        const [profile] = await Promise.all([
+          refreshUserProfile(),
+          fetchTodayMeals(todayDate),
+          fetchWaterIntake(todayDate),
+          fetchWeeklySummary(),
+          fetchExerciseData(todayDate),
+          fetchWeightHistory(),
+        ]);
+
+        // 3. Cache only data we just confirmed with the server.
+        if (isCurrent() && profile && !profile.offline) {
+          const latest = useMealStore.getState();
+          await Promise.all([
+            saveDataToCache(mealCacheKey(todayDate), latest.meals),
+            water.isDirty()
+              ? Promise.resolve()
+              : saveDataToCache(waterCacheKey(todayDate), latest.waterIntake),
+            saveDataToCache(weeklyCacheKey, {
+              weeklyHistory: latest.weeklyHistory,
+              weeklyAiInsight: latest.weeklyAiInsight,
+            }),
+          ]);
         }
       };
 
-      loadDashboardData();
+      loadDashboardData().catch((error) =>
+        console.warn("Dashboard load issue:", error?.message),
+      );
 
       return () => {
         isMounted = false;
       };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refreshUserProfile, userId]),
   );
 
-  const handleWaterChange = (delta) => {
-    const newGlasses = Math.max(
-      0,
-      Math.floor(Number(waterCountRef.current) || 0) + delta,
-    );
-    if (newGlasses === waterCountRef.current) return;
-    waterCountRef.current = newGlasses;
-    const todayDate = getLocalDate();
-    useMealStore.setState({ waterIntake: newGlasses });
-
-    waterSyncQueueRef.current = waterSyncQueueRef.current
-      .catch(() => undefined)
-      .then(async () => {
-        const activeUser = useAuthStore.getState().user;
-        if (String(activeUser?._id || activeUser?.id || "") !== userId) return;
-        const res = await updateWaterIntake(newGlasses, todayDate);
-        if (!res?.success) {
-          throw new Error(res?.message || "Could not update water intake.");
-        }
-        const badges = res.unlockedBadges || res.data?.unlockedBadges;
-        if (badges) updateUserStats({ unlockedBadges: badges });
-        await saveDataToCache(waterCacheKey(todayDate), newGlasses);
-      })
-      .catch((error) => {
-        console.error("Could not sync water intake:", error.message);
-        fetchWaterIntake(todayDate);
-      });
-  };
+  const handleWaterChange = (delta) => water.set((current) => current + delta);
 
   const handleDeleteMeal = async (mealId, mealName) => {
     try {
@@ -479,40 +438,61 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  // AI Recovery Assistant Handler when diet limit is exceeded
+  const calorieGoal =
+    Number(user?.dailyCalorieTarget || user?.dailyCalorieGoal) || 2000;
+  const currentEaten = Math.round(Number(totalCalories) || 0);
+  const remainingCal = Math.max(0, calorieGoal - currentEaten);
+  const excessKcal = Math.max(0, currentEaten - calorieGoal);
+  const isExceeded = excessKcal > 0;
+  const isPro = isActiveProUser(user);
+  const planLabel = getPlanLabel(user);
+  const bmiInfo = getBmiInfo(user?.weight, user?.height);
+  const bmiColor = bmiInfo
+    ? bmiInfo.category === "Obese"
+      ? colors.danger
+      : BMI_COLORS[bmiInfo.category] || colors.primary
+    : colors.primary;
+
+  // Clear a previous suggestion when the excess changes (new meal logged).
+  useEffect(() => {
+    setAiRecoveryTip(null);
+  }, [excessKcal, userId]);
+
+  // Personalised recovery suggestion (goal, diet preference, time of day,
+  // today's meals). The server falls back to rule-based advice if AI is down.
   const handleFetchAiRecovery = async () => {
+    if (recoveryLoading) return;
     setRecoveryLoading(true);
+    const offlineTip = `You're ${formatKcal(excessKcal)} kcal over today, which is completely recoverable. Keep your next meal light and protein-focused with plenty of vegetables, drink water instead of sugary drinks, and go back to your normal plan tomorrow. There's no need to skip meals.`;
     try {
-      const BASE_URL =
-        process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
       const res = await axios.post(
-        `${BASE_URL}/api/meals/recovery-guidance`,
-        { consumedCalories: currentEaten, targetCalories: calorieGoal },
-        { headers: { Authorization: `Bearer ${token}` } },
+        `${API_BASE_URL}/api/meals/recovery-guidance`,
+        {
+          consumedCalories: currentEaten,
+          excessKcal,
+          date: getLocalDate(),
+          localHour: new Date().getHours(),
+          dietPreference: user?.dietPreference || "",
+        },
+        authHeaders,
       );
-      if (res.data?.success) {
-        setAiRecoveryTip(
-          res.data.data?.guidance ||
-            res.data.advice ||
-            `You have exceeded your daily calorie goal by ${Math.max(0, currentEaten - calorieGoal)} kcal. Return to your usual balanced routine tomorrow without skipping meals or overexercising.`,
-        );
-      }
-    } catch (err) {
+      if (!isStillActiveUser()) return;
       setAiRecoveryTip(
-        `You have exceeded your daily calorie goal by ${Math.max(0, currentEaten - calorieGoal)} kcal. There is no need to skip meals or overexercise. Return to your usual balanced routine tomorrow.`,
+        res.data?.success && res.data.data?.guidance
+          ? {
+              text: res.data.data.guidance,
+              source: res.data.data.source || "rule",
+            }
+          : { text: offlineTip, source: "offline" },
       );
+    } catch (err) {
+      if (isStillActiveUser()) {
+        setAiRecoveryTip({ text: offlineTip, source: "offline" });
+      }
     } finally {
       setRecoveryLoading(false);
     }
   };
-
-  const calorieGoal =
-    user?.dailyCalorieTarget || user?.dailyCalorieGoal || 2000;
-  const currentEaten = totalCalories || 0;
-  const remainingCal = Math.max(0, calorieGoal - currentEaten);
-  const isExceeded = currentEaten > calorieGoal;
-  const isPro = isActiveProUser(user);
-  const bmiInfo = getBmiInfo(user?.weight, user?.height);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -529,16 +509,19 @@ export default function DashboardScreen({ navigation }) {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
+          <View style={styles.headerText}>
             <Text style={[styles.greeting, { color: colors.textSecondary }]}>
               Welcome back,
             </Text>
-            <Text style={[styles.userName, { color: colors.text }]}>
+            <Text
+              style={[styles.userName, { color: colors.text }]}
+              numberOfLines={1}
+            >
               {user?.name || "User Name"}
             </Text>
           </View>
 
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={styles.headerBadges}>
             <TouchableOpacity
               style={[
                 styles.badge,
@@ -578,33 +561,30 @@ export default function DashboardScreen({ navigation }) {
                 }
               }}
             >
-              <Text style={styles.badgeText}>{isPro ? "PRO" : "FREE"}</Text>
+              <Text style={styles.badgeText}>{planLabel}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         <StreakHeader streakCount={user?.streakCount || 1} colors={colors} />
 
-        <View
-          style={[
-            styles.card,
-            {
-              backgroundColor: colors.cardBg,
-              borderColor: colors.border,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            },
-          ]}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
+        {/* BMI: text column shrinks, score badge never does, so the badge
+            can't be pushed past the card's right edge on narrow screens. */}
+        <NeonCard style={styles.bmiRow}>
+          <View style={styles.bmiInfo}>
             <Ionicons name="body-outline" size={22} color={colors.primary} />
-            <View style={{ marginLeft: 10 }}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>
+            <View style={styles.bmiTextCol}>
+              <Text
+                style={[styles.cardTitle, { color: colors.text }]}
+                numberOfLines={1}
+              >
                 Your BMI
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-                Estimate based on profile height and weight
+              <Text
+                style={{ color: colors.textSecondary, fontSize: 11 }}
+                numberOfLines={2}
+              >
+                Estimate from your profile height and weight
               </Text>
             </View>
           </View>
@@ -612,41 +592,52 @@ export default function DashboardScreen({ navigation }) {
             <View
               style={[
                 styles.bmiBadge,
-                { backgroundColor: colors.glassGlow, borderColor: colors.border },
+                { backgroundColor: colors.glassGlow, borderColor: bmiColor },
               ]}
+              accessibilityLabel={`BMI ${bmiInfo.value}, ${bmiInfo.category}`}
             >
-              <Text style={[styles.bmiValue, { color: colors.primary }]}>
-                {bmiInfo.value}
+              <Text
+                style={[styles.bmiValue, { color: bmiColor }]}
+                numberOfLines={1}
+              >
+                {bmiInfo.value.toFixed(1)}
               </Text>
-              <Text style={[styles.bmiCategory, { color: colors.textSecondary }]}>
+              <Text
+                style={[styles.bmiCategory, { color: colors.textSecondary }]}
+                numberOfLines={1}
+              >
                 {bmiInfo.category}
               </Text>
             </View>
           ) : (
-            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+            <Text
+              style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}
+            >
               Add height and weight
             </Text>
           )}
-        </View>
+        </NeonCard>
 
         {/* Calorie Deviation Alert & AI Recovery Assistant Trigger */}
         {isExceeded && (
-          <View
-            style={[
-              styles.alertCard,
-              { backgroundColor: colors.cardBg, borderColor: "#EF4444" },
-            ]}
+          <NeonCard
+            accent="red"
+            active
+            style={[styles.alertCard, { backgroundColor: colors.dangerBg }]}
           >
-            <Ionicons name="warning" size={22} color="#EF4444" />
-            <View style={{ flex: 1, marginLeft: 8 }}>
+            <Ionicons name="warning" size={22} color={colors.danger} />
+            <View style={styles.alertBody}>
               <Text style={[styles.alertText, { color: colors.text }]}>
-                Diet Deviation Alert: Exceeded goal by{""}
-                {currentEaten - calorieGoal} kcal!
+                {`Diet Deviation Alert: Exceeded goal by ${formatKcal(excessKcal)} kcal!`}
               </Text>
               <TouchableOpacity
-                style={[styles.recoveryBtn, { backgroundColor: "#EF4444" }]}
+                style={[
+                  styles.recoveryBtn,
+                  { backgroundColor: colors.danger, opacity: recoveryLoading ? 0.75 : 1 },
+                ]}
                 onPress={handleFetchAiRecovery}
                 disabled={recoveryLoading}
+                accessibilityRole="button"
               >
                 <Ionicons
                   name="sparkles"
@@ -654,31 +645,22 @@ export default function DashboardScreen({ navigation }) {
                   color="#FFF"
                   style={{ marginRight: 4 }}
                 />
-                <Text style={styles.recoveryBtnText}>
+                <Text style={styles.recoveryBtnText} numberOfLines={1}>
                   {recoveryLoading
-                    ? "Generating AI Rescue..."
-                    : "Ask AI Recovery Assistant"}
+                    ? "Personalising your plan…"
+                    : aiRecoveryTip
+                      ? "Get another suggestion"
+                      : "Ask AI Recovery Assistant"}
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </NeonCard>
         )}
 
         {/* AI Recovery Tip Card Display */}
         {aiRecoveryTip && (
-          <View
-            style={[
-              styles.aiRecoveryCard,
-              { backgroundColor: colors.cardBg, borderColor: colors.primary },
-            ]}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: 6,
-              }}
-            >
+          <NeonCard active style={styles.aiRecoveryCard}>
+            <View style={styles.aiRecoveryHeader}>
               <Ionicons
                 name="shield-checkmark"
                 size={16}
@@ -690,52 +672,53 @@ export default function DashboardScreen({ navigation }) {
                   color: colors.primary,
                   fontWeight: "bold",
                   fontSize: 13,
+                  flexShrink: 1,
                 }}
               >
-                NutriMorph AI Recovery Plan
+                {aiRecoveryTip.source === "ai"
+                  ? "Your personalised recovery plan"
+                  : "Recovery plan"}
               </Text>
             </View>
-            <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>
-              {aiRecoveryTip}
+            <Text style={{ color: colors.text, fontSize: 13, lineHeight: 19 }}>
+              {aiRecoveryTip.text}
             </Text>
-          </View>
+            {!user?.dietPreference && (
+              <Text
+                style={{ color: colors.textSecondary, fontSize: 11, marginTop: 8 }}
+              >
+                Tip: set your diet style in Profile for food suggestions that
+                match how you eat.
+              </Text>
+            )}
+          </NeonCard>
         )}
 
         {/* Water Tracker & Log Exercise Row */}
         <View style={styles.rowContainer}>
-          <View
-            style={[
-              styles.halfCard,
-              { backgroundColor: colors.cardBg, borderColor: colors.border },
-            ]}
+          <NeonCard
+            accent="sky"
+            containerStyle={styles.halfCardContainer}
+            style={styles.halfCard}
           >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Ionicons name="water" size={20} color="#38BDF8" />
+            <View style={styles.cardTitleRow}>
+              <Ionicons name="water" size={20} color={colors.info} />
               <Text
-                style={[
-                  styles.cardTitle,
-                  { color: colors.text, marginLeft: 6 },
-                ]}
+                style={[styles.cardTitle, styles.cardTitleText, { color: colors.text }]}
+                numberOfLines={1}
               >
-                Water Tracker
+                Water
               </Text>
             </View>
             <Text
-              style={{
-                color: "#38BDF8",
-                fontWeight: "bold",
-                marginVertical: 6,
-              }}
+              style={[styles.halfCardValue, { color: colors.info }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
             >
-              {(waterIntake || 0) * 250} / 2000 ml
+              {(waterGlasses * 250).toLocaleString("en-US")} / 2,000 ml
             </Text>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
+            <View style={styles.waterControls}>
               <TouchableOpacity
                 style={[
                   styles.smallWaterBtn,
@@ -743,53 +726,66 @@ export default function DashboardScreen({ navigation }) {
                     backgroundColor: colors.inputBg,
                     borderWidth: 1,
                     borderColor: colors.border,
+                    opacity: waterGlasses === 0 ? 0.5 : 1,
                   },
                 ]}
                 onPress={() => handleWaterChange(-1)}
+                disabled={waterGlasses === 0}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Remove one glass of water"
               >
                 <Ionicons name="remove" size={16} color={colors.text} />
               </TouchableOpacity>
-              <Text style={{ color: colors.text, fontWeight: "bold" }}>
-                {waterIntake || 0} Glasses
+              <Text
+                style={[styles.waterCount, { color: colors.text }]}
+                numberOfLines={1}
+              >
+                {waterGlasses} {waterGlasses === 1 ? "glass" : "glasses"}
               </Text>
               <TouchableOpacity
-                style={[styles.smallWaterBtn, { backgroundColor: "#38BDF8" }]}
+                style={[styles.smallWaterBtn, { backgroundColor: colors.info }]}
                 onPress={() => handleWaterChange(1)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Add one glass of water"
               >
                 <Ionicons name="add" size={16} color="#FFF" />
               </TouchableOpacity>
             </View>
-          </View>
+            {water.status === "offline" && (
+              <Text style={[styles.syncNote, { color: colors.warning }]}>
+                Saved on device · will sync
+              </Text>
+            )}
+          </NeonCard>
 
-          <View
-            style={[
-              styles.halfCard,
-              { backgroundColor: colors.cardBg, borderColor: colors.border },
-            ]}
+          <NeonCard
+            accent="red"
+            containerStyle={styles.halfCardContainer}
+            style={styles.halfCard}
+            onPress={() => setShowExerciseModal(true)}
+            accessibilityLabel="Log exercise"
           >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Ionicons name="fitness" size={20} color="#EF4444" />
+            <View style={styles.cardTitleRow}>
+              <Ionicons name="fitness" size={20} color={colors.danger} />
               <Text
-                style={[
-                  styles.cardTitle,
-                  { color: colors.text, marginLeft: 6 },
-                ]}
+                style={[styles.cardTitle, styles.cardTitleText, { color: colors.text }]}
+                numberOfLines={1}
               >
-                Log Exercise
+                Exercise
               </Text>
             </View>
             <Text
-              style={{
-                color: "#EF4444",
-                fontWeight: "bold",
-                marginVertical: 6,
-              }}
+              style={[styles.halfCardValue, { color: colors.danger }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
             >
-              {caloriesBurned} Calories Burned
+              {formatKcal(caloriesBurned)} kcal burned
             </Text>
-            <TouchableOpacity
-              style={styles.exerciseActionBtn}
-              onPress={() => setShowExerciseModal(true)}
+            <View
+              style={[styles.exerciseActionBtn, { backgroundColor: colors.danger }]}
             >
               <Ionicons
                 name="add"
@@ -797,42 +793,40 @@ export default function DashboardScreen({ navigation }) {
                 color="#FFF"
                 style={{ marginRight: 4 }}
               />
-              <Text style={{ color: "#FFF", fontSize: 12, fontWeight: "bold" }}>
+              <Text
+                style={{ color: "#FFF", fontSize: 12, fontWeight: "bold" }}
+                numberOfLines={1}
+              >
                 Add Exercise
               </Text>
-            </TouchableOpacity>
-          </View>
+            </View>
+          </NeonCard>
         </View>
 
         {/* Step Tracking Card */}
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: colors.cardBg, borderColor: colors.border },
-          ]}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <NeonCard>
+          <View style={styles.stepsHeader}>
+            <View style={styles.cardTitleRow}>
               <Ionicons name="footsteps" size={22} color={colors.primary} />
               <Text
-                style={[
-                  styles.cardTitle,
-                  { color: colors.text, marginLeft: 8 },
-                ]}
+                style={[styles.cardTitle, styles.cardTitleText, { color: colors.text }]}
+                numberOfLines={1}
               >
                 Steps Tracking
               </Text>
             </View>
-            <Text style={{ color: colors.primary, fontWeight: "bold" }}>
-              {stepCount} / 10,000 steps
+            <Text
+              style={[styles.stepsValue, { color: colors.primary }]}
+              numberOfLines={1}
+            >
+              {stepCount.toLocaleString("en-US")} / 10,000
             </Text>
           </View>
+          {steps.status === "offline" && (
+            <Text style={[styles.syncNote, { color: colors.warning }]}>
+              Saved on device · will sync when online
+            </Text>
+          )}
 
           <View style={styles.stepControls}>
             <TouchableOpacity
@@ -894,14 +888,15 @@ export default function DashboardScreen({ navigation }) {
               <Text style={{ color: "#FFF", fontWeight: "700" }}>Set total</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </NeonCard>
 
         {/* Health & Device Sync Component */}
         <DeviceSyncSection
           key={String(user?._id || user?.id || "signed-out")}
           onSyncSuccess={(syncedSteps) => {
-            stepCountRef.current = syncedSteps;
-            setStepCount(syncedSteps);
+            // Device totals are authoritative; adopt them unless the user is
+            // mid-adjustment, in which case their pending total syncs next.
+            if (!steps.isDirty()) steps.set(syncedSteps);
           }}
         />
 
@@ -910,6 +905,7 @@ export default function DashboardScreen({ navigation }) {
           entries={weightHistory}
           currentWeight={user?.weight}
           targetWeight={user?.targetWeight}
+          onAddWeighIn={() => setShowWeighModal(true)}
         />
         <TouchableOpacity
           style={[styles.weighInButton, { backgroundColor: colors.primary }]}
@@ -922,15 +918,7 @@ export default function DashboardScreen({ navigation }) {
         </TouchableOpacity>
 
         {/* Calorie Progress Card */}
-        <View
-          style={[
-            styles.card,
-            {
-              backgroundColor: colors.cardBg,
-              borderColor: isExceeded ? "#EF4444" : colors.border,
-            },
-          ]}
-        >
+        <NeonCard accent={isExceeded ? "red" : "green"} active={isExceeded}>
           <Text style={[styles.cardTitle, { color: colors.text }]}>
             Daily Calorie Summary
           </Text>
@@ -940,26 +928,36 @@ export default function DashboardScreen({ navigation }) {
               <Text
                 style={[
                   styles.statNum,
-                  { color: isExceeded ? "#EF4444" : colors.primary },
+                  { color: isExceeded ? colors.danger : colors.primary },
                 ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
               >
-                {currentEaten}
+                {formatKcal(currentEaten)}
               </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
                 Eaten
               </Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={[styles.statNum, { color: colors.text }]}>
-                {remainingCal}
+              <Text
+                style={[styles.statNum, { color: colors.text }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {formatKcal(remainingCal)}
               </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
                 Remaining
               </Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={[styles.statNum, { color: colors.textSecondary }]}>
-                {calorieGoal}
+              <Text
+                style={[styles.statNum, { color: colors.textSecondary }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {formatKcal(calorieGoal)}
               </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
                 Goal
@@ -983,7 +981,7 @@ export default function DashboardScreen({ navigation }) {
               View Logged History ({meals?.length || 0})
             </Text>
           </TouchableOpacity>
-        </View>
+        </NeonCard>
 
         {/* Action Buttons */}
         <View style={styles.actionRow}>
@@ -1217,7 +1215,7 @@ export default function DashboardScreen({ navigation }) {
                       <Text
                         style={{ color: colors.textSecondary, fontSize: 12 }}
                       >
-                        P: {item.protein || 0}g | C: {item.carbs || 0}g | F:{""}
+                        P: {item.protein || 0}g | C: {item.carbs || 0}g | F:{" "}
                         {item.fats || 0}g
                       </Text>
                     </View>
@@ -1266,9 +1264,65 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
+    gap: 10,
+  },
+  headerText: { flex: 1, minWidth: 0 },
+  headerBadges: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
   },
   greeting: { fontSize: 13 },
   userName: { fontSize: 18, fontWeight: "bold" },
+  cardTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  cardTitleText: { marginLeft: 6, flexShrink: 1 },
+  bmiRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  bmiInfo: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  bmiTextCol: { marginLeft: 10, flex: 1, minWidth: 0 },
+  alertBody: { flex: 1, minWidth: 0, marginLeft: 8 },
+  aiRecoveryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  halfCardContainer: { width: "48.5%" },
+  halfCardValue: { fontWeight: "bold", marginVertical: 6, fontSize: 13 },
+  waterControls: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 4,
+  },
+  waterCount: {
+    fontWeight: "bold",
+    fontSize: 13,
+    flexShrink: 1,
+    textAlign: "center",
+  },
+  syncNote: { fontSize: 10, marginTop: 6 },
+  stepsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+  },
+  stepsValue: { fontWeight: "bold", flexShrink: 0 },
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -1280,9 +1334,6 @@ const styles = StyleSheet.create({
   alertCard: {
     flexDirection: "row",
     padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 12,
     alignItems: "center",
   },
   alertText: { fontSize: 13, fontWeight: "600", marginBottom: 6 },
@@ -1295,23 +1346,14 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   recoveryBtnText: { color: "#FFF", fontSize: 11, fontWeight: "bold" },
-  aiRecoveryCard: {
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
+  aiRecoveryCard: { padding: 14 },
   rowContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "stretch",
     marginBottom: 12,
   },
-  halfCard: {
-    width: "48%",
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
+  halfCard: { padding: 12, marginBottom: 0 },
   card: {
     padding: 16,
     borderRadius: 12,
@@ -1327,7 +1369,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   exerciseActionBtn: {
-    backgroundColor: "#EF4444",
     paddingVertical: 6,
     borderRadius: 8,
     flexDirection: "row",
@@ -1375,8 +1416,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   bmiBadge: {
-    minWidth: 92,
-    paddingHorizontal: 12,
+    minWidth: 76,
+    maxWidth: 110,
+    flexShrink: 0,
+    paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 12,
     borderWidth: 1,

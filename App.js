@@ -22,6 +22,10 @@ import { getThemeColors } from "./src/theme/colors";
 import { ensureWaterReminderScheduled } from "./src/services/notificationService";
 import { stopBackgroundStepTracking } from "./src/services/stepTrackingTask";
 import { initializeMobileAds } from "./src/services/ads";
+import {
+  identifyRevenueCatUser,
+  resetRevenueCatUser,
+} from "./src/services/revenueCat";
 
 import AppNavigator from "./src/navigation/AppNavigator";
 import LogFoodScreen from "./src/screens/LogFoodScreen";
@@ -53,7 +57,15 @@ export default function App() {
       waterIntake: 0,
       savedMeals: [],
     });
-    useMealPlanStore.setState({ activeMealPlan: null });
+    useMealPlanStore.setState({ activeMealPlan: null, error: null });
+
+    // Keep the RevenueCat customer bound to the signed-in account so store
+    // purchases and entitlements never carry over to another user.
+    if (activeUserId) {
+      identifyRevenueCatUser(activeUserId);
+    } else {
+      resetRevenueCatUser();
+    }
   }, [activeUserId]);
 
   useEffect(() => {

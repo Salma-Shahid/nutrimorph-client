@@ -19,16 +19,37 @@ import { useAuthStore, getThemeColors } from "../store/useAuthStore";
 import { useMealStore } from "../store/useMealStore";
 import axios from "axios";
 
-const CATEGORIES = [
-  "All",
+const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Late-night"];
+
+// Offline/older-backend fallback chips. Values are normalised the same way
+// the server normalises (trim + lowercase), so matching is case-insensitive.
+const normalize = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, " ");
+const FALLBACK_CUISINES = [
+  "Pakistani",
+  "Indian",
+  "Middle Eastern",
+  "American",
+  "Italian",
+  "Mediterranean",
+  "Mexican",
+  "Asian Fusion",
+  "Continental",
+].map((label) => ({ value: normalize(label), label, count: null }));
+const FALLBACK_CATEGORIES = [
+  "High-Protein",
   "Post-Workout",
   "Pre-Workout",
-  "High-Protein",
+  "Weight Loss",
   "Immune Support",
-];
-
-const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack", "Late-night"];
-const CUISINES = ["All", "Arabic", "American", "Italian"];
+  "Plant-Based",
+  "Vegetarian",
+].map((label) => ({ value: normalize(label), label, count: null }));
+// Friendlier labels for stored cuisine values.
+const CUISINE_LABELS = { "middle eastern": "Arabic / Middle Eastern" };
 
 export default function ExploreScreen({ navigation }) {
   const theme = useAuthStore((state) => state.theme) || "dark";
@@ -37,14 +58,28 @@ export default function ExploreScreen({ navigation }) {
   const updateUserStats = useAuthStore((state) => state.updateUserStats);
   const fetchTodayMeals = useMealStore((state) => state.fetchTodayMeals);
 
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [selectedCuisine, setSelectedCuisine] = useState("All");
+  // "" means "All" for each facet.
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedCuisine, setSelectedCuisine] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [recipes, setRecipes] = useState([]);
+  const [facets, setFacets] = useState({
+    cuisines: FALLBACK_CUISINES,
+    categories: FALLBACK_CATEGORIES,
+  });
+  const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const recipeRequestId = useRef(0);
+  const hasFilters = Boolean(selectedCategory || selectedCuisine || searchQuery.trim());
+
+  const clearFilters = () => {
+    setSelectedCategory("");
+    setSelectedCuisine("");
+    setSearchInput("");
+    setSearchQuery("");
+  };
 
   // Meal Type Modal States
   const [showMealModal, setShowMealModal] = useState(false);
@@ -65,26 +100,38 @@ export default function ExploreScreen({ navigation }) {
       const BASE_URL =
         process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
       const query = [];
-      if (category !== "All") {
-        query.push(`category=${encodeURIComponent(category)}`);
-      }
-      if (cuisine !== "All") {
-        query.push(`cuisine=${encodeURIComponent(cuisine)}`);
-      }
+      if (category) query.push(`category=${encodeURIComponent(category)}`);
+      if (cuisine) query.push(`cuisine=${encodeURIComponent(cuisine)}`);
       if (search.trim()) query.push(`q=${encodeURIComponent(search.trim())}`);
       const suffix = query.length ? `?${query.join("&")}` : "";
 
       const res = await axios.get(`${BASE_URL}/api/recipes${suffix}`, {
         headers: { Authorization: `Bearer ${token}` },
+        timeout: 15000,
       });
 
       if (res.data?.success && requestId === recipeRequestId.current) {
         setRecipes(res.data.recipes || res.data.data || []);
+        setLoadError("");
+        // Facets come from the actual library, so only real options show.
+        if (res.data.facets?.cuisines?.length) {
+          setFacets({
+            cuisines: res.data.facets.cuisines,
+            categories: res.data.facets.categories || FALLBACK_CATEGORIES,
+          });
+        }
         return true;
       }
       return res.data?.success === true;
     } catch (err) {
-      console.log("Error loading recipes:", err.message);
+      if (requestId === recipeRequestId.current) {
+        setLoadError(
+          err?.response
+            ? err.response.data?.message || "Could not load recipes."
+            : "You're offline. Pull down to retry.",
+        );
+      }
+      if (__DEV__) console.log("Error loading recipes:", err.message);
       if (isRefresh && requestId === recipeRequestId.current) {
         Alert.alert(
           "Refresh failed",
@@ -208,77 +255,117 @@ export default function ExploreScreen({ navigation }) {
         accessibilityLabel="Search recipes by English title"
       />
 
-      <View style={{ height: 44, marginBottom: 8 }}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
-        >
-          {CUISINES.map((cuisine) => {
-            const isSelected = selectedCuisine === cuisine;
-            return (
-              <TouchableOpacity
-                key={cuisine}
-                style={[
-                  styles.categoryPill,
-                  {
-                    backgroundColor: isSelected ? colors.primary : colors.cardBg,
-                    borderColor: isSelected ? colors.primary : colors.border,
-                  },
-                ]}
-                onPress={() => setSelectedCuisine(cuisine)}
-              >
-                <Text
-                  style={{
-                    color: isSelected ? "#FFF" : colors.textSecondary,
-                    fontWeight: "bold",
-                    fontSize: 12,
-                  }}
-                >
-                  {cuisine}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+      {/* One connected filter panel: cuisine + goal, with live counts. */}
+      <View
+        style={[
+          styles.filterPanel,
+          { backgroundColor: colors.cardBg, borderColor: colors.neonBorder || colors.border },
+        ]}
+      >
+        {[
+          {
+            key: "cuisine",
+            label: "Cuisine",
+            options: facets.cuisines,
+            selected: selectedCuisine,
+            onSelect: setSelectedCuisine,
+            labelFor: (option) => CUISINE_LABELS[option.value] || option.label,
+          },
+          {
+            key: "category",
+            label: "Goal",
+            options: facets.categories,
+            selected: selectedCategory,
+            onSelect: setSelectedCategory,
+            labelFor: (option) => option.label,
+          },
+        ]
+          // Stable alphabetical order (counts change with every filter, which
+          // made chips jump), with the active chip pinned next to "All".
+          .map((group) => ({
+            ...group,
+            options: [...group.options].sort((a, b) => {
+              if (a.value === group.selected) return -1;
+              if (b.value === group.selected) return 1;
+              return group.labelFor(a).localeCompare(group.labelFor(b));
+            }),
+          }))
+          .map((group, groupIndex) => (
+          <View key={group.key} style={groupIndex > 0 && styles.filterGroupGap}>
+            <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>
+              {group.label}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chipRow}
+              keyboardShouldPersistTaps="handled"
+            >
+              {[{ value: "", label: "All", count: null }, ...group.options].map(
+                (option) => {
+                  const isSelected = group.selected === option.value;
+                  const empty = option.count === 0 && !isSelected;
+                  return (
+                    <TouchableOpacity
+                      key={option.value || "all"}
+                      style={[
+                        styles.categoryPill,
+                        {
+                          backgroundColor: isSelected ? colors.primary : colors.inputBg,
+                          borderColor: isSelected ? colors.primary : colors.border,
+                          opacity: empty ? 0.45 : 1,
+                        },
+                      ]}
+                      onPress={() =>
+                        group.onSelect(isSelected && option.value ? "" : option.value)
+                      }
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isSelected }}
+                    >
+                      <Text
+                        style={[
+                          styles.pillText,
+                          { color: isSelected ? "#FFF" : colors.text },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {group.labelFor(option)}
+                        {typeof option.count === "number" ? (
+                          <Text
+                            style={{
+                              color: isSelected ? "rgba(255,255,255,0.85)" : colors.textSecondary,
+                              fontWeight: "600",
+                            }}
+                          >
+                            {`  ${option.count}`}
+                          </Text>
+                        ) : null}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                },
+              )}
+            </ScrollView>
+          </View>
+        ))}
 
-      {/* Horizontal Category Pill Selector */}
-      <View style={{ height: 48, marginBottom: 12 }}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
-        >
-          {CATEGORIES.map((cat) => {
-            const isSelected = selectedCategory === cat;
-            return (
-              <TouchableOpacity
-                key={cat}
-                style={[
-                  styles.categoryPill,
-                  {
-                    backgroundColor: isSelected
-                      ? colors.primary
-                      : colors.cardBg,
-                    borderColor: isSelected ? colors.primary : colors.border,
-                  },
-                ]}
-                onPress={() => setSelectedCategory(cat)}
-              >
-                <Text
-                  style={{
-                    color: isSelected ? "#FFF" : colors.textSecondary,
-                    fontWeight: "bold",
-                    fontSize: 13,
-                  }}
-                >
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        <View style={styles.filterSummary}>
+          <Text
+            style={[styles.summaryText, { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
+            {loading
+              ? "Loading recipes…"
+              : `${recipes.length} recipe${recipes.length === 1 ? "" : "s"}${hasFilters ? " match" : ""}`}
+          </Text>
+          {hasFilters && (
+            <TouchableOpacity onPress={clearFilters} hitSlop={8}>
+              <Text style={[styles.clearText, { color: colors.primary }]}>
+                Clear filters
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Recipe Cards List */}
@@ -320,9 +407,43 @@ export default function ExploreScreen({ navigation }) {
               size={48}
               color={colors.textSecondary}
             />
-            <Text style={{ color: colors.textSecondary, marginTop: 10 }}>
-              No recipes match these filters.
+            <Text
+              style={{
+                color: colors.text,
+                marginTop: 10,
+                fontWeight: "700",
+                textAlign: "center",
+              }}
+            >
+              {loadError
+                ? "Couldn't load recipes"
+                : hasFilters
+                  ? "No recipes match these filters"
+                  : "No recipes available yet"}
             </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                marginTop: 4,
+                textAlign: "center",
+                paddingHorizontal: 24,
+              }}
+            >
+              {loadError ||
+                (hasFilters
+                  ? "Try another cuisine or goal, or clear the filters to see everything."
+                  : "Pull down to refresh.")}
+            </Text>
+            {hasFilters && (
+              <TouchableOpacity
+                onPress={clearFilters}
+                style={[styles.clearButton, { borderColor: colors.primary }]}
+              >
+                <Text style={{ color: colors.primary, fontWeight: "700" }}>
+                  Clear filters
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
       ) : (
@@ -364,10 +485,15 @@ export default function ExploreScreen({ navigation }) {
                         color: colors.primary,
                       },
                     ]}
+                    numberOfLines={1}
                   >
-                    {item.category || "High-Protein"}
+                    {[item.cuisine, item.category || "High-Protein"]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </Text>
-                  <Text style={{ color: colors.primary, fontWeight: "bold" }}>
+                  <Text
+                    style={{ color: colors.primary, fontWeight: "bold", flexShrink: 0 }}
+                  >
                     {item.calories} kcal
                   </Text>
                 </View>
@@ -383,7 +509,7 @@ export default function ExploreScreen({ navigation }) {
                     marginBottom: 12,
                   }}
                 >
-                  P: {item.protein || 0}g | C: {item.carbs || 0}g | F:{""}
+                  P: {item.protein || 0}g | C: {item.carbs || 0}g | F:{" "}
                   {item.fats || 0}g
                 </Text>
 
@@ -526,13 +652,47 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     fontSize: 14,
   },
+  filterPanel: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+  },
+  filterGroupGap: { marginTop: 8 },
+  filterLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    paddingHorizontal: 12,
+    marginBottom: 6,
+  },
+  chipRow: { paddingHorizontal: 12, gap: 8 },
   categoryPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: 20,
     borderWidth: 1,
-    height: 36,
+    height: 34,
     justifyContent: "center",
+  },
+  pillText: { fontWeight: "700", fontSize: 12 },
+  filterSummary: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    marginTop: 10,
+    gap: 8,
+  },
+  summaryText: { fontSize: 12, flexShrink: 1 },
+  clearText: { fontSize: 12, fontWeight: "700" },
+  clearButton: {
+    marginTop: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
   },
   recipeCard: {
     borderRadius: 16,
@@ -556,8 +716,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 6,
+    gap: 8,
   },
   categoryBadge: {
+    flexShrink: 1,
+    overflow: "hidden",
     fontSize: 11,
     fontWeight: "bold",
     paddingHorizontal: 8,
@@ -578,7 +741,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   addToDiaryText: { color: "#FFF", fontWeight: "bold", fontSize: 13 },
-  emptyState: { alignItems: "center", marginTop: 60 },
+  emptyState: { alignItems: "center", marginTop: 40 },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",

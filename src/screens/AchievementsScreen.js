@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { BADGES_DATA } from "../constants/badges";
 import { useAuthStore, getThemeColors } from "../store/useAuthStore";
+import LottieFeedback from "../components/LottieFeedback";
+
+// Badge count seen per user this session, so the celebration plays only
+// when something new was unlocked (not on every visit).
+const lastSeenBadgeCount = new Map();
 
 export default function AchievementsScreen({ navigation }) {
   const user = useAuthStore((state) => state.user) || {};
@@ -23,8 +28,8 @@ export default function AchievementsScreen({ navigation }) {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const result = await refreshUserProfile();
-      if (!result.success) {
+      const result = await refreshUserProfile({ force: true });
+      if (!result.success && !result.sessionExpired) {
         Alert.alert(
           "Refresh failed",
           result.message || "Could not refresh achievements.",
@@ -45,6 +50,18 @@ export default function AchievementsScreen({ navigation }) {
       .map(normalizeBadgeId)
       .filter(Boolean),
   );
+
+  const userKey = String(user._id || user.id || "");
+  const unlockedCount = unlockedBadges.size;
+  const totalBadges = (BADGES_DATA || []).length;
+  const [celebrate, setCelebrate] = useState(false);
+
+  useEffect(() => {
+    if (!userKey) return;
+    const previous = lastSeenBadgeCount.get(userKey);
+    if (previous !== undefined && unlockedCount > previous) setCelebrate(true);
+    lastSeenBadgeCount.set(userKey, unlockedCount);
+  }, [unlockedCount, userKey]);
 
   const currentSteps = Number(user.dailySteps || 0);
   const currentWater = Number(user.water || user.dailyWater || 0);
@@ -110,6 +127,36 @@ export default function AchievementsScreen({ navigation }) {
           />
         }
       >
+        <View
+          style={[
+            styles.summaryCard,
+            {
+              backgroundColor: colors.cardBg,
+              borderColor: celebrate ? colors.primary : colors.neonBorder || colors.border,
+            },
+          ]}
+        >
+          {celebrate ? (
+            <LottieFeedback
+              name="success"
+              size={56}
+              loop={false}
+              color={colors.primary}
+              onFinish={() => setTimeout(() => setCelebrate(false), 1200)}
+            />
+          ) : (
+            <Ionicons name="trophy" size={30} color={colors.primary} />
+          )}
+          <View style={styles.summaryText}>
+            <Text style={[styles.summaryTitle, { color: colors.text }]}>
+              {celebrate ? "New badge unlocked!" : "Your progress"}
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+              {unlockedCount} of {totalBadges} badges unlocked
+            </Text>
+          </View>
+        </View>
+
         {categories.map((cat) => {
           const catBadges = (BADGES_DATA || []).filter(
             (b) => b.category === cat,
@@ -222,6 +269,18 @@ export default function AchievementsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  summaryCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    minHeight: 72,
+  },
+  summaryText: { flex: 1, minWidth: 0 },
+  summaryTitle: { fontSize: 16, fontWeight: "800", marginBottom: 2 },
   container: { flex: 1 },
   header: {
     flexDirection: "row",

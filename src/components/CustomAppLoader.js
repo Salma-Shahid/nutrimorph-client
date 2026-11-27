@@ -1,5 +1,12 @@
 import React, { useEffect, useRef } from "react";
-import { View, Text, Animated, StyleSheet, Easing } from "react-native";
+import {
+  View,
+  Text,
+  Animated,
+  StyleSheet,
+  Easing,
+  Platform,
+} from "react-native";
 import { useAuthStore } from "../store/useAuthStore";
 import { getThemeColors } from "../theme/colors";
 
@@ -21,13 +28,13 @@ const CustomAppLoader = ({ size = 60, text = "NutriBot is thinking..." }) => {
           toValue: 1,
           duration: 900,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== "web",
         }),
         Animated.timing(opacityAnim, {
           toValue: 0.3,
           duration: 900,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== "web",
         }),
       ]),
     ).start();

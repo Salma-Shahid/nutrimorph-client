@@ -50,6 +50,7 @@ export const useMealStore = create((set, get) => ({
   weeklyHistory: [],
   weeklyAiInsight: "",
   waterIntake: 0,
+  waterPendingSync: false, // true while local water taps are unsynced
   savedMeals: [], // Saved meals / recipes list
   selectedDate: getTodayDateString(),
   isLoading: false,
@@ -110,7 +111,8 @@ export const useMealStore = create((set, get) => ({
     } catch (error) {
       console.error(
         "Error fetching daily summary:",
-        error?.response?.data || error.message,
+        error?.response?.status || "network",
+        error?.response?.data?.message || error.message,
       );
       if (!authContext || isAuthContextCurrent(authContext)) {
         set({ isLoading: false });
@@ -169,7 +171,8 @@ export const useMealStore = create((set, get) => ({
       );
 
       if (!isAuthContextCurrent(authContext)) return;
-      if (res.data?.success) {
+      // Local taps not yet persisted win over a (possibly older) server value.
+      if (res.data?.success && !get().waterPendingSync) {
         set({ waterIntake: res.data.data?.glasses || 0 });
       }
     } catch (error) {
@@ -183,7 +186,10 @@ export const useMealStore = create((set, get) => ({
     }
   },
 
-  updateWaterIntake: async (glasses, date) => {
+  // `applyResult: false` lets callers that manage optimistic state themselves
+  // (the dashboard's debounced tracker) avoid an older value overwriting
+  // newer taps when the response arrives.
+  updateWaterIntake: async (glasses, date, { applyResult = true } = {}) => {
     try {
       const authContext = await getAuthContext();
       if (!authContext?.token) {
@@ -199,7 +205,7 @@ export const useMealStore = create((set, get) => ({
         return { success: false, message: "The active account has changed." };
       }
       if (response.data.success) {
-        set({ waterIntake: glasses });
+        if (applyResult) set({ waterIntake: glasses });
 
         // Update Auth Store User's Unlocked Badges in Real-Time
         if (response.data.unlockedBadges) {
@@ -523,6 +529,7 @@ useAuthStore.subscribe((state, previousState) => {
       weeklyHistory: [],
       weeklyAiInsight: "",
       waterIntake: 0,
+      waterPendingSync: false,
       savedMeals: [],
       selectedDate: getTodayDateString(),
       isLoading: false,

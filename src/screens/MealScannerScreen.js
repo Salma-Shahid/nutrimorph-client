@@ -11,11 +11,15 @@ import {
   Alert,
   Modal,
   TextInput,
+  Platform,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import { useCameraPermissions } from "expo-camera";
+import BarcodeScannerModal from "../components/BarcodeScannerModal";
+import LottieFeedback from "../components/LottieFeedback";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -61,6 +65,15 @@ export default function MealScannerScreen({ navigation }) {
   const [servingSize, setServingSize] = useState("");
   const [confidence, setConfidence] = useState("AI estimate");
   const [savingMeal, setSavingMeal] = useState(false);
+  const [savedMealName, setSavedMealName] = useState("");
+
+  // Auto-dismiss the saved confirmation (also covers the icon fallback,
+  // which has no animation-finish event).
+  useEffect(() => {
+    if (!savedMealName) return undefined;
+    const timer = setTimeout(() => setSavedMealName(""), 2200);
+    return () => clearTimeout(timer);
+  }, [savedMealName]);
   const [showTrialModal, setShowTrialModal] = useState(false);
   const scanLineProgress = useRef(new Animated.Value(0)).current;
   const barcodeLockRef = useRef(false);
@@ -71,12 +84,12 @@ export default function MealScannerScreen({ navigation }) {
         Animated.timing(scanLineProgress, {
           toValue: 1,
           duration: 1500,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== "web",
         }),
         Animated.timing(scanLineProgress, {
           toValue: 0,
           duration: 1500,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== "web",
         }),
       ]),
     );
@@ -383,15 +396,10 @@ export default function MealScannerScreen({ navigation }) {
       return;
     }
 
-    if (!permission?.granted) {
-      const res = await requestPermission();
-      if (!res.granted) {
-        Alert.alert(
-          "Permission Required",
-          "Camera permission is required to scan barcodes.",
-        );
-        return;
-      }
+    // Ask up front when possible; the scanner modal also shows a permission
+    // screen (with an "Open settings" path) if access is still missing.
+    if (!permission?.granted && permission?.canAskAgain !== false) {
+      await requestPermission().catch(() => null);
     }
     setIsScanningBarcode(false);
     barcodeLockRef.current = false;
@@ -462,11 +470,8 @@ export default function MealScannerScreen({ navigation }) {
       setModalVisible(false);
       setImageUri(null);
       setImageBase64(null);
-
-      Alert.alert(
-        "Meal Saved! ",
-        `${foodName} logged into your diary and added to your saved recipes successfully.`,
-      );
+      // Short animated confirmation instead of a blocking alert.
+      setSavedMealName(foodName.trim());
     } catch (error) {
       console.error("Save Error:", error);
       Alert.alert("Save Error", "Failed to save meal entry to diary.");
@@ -487,8 +492,10 @@ export default function MealScannerScreen({ navigation }) {
             accessibilityRole="progressbar"
             accessibilityLabel={scanStatus}
           >
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={{ color: colors.primary, fontWeight: "700" }}>
+            <LottieFeedback name="scanning" size={64} color={colors.primary} />
+            <Text
+              style={{ color: colors.primary, fontWeight: "700", flexShrink: 1 }}
+            >
               {scanStatus}
             </Text>
           </View>
@@ -646,49 +653,55 @@ export default function MealScannerScreen({ navigation }) {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Barcode Scanner Modal */}
-      <Modal visible={showBarcodeScanner} animationType="slide">
-        <View style={{ flex: 1, backgroundColor: "#000" }}>
-          <CameraView
-            style={StyleSheet.absoluteFillObject}
-            onBarcodeScanned={handleBarCodeScanned}
-            barcodeScannerSettings={{
-              barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "qr"],
-            }}
-          />
-          {isScanningBarcode && (
-            <View style={styles.laserOverlay} pointerEvents="none">
-              <Animated.View
-                style={[
-                  styles.laserLine,
-                  {
-                    transform: [
-                      {
-                        translateY: scanLineProgress.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, 240],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              />
-              <View style={styles.cameraLoadingBadge}>
-                <ActivityIndicator color="#42F5A1" size="small" />
-                <Text style={styles.cameraLoadingText}>
-                  Looking up product details…
-                </Text>
-              </View>
-            </View>
-          )}
-          <TouchableOpacity
-            style={styles.closeBarcodeBtn}
-            onPress={() => setShowBarcodeScanner(false)}
+      {/* Meal saved confirmation */}
+      <Modal
+        visible={Boolean(savedMealName)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSavedMealName("")}
+      >
+        <Pressable
+          style={styles.savedOverlay}
+          onPress={() => setSavedMealName("")}
+          accessibilityRole="alert"
+          accessibilityLabel={`${savedMealName} saved to your diary`}
+        >
+          <View
+            style={[
+              styles.savedCard,
+              { backgroundColor: colors.cardBg, borderColor: colors.primary },
+            ]}
           >
-            <Ionicons name="close" size={28} color="#FFF" />
-          </TouchableOpacity>
-        </View>
+            <LottieFeedback
+              name="success"
+              size={96}
+              loop={false}
+              color={colors.primary}
+            />
+            <Text style={[styles.savedTitle, { color: colors.text }]}>
+              Meal saved
+            </Text>
+            <Text
+              style={[styles.savedText, { color: colors.textSecondary }]}
+              numberOfLines={2}
+            >
+              {savedMealName} was added to your diary and saved recipes.
+            </Text>
+          </View>
+        </Pressable>
       </Modal>
+
+      {/* Barcode Scanner Modal (camera lifecycle, permission & laser overlay) */}
+      <BarcodeScannerModal
+        visible={showBarcodeScanner}
+        busy={isScanningBarcode}
+        onScanned={(data) => handleBarCodeScanned({ data })}
+        onClose={() => {
+          if (isScanningBarcode) return;
+          barcodeLockRef.current = false;
+          setShowBarcodeScanner(false);
+        }}
+      />
 
       {/* Confirmation & Editing Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
@@ -857,14 +870,32 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  savedOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  savedCard: {
+    width: "100%",
+    maxWidth: 320,
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingVertical: 20,
+    paddingHorizontal: 18,
+  },
+  savedTitle: { fontSize: 18, fontWeight: "800", marginTop: 4 },
+  savedText: { fontSize: 13, textAlign: "center", marginTop: 4 },
   laserLine: {
     position: "absolute",
     top: 8,
     left: 12,
     right: 12,
     height: 2,
-    backgroundColor: "#42F5A1",
-    shadowColor: "#42F5A1",
+    backgroundColor: "#39FF14",
+    shadowColor: "#39FF14",
     shadowOpacity: 1,
     shadowRadius: 12,
     elevation: 8,

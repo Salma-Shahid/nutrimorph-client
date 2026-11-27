@@ -24,7 +24,7 @@ import NotificationSettings from "../components/NotificationSettings";
 import DeviceSyncSection from "../components/DeviceSyncSection";
 import AdBanner from "../components/AdBanner";
 import PaddleCheckoutModal from "../components/PaddleCheckoutModal";
-import { isActiveProUser } from "../utils/subscription";
+import { isActiveProUser, getPlanLabel } from "../utils/subscription";
 
 export default function ProfileScreen({ navigation }) {
   const {
@@ -73,9 +73,11 @@ export default function ProfileScreen({ navigation }) {
   );
   const [checkoutVisible, setCheckoutVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [dietPreference, setDietPreference] = useState(user?.dietPreference || "");
 
   useEffect(() => {
     if (user) {
+      setDietPreference(user.dietPreference || "");
       setName(user.name || "");
       setHeight(user.height ? String(user.height) : "");
       setWeight(user.weight ? String(user.weight) : "");
@@ -91,8 +93,8 @@ export default function ProfileScreen({ navigation }) {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const result = await refreshUserProfile();
-      if (!result.success) {
+      const result = await refreshUserProfile({ force: true });
+      if (!result.success && !result.sessionExpired) {
         Alert.alert(
           "Refresh failed",
           result.message || "Could not refresh your profile.",
@@ -103,15 +105,10 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  // RevenueCat-first: the subscription screen shows store offerings,
+  // restore, and falls back to Paddle only where it is configured.
   const handlePaddleCheckout = () => {
-    if (isPro) {
-      Alert.alert(
-        "Pro Plan",
-        "You are already enjoying NutriMorph Pro features!",
-      );
-      return;
-    }
-    setCheckoutVisible(true);
+    navigation.navigate("SubscriptionScreen");
   };
 
   const handlePaddleCheckoutComplete = async () => {
@@ -125,7 +122,7 @@ export default function ProfileScreen({ navigation }) {
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (response.data?.user) {
-        await refreshUserProfile();
+        await refreshUserProfile({ force: true });
       }
       Alert.alert(
         "Payment submitted",
@@ -180,6 +177,7 @@ export default function ProfileScreen({ navigation }) {
       weight: weight ? Number(weight) : undefined,
       dailyCalorieGoal: dailyCalorieGoal ? Number(dailyCalorieGoal) : 2000,
       avatar: profileImage,
+      dietPreference,
     };
 
     const res = await updateProfile(payload);
@@ -204,7 +202,8 @@ export default function ProfileScreen({ navigation }) {
             if (res?.success) {
               Alert.alert(
                 "Account Deleted",
-                "Your account and all associated data have been deleted successfully.",
+                res.message ||
+                  "Your account is deactivated and will be permanently deleted in 30 days.",
               );
             } else {
               Alert.alert(
@@ -366,6 +365,48 @@ export default function ProfileScreen({ navigation }) {
             keyboardType="numeric"
           />
 
+          {/* Used to personalise AI suggestions (e.g. calorie recovery tips). */}
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
+            Diet style
+          </Text>
+          <View style={styles.dietRow}>
+            {[
+              "Desi / Pakistani",
+              "Indian",
+              "Middle Eastern",
+              "Western",
+              "Mediterranean",
+              "Vegetarian",
+            ].map((option) => {
+              const selected = dietPreference === option;
+              return (
+                <TouchableOpacity
+                  key={option}
+                  onPress={() => setDietPreference(selected ? "" : option)}
+                  style={[
+                    styles.dietChip,
+                    {
+                      backgroundColor: selected ? colors.primary : colors.inputBg,
+                      borderColor: selected ? colors.primary : colors.border,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                >
+                  <Text
+                    style={{
+                      color: selected ? "#FFF" : colors.text,
+                      fontSize: 12,
+                      fontWeight: "600",
+                    }}
+                  >
+                    {option}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           <TouchableOpacity
             style={[styles.saveButton, { backgroundColor: colors.primary }]}
             onPress={handleSaveChanges}
@@ -445,24 +486,30 @@ export default function ProfileScreen({ navigation }) {
               marginBottom: 10,
             }}
           >
-            {isPro ? "Pro Plan Active" : "Free Tier Plan"}
+            {isPro
+              ? getPlanLabel(user) === "TRIAL"
+                ? "Pro Trial Active"
+                : "Pro Plan Active"
+              : "Free Tier Plan"}
           </Text>
 
           <TouchableOpacity
             style={[
               styles.planToggleBtn,
-              { backgroundColor: isPro ? "#64748B" : colors.primary },
+              { backgroundColor: isPro ? colors.cardBgGlow : colors.primary },
+              isPro && { borderWidth: 1, borderColor: colors.primary },
             ]}
             onPress={handlePaddleCheckout}
-            disabled={isPro}
           >
             <Ionicons
-              name={isPro ? "checkmark-circle-outline" : "star-outline"}
+              name={isPro ? "settings-outline" : "star-outline"}
               size={18}
-              color="#FFF"
+              color={isPro ? colors.primary : "#FFF"}
             />
-            <Text style={styles.planToggleText}>
-              {isPro ? "Pro Plan Active" : "Upgrade to Pro"}
+            <Text
+              style={[styles.planToggleText, isPro && { color: colors.primary }]}
+            >
+              {isPro ? "Manage Subscription" : "Upgrade to Pro"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -528,6 +575,18 @@ export default function ProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  dietRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 14,
+  },
+  dietChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
   supportLink: {
     minHeight: 44,
     flexDirection: "row",

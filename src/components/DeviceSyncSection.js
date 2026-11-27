@@ -402,14 +402,19 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
         styles.card,
         {
           backgroundColor: colors.cardBg,
-          borderColor: colors.border,
+          borderColor: colors.neonBorder || colors.border,
+          shadowColor: colors.cardShadow || "#000",
+          shadowOpacity: colors.cardShadowOpacity ?? 0.1,
         },
       ]}
     >
       <View style={styles.headerRow}>
         <View style={styles.titleContainer}>
           <Ionicons name="fitness-outline" size={22} color={colors.primary} />
-          <Text style={[styles.title, { color: colors.text }]}>
+          <Text
+            style={[styles.title, { color: colors.text }]}
+            numberOfLines={1}
+          >
             Health & Device Sync
           </Text>
         </View>
@@ -468,10 +473,11 @@ export default function DeviceSyncSection({ onSyncSuccess }) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 20,
-    padding: 18,
-    marginHorizontal: 16,
-    marginBottom: 16,
+    borderRadius: 14,
+    padding: 16,
+    // Parent screens already provide horizontal padding.
+    marginHorizontal: 0,
+    marginBottom: 12,
     borderWidth: 1,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 3 },
@@ -484,14 +490,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 8,
+    gap: 8,
   },
   titleContainer: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flex: 1,
+    minWidth: 0,
   },
-  title: { fontSize: 16, fontWeight: "bold" },
+  title: { fontSize: 15, fontWeight: "bold", flexShrink: 1 },
   statusBadge: {
+    flexShrink: 0,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,

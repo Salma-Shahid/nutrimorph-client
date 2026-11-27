@@ -13,6 +13,7 @@ import {
   Alert,
   Image,
   Animated,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -21,6 +22,9 @@ import Markdown from "react-native-markdown-display";
 import { Ionicons } from "@expo/vector-icons";
 
 import ChatMessageItemModule from "./ChatMessageItem";
+import CopyMessageButton, {
+  useCopyMessage,
+} from "../components/CopyMessageButton";
 import { useAuthStore } from "../store/useAuthStore";
 import CustomAppLoader from "../components/CustomAppLoader";
 import UpgradeTrialModal from "../components/UpgradeTrialModal";
@@ -33,23 +37,40 @@ const ChatMessageItem =
   ChatMessageItemModule?.ChatMessageItem ||
   ChatMessageItemModule;
 
-// Dynamic Message Bubble UI supporting Markdown for Bot & Plain Text for User
+// Dynamic Message Bubble UI supporting Markdown for Bot & Plain Text for User.
+// Long-press any message to copy it; NutriBot replies also get a Copy button.
 const DefaultMessageBubble = ({ item, colors }) => {
   const isUser = item.sender === "user" || item.role === "user";
   const messageText = item.text || item.message || item.content || "";
+  const { state: copyState, copy } = useCopyMessage(messageText);
 
   if (isUser) {
     return (
-      <View
-        style={[
-          bubbleStyles.container,
-          bubbleStyles.userContainer,
-          { backgroundColor: colors.primary },
-        ]}
-      >
-        <Text style={[bubbleStyles.text, { color: "#FFFFFF" }]}>
-          {messageText}
-        </Text>
+      <View style={bubbleStyles.userColumn}>
+        <Pressable
+          onLongPress={copy}
+          delayLongPress={350}
+          accessibilityHint="Long press to copy this message"
+          style={({ pressed }) => [
+            bubbleStyles.container,
+            bubbleStyles.userBubbleInColumn,
+            { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <Text style={[bubbleStyles.text, { color: "#FFFFFF" }]} selectable>
+            {messageText}
+          </Text>
+        </Pressable>
+        {copyState !== "idle" && (
+          <Text
+            style={[
+              bubbleStyles.copiedNote,
+              { color: copyState === "copied" ? colors.primary : colors.danger },
+            ]}
+          >
+            {copyState === "copied" ? "Copied" : "Couldn't copy"}
+          </Text>
+        )}
       </View>
     );
   }
@@ -97,18 +118,28 @@ const DefaultMessageBubble = ({ item, colors }) => {
   };
 
   return (
-    <View
-      style={[
-        bubbleStyles.container,
-        bubbleStyles.botContainer,
-        {
-          backgroundColor: colors.cardBg,
-          borderColor: colors.border,
-          borderWidth: 1,
-        },
-      ]}
-    >
-      <Markdown style={markdownStyles}>{messageText}</Markdown>
+    <View style={bubbleStyles.botColumn}>
+      <Pressable
+        onLongPress={copy}
+        delayLongPress={350}
+        accessibilityHint="Long press to copy this reply"
+        style={({ pressed }) => [
+          bubbleStyles.container,
+          bubbleStyles.botBubbleInColumn,
+          {
+            backgroundColor: colors.cardBg,
+            borderColor:
+              copyState === "copied" ? colors.primary : colors.border,
+            borderWidth: 1,
+            opacity: pressed ? 0.9 : 1,
+          },
+        ]}
+      >
+        <Markdown style={markdownStyles}>{messageText}</Markdown>
+      </Pressable>
+      {messageText ? (
+        <CopyMessageButton state={copyState} onPress={copy} colors={colors} />
+      ) : null}
     </View>
   );
 };
@@ -170,12 +201,12 @@ const ChatBotScreen = ({ navigation }) => {
         Animated.timing(pulseAnim, {
           toValue: 1.08,
           duration: 1200,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== "web",
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
           duration: 1200,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== "web",
         }),
       ]),
     ).start();
@@ -579,6 +610,30 @@ const bubbleStyles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
+  // Column wrappers hold the bubble plus its copy action/feedback.
+  userColumn: {
+    alignSelf: "flex-end",
+    alignItems: "flex-end",
+    maxWidth: "82%",
+    marginVertical: 6,
+  },
+  botColumn: {
+    alignSelf: "flex-start",
+    alignItems: "flex-start",
+    maxWidth: "88%",
+    marginVertical: 6,
+  },
+  userBubbleInColumn: {
+    maxWidth: "100%",
+    marginVertical: 0,
+    borderBottomRightRadius: 4,
+  },
+  botBubbleInColumn: {
+    maxWidth: "100%",
+    marginVertical: 0,
+    borderBottomLeftRadius: 4,
+  },
+  copiedNote: { fontSize: 11, fontWeight: "600", marginTop: 3 },
 });
 
 const screenStyles = StyleSheet.create({

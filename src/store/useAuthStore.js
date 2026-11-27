@@ -2,7 +2,15 @@ import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { stopBackgroundStepTracking } from "../services/stepTrackingTask";
+import { clearUserScopedStorage } from "../utils/cache";
 export { getThemeColors } from "../theme/colors";
+
+// Profile refresh bookkeeping (module scope: one in-flight request at a time,
+// and network failures are logged once instead of on every screen focus).
+let profileRefreshPromise = null;
+let lastProfileRefreshAt = 0;
+let loggedOfflineRefresh = false;
+const PROFILE_REFRESH_MIN_INTERVAL_MS = 15000;
 
 const BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || "https://api.nutrimorph.app";
@@ -112,55 +120,107 @@ export const useAuthStore = create((set, get) => ({
     await AsyncStorage.setItem("user", JSON.stringify(mergedUser));
   },
 
-  refreshUserProfile: async () => {
+  // Refreshes the signed-in profile from /api/auth/me.
+  // - Concurrent callers share one request; calls within 15 s reuse the last
+  //   result unless `{ force: true }`.
+  // - Network/CORS/offline failures keep the cached profile untouched and are
+  //   reported as `{ offline: true }` without global error state or log spam.
+  // - Only a rejected session (401 / deactivated) signs the user out.
+  refreshUserProfile: async ({ force = false } = {}) => {
     const { token, user: currentUser } = get();
     if (!token || !currentUser) {
       return { success: false, message: "No authenticated user to refresh." };
+    }
+    if (profileRefreshPromise) return profileRefreshPromise;
+    if (
+      !force &&
+      Date.now() - lastProfileRefreshAt < PROFILE_REFRESH_MIN_INTERVAL_MS
+    ) {
+      return { success: true, user: currentUser, cached: true };
     }
 
     const requestedUserId = getUserId(currentUser);
     set({ isRefreshingProfile: true });
 
-    try {
-      const response = await axios.get(`${API_URL}/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Cache-Control": "no-cache",
-        },
-      });
-      const profile = response.data?.user || response.data;
+    profileRefreshPromise = (async () => {
+      try {
+        // Cache-busting query param instead of a custom Cache-Control header,
+        // so older backends without that header in their CORS allow-list still
+        // accept the browser/Expo Web preflight.
+        const response = await axios.get(`${API_URL}/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { _: Date.now() },
+          timeout: 15000,
+        });
+        const profile = response.data?.user || response.data;
 
-      if (!profile || getUserId(profile) !== requestedUserId) {
-        throw new Error("Profile response does not match the signed-in user.");
-      }
+        if (!profile || getUserId(profile) !== requestedUserId) {
+          throw new Error("Profile response does not match the signed-in user.");
+        }
 
-      const latestUser = get().user;
-      if (getUserId(latestUser) !== requestedUserId) {
+        const latestUser = get().user;
+        if (
+          getUserId(latestUser) !== requestedUserId ||
+          get().token !== token
+        ) {
+          return { success: false, message: "The active account has changed." };
+        }
+
+        const updatedUser = {
+          ...latestUser,
+          ...profile,
+          unlockedBadges: mergeUnlockedBadges(
+            latestUser.unlockedBadges,
+            profile.unlockedBadges,
+          ),
+        };
+
+        lastProfileRefreshAt = Date.now();
+        loggedOfflineRefresh = false;
+        set({ user: updatedUser, error: null });
+        await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+        return { success: true, user: updatedUser };
+      } catch (error) {
+        const status = error?.response?.status;
+        const code = error?.response?.data?.code;
+
+        if (status === 401 || code === "ACCOUNT_DEACTIVATED") {
+          // Session is no longer valid; clear it (only if still current).
+          if (getUserId(get().user) === requestedUserId) await get().logout();
+          return {
+            success: false,
+            sessionExpired: true,
+            message: "Your session has expired. Please sign in again.",
+          };
+        }
+
+        if (!error?.response) {
+          // No response: offline, DNS, timeout or a CORS-blocked request.
+          if (!loggedOfflineRefresh) {
+            console.warn("Profile refresh skipped (network unavailable):", error?.message);
+            loggedOfflineRefresh = true;
+          }
+          return {
+            success: false,
+            offline: true,
+            user: get().user,
+            message: "You're offline. Showing your last synced data.",
+          };
+        }
+
+        const message =
+          error?.response?.data?.message ||
+          error.message ||
+          "Could not refresh the account profile.";
+        console.warn("Profile refresh failed:", status, message);
+        return { success: false, user: get().user, message };
+      } finally {
+        profileRefreshPromise = null;
         set({ isRefreshingProfile: false });
-        return { success: false, message: "The active account has changed." };
       }
+    })();
 
-      const updatedUser = {
-        ...latestUser,
-        ...profile,
-        unlockedBadges: mergeUnlockedBadges(
-          latestUser.unlockedBadges,
-          profile.unlockedBadges,
-        ),
-      };
-
-      set({ user: updatedUser, isRefreshingProfile: false, error: null });
-      await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
-      return { success: true, user: updatedUser };
-    } catch (error) {
-      const message =
-        error?.response?.data?.message ||
-        error.message ||
-        "Could not refresh the account profile.";
-      console.error("Profile refresh failed:", message);
-      set({ isRefreshingProfile: false, error: message });
-      return { success: false, message };
-    }
+    return profileRefreshPromise;
   },
 
   // Onboarding Wizard Complete Handler
@@ -381,6 +441,15 @@ export const useAuthStore = create((set, get) => ({
       const res = await axios.post(`${API_URL}/login`, { email, password });
       const userData = res.data;
 
+      // Signing into a different account than the one cached on this device:
+      // drop the previous account's local data before switching.
+      const previousRaw = await AsyncStorage.getItem("user").catch(() => null);
+      const previousId = previousRaw ? getUserId(JSON.parse(previousRaw)) : "";
+      if (previousId && previousId !== getUserId(userData)) {
+        await clearUserScopedStorage(previousId);
+      }
+      lastProfileRefreshAt = Date.now();
+
       const cachedAvatar = await AsyncStorage.getItem(
         `avatar_${userData._id || userData.email}`,
       );
@@ -417,19 +486,15 @@ export const useAuthStore = create((set, get) => ({
       isLoading: false,
       isRefreshingProfile: false,
     });
+    lastProfileRefreshAt = 0;
     try {
       const storageKeys = ["token", "user", "hasCompletedOnboarding"];
-      if (currentUserId) {
-        const today = getLocalDate();
-        storageKeys.push(
-          getDailyStepsKey(currentUserId, today),
-          `stepSensorState:${encodeURIComponent(currentUserId)}:${today}`,
-        );
-      }
       await stopBackgroundStepTracking().catch((error) => {
         console.error("Could not stop background step tracking on logout:", error);
       });
       await Promise.all(storageKeys.map((key) => AsyncStorage.removeItem(key)));
+      // Every cache/steps/sensor key owned by this account (all dates).
+      await clearUserScopedStorage(currentUserId);
     } catch (e) {
       console.error("Logout error:", e);
     }
@@ -456,11 +521,14 @@ export const useAuthStore = create((set, get) => ({
             `avatar_${currentUser._id || currentUser.email}`,
           ).catch(() => {});
         }
-        await AsyncStorage.removeItem("token");
-        await AsyncStorage.removeItem("user");
-
-        set({ user: null, token: null, isLoading: false, error: null });
-        return { success: true, message: res.data.message };
+        // Same cleanup as logout: token, profile, caches, step tracking.
+        await get().logout();
+        set({ isLoading: false });
+        const notes = Array.isArray(res.data.notes) ? res.data.notes : [];
+        return {
+          success: true,
+          message: [res.data.message, ...notes].filter(Boolean).join("\n\n"),
+        };
       }
 
       set({ isLoading: false });
