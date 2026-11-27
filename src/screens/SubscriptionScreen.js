@@ -28,6 +28,7 @@ import {
   getUnavailableReason,
   hasProEntitlement,
   identifyRevenueCatUser,
+  isExpoGo,
   isRevenueCatAvailable,
   purchaseRevenueCatPackage,
   restoreRevenueCatPurchases,
@@ -51,6 +52,7 @@ export default function SubscriptionScreen({ navigation }) {
   const isPro = isActiveProUser(user);
 
   const [config, setConfig] = useState(null);
+  const [configState, setConfigState] = useState("loading"); // loading | ready | error
   const [packages, setPackages] = useState([]);
   // Product IDs whose trial this user can't get (iOS StoreKit check).
   const [trialIneligible, setTrialIneligible] = useState(() => new Set());
@@ -131,11 +133,21 @@ export default function SubscriptionScreen({ navigation }) {
   );
 
   // Billing capability flags (no secrets) so unavailable options are hidden.
+  // Only gates the optional Paddle fallback; RevenueCat never waits on it.
   const loadConfig = useCallback(() => {
+    setConfigState("loading");
     axios
       .get(`${BASE_URL}/api/payment/config`, { timeout: 10000 })
-      .then((res) => mounted.current && setConfig(res.data?.data || null))
-      .catch(() => mounted.current && setConfig(null));
+      .then((res) => {
+        if (!mounted.current) return;
+        setConfig(res.data?.data || null);
+        setConfigState("ready");
+      })
+      .catch(() => {
+        if (!mounted.current) return;
+        setConfig(null);
+        setConfigState("error");
+      });
   }, []);
 
   useEffect(() => {
@@ -315,7 +327,9 @@ export default function SubscriptionScreen({ navigation }) {
           <Text style={[styles.muted, { color: colors.textSecondary }]}>
             {offeringsState === "error"
               ? offeringsError || "Check your connection and try again."
-              : "Subscriptions are being set up for your region. Please check back soon."}
+              : __DEV__
+                ? "RevenueCat returned no packages. Mark an offering as Current and attach products to it in the RevenueCat dashboard."
+                : "Subscriptions are being set up for your region. Please check back soon."}
           </Text>
           <TouchableOpacity onPress={retryBilling} style={styles.inlineAction}>
             <Text style={{ color: colors.primary, fontWeight: "700" }}>Retry</Text>
@@ -480,7 +494,7 @@ export default function SubscriptionScreen({ navigation }) {
                     {cycle === "yearly" ? "Yearly" : "Monthly"}
                   </Text>
                   <Text style={[styles.muted, { color: colors.textSecondary }]}>
-                    Secure Paddle billing
+                    Secure web checkout
                   </Text>
                 </NeonCard>
               ))}
@@ -497,16 +511,27 @@ export default function SubscriptionScreen({ navigation }) {
               )}
             </TouchableOpacity>
           </>
+        ) : configState === "loading" ? (
+          <View style={styles.centerRow}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={[styles.muted, { color: colors.textSecondary }]}>
+              Checking subscription options…
+            </Text>
+          </View>
         ) : (
           <NeonCard accent="sky">
             <Text style={[styles.noticeTitle, { color: colors.text }]}>
-              Subscriptions aren't available here yet
+              {Platform.OS === "web"
+                ? "Subscribe in the NutriMorph app"
+                : isExpoGo()
+                  ? "Store billing isn't available in Expo Go"
+                  : "Subscriptions aren't available in this build"}
             </Text>
             <Text style={[styles.muted, { color: colors.textSecondary }]}>
               {getUnavailableReason() ||
                 "Pro will be available to purchase soon. Your free features keep working in the meantime."}
             </Text>
-            {config === null ? (
+            {configState === "error" ? (
               <TouchableOpacity onPress={retryBilling} style={styles.inlineAction}>
                 <Text style={{ color: colors.primary, fontWeight: "700" }}>Retry</Text>
               </TouchableOpacity>

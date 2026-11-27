@@ -49,6 +49,31 @@ let configuredUserId = null;
 let configurePromise = null;
 let lastError = null;
 
+// Turns RevenueCat SDK errors into actionable, user-facing sentences.
+const friendlyError = (error, fallback) => {
+  const codes = Purchases?.PURCHASES_ERROR_CODE || {};
+  switch (error?.code) {
+    case codes.CONFIGURATION_ERROR:
+      return __DEV__
+        ? "RevenueCat couldn't fetch store products. Check the products/offering in RevenueCat, and install from a Play testing track (sideloaded builds can't reach Play billing)."
+        : "Plans aren't available on this device yet. Make sure the app was installed from Google Play, then try again.";
+    case codes.NETWORK_ERROR:
+      return "No connection to the store. Check your internet and try again.";
+    case codes.STORE_PROBLEM_ERROR:
+      return "The store is having a problem right now. Please try again in a moment.";
+    case codes.PURCHASE_NOT_ALLOWED_ERROR:
+      return "Purchases aren't allowed on this device or account.";
+    case codes.PRODUCT_NOT_AVAILABLE_FOR_PURCHASE_ERROR:
+      return "This plan isn't available for your account or region.";
+    case codes.PRODUCT_ALREADY_PURCHASED_ERROR:
+      return "You already own this subscription. Tap \"Restore purchases\" to activate it.";
+    case codes.PAYMENT_PENDING_ERROR:
+      return "Your payment is pending. Pro will activate as soon as the store confirms it.";
+    default:
+      return error?.message || fallback;
+  }
+};
+
 export const isRevenueCatAvailable = () => Boolean(Purchases && API_KEY);
 
 // Last setup/offerings error, as a user-facing sentence (or null).
@@ -94,7 +119,7 @@ export const identifyRevenueCatUser = async (userId) => {
   } catch (error) {
     // Don't cache a failed setup: the next attempt (e.g. Retry) starts fresh.
     if (!configuredUserId) configurePromise = null;
-    lastError = error?.message || "In-app purchases could not be started.";
+    lastError = friendlyError(error, "In-app purchases could not be started.");
     console.warn("RevenueCat identify failed:", lastError);
     return false;
   }
@@ -122,10 +147,15 @@ export const getCurrentPackages = async () => {
     throw new Error(lastError || getUnavailableReason() || "In-app purchases are not ready.");
   }
   await configurePromise;
-  const offerings = await withTimeout(
-    Purchases.getOfferings(),
-    "Loading plans timed out. Check your connection and try again.",
-  );
+  let offerings;
+  try {
+    offerings = await withTimeout(
+      Purchases.getOfferings(),
+      "Loading plans timed out. Check your connection and try again.",
+    );
+  } catch (error) {
+    throw new Error(friendlyError(error, "Plans couldn't be loaded. Please try again."));
+  }
   const current =
     offerings?.current || Object.values(offerings?.all || {})[0] || null;
   const order = ["MONTHLY", "SIX_MONTH", "THREE_MONTH", "TWO_MONTH", "ANNUAL", "LIFETIME"];
@@ -147,7 +177,7 @@ export const purchaseRevenueCatPackage = async (aPackage) => {
     if (isCancelled(error)) return { success: false, cancelled: true };
     return {
       success: false,
-      message: error?.message || "The purchase could not be completed.",
+      message: friendlyError(error, "The purchase could not be completed."),
     };
   }
 };
@@ -159,7 +189,7 @@ export const restoreRevenueCatPurchases = async () => {
   } catch (error) {
     return {
       success: false,
-      message: error?.message || "Purchases could not be restored.",
+      message: friendlyError(error, "Purchases could not be restored."),
     };
   }
 };
