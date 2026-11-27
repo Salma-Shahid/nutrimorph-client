@@ -24,6 +24,7 @@ import {
   describePackage,
   getCurrentPackages,
   getIneligibleTrialProductIds,
+  getRevenueCatError,
   getUnavailableReason,
   hasProEntitlement,
   identifyRevenueCatUser,
@@ -55,6 +56,7 @@ export default function SubscriptionScreen({ navigation }) {
   const [trialIneligible, setTrialIneligible] = useState(() => new Set());
   const [selectedId, setSelectedId] = useState(null);
   const [offeringsState, setOfferingsState] = useState("loading"); // loading | ready | empty | error | unavailable
+  const [offeringsError, setOfferingsError] = useState("");
   const [busy, setBusy] = useState(""); // "" | purchase | restore | verify
   const [notice, setNotice] = useState("");
   const [celebrate, setCelebrate] = useState(false);
@@ -102,11 +104,16 @@ export default function SubscriptionScreen({ navigation }) {
               await refreshUserProfile({ force: true });
               return true;
             }
-            if (res.data?.code === "REVENUECAT_NOT_CONFIGURED") {
-              if (!quiet) setNotice(res.data.message);
+          } catch (error) {
+            const data = error?.response?.data;
+            if (data?.user && String(useAuthStore.getState().user?._id || "") === userId) {
+              await setUser(data.user);
+            }
+            // Server setup problem (503): retrying now won't help.
+            if (error?.response?.status === 503) {
+              if (!quiet) setNotice(data?.message || "Pro will activate once verification completes.");
               return false;
             }
-          } catch (error) {
             if (attempt === 3 && !quiet) {
               setNotice(
                 error?.response?.data?.message ||
@@ -124,33 +131,53 @@ export default function SubscriptionScreen({ navigation }) {
   );
 
   // Billing capability flags (no secrets) so unavailable options are hidden.
-  useEffect(() => {
+  const loadConfig = useCallback(() => {
     axios
       .get(`${BASE_URL}/api/payment/config`, { timeout: 10000 })
       .then((res) => mounted.current && setConfig(res.data?.data || null))
       .catch(() => mounted.current && setConfig(null));
   }, []);
 
+  useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
+
   const loadOfferings = useCallback(async () => {
     if (!useRevenueCat) {
       setOfferingsState("unavailable");
       return;
     }
+    if (!userId) {
+      // Profile still loading; this re-runs when the user ID arrives.
+      setOfferingsState("loading");
+      return;
+    }
     setOfferingsState("loading");
+    setOfferingsError("");
     try {
-      await identifyRevenueCatUser(userId);
+      // Stop here if setup failed (bad key, no network) instead of calling
+      // getOfferings() on an unconfigured SDK.
+      if (!(await identifyRevenueCatUser(userId))) {
+        throw new Error(getRevenueCatError() || "In-app purchases could not be started.");
+      }
       const { packages: list } = await getCurrentPackages();
       const ineligible = await getIneligibleTrialProductIds(list);
       if (!mounted.current) return;
       setTrialIneligible(ineligible);
       setPackages(list);
-      setSelectedId(
-        (list.find((p) => p.packageType === "ANNUAL") || list[0])?.identifier || null,
+      setSelectedId((current) =>
+        list.some((p) => p.identifier === current)
+          ? current
+          : (list.find((p) => p.packageType === "ANNUAL") || list[0])?.identifier || null,
       );
       setOfferingsState(list.length ? "ready" : "empty");
     } catch (error) {
       if (__DEV__) console.warn("RevenueCat offerings failed:", error?.message);
-      if (mounted.current) setOfferingsState("error");
+      if (!mounted.current) return;
+      setPackages([]);
+      setSelectedId(null);
+      setOfferingsError(error?.message || "");
+      setOfferingsState("error");
     }
   }, [useRevenueCat, userId]);
 
@@ -158,15 +185,22 @@ export default function SubscriptionScreen({ navigation }) {
     loadOfferings();
   }, [loadOfferings]);
 
+  const retryBilling = () => {
+    loadConfig();
+    loadOfferings();
+  };
+
   // Renewals/expirations reported by the SDK while this screen is open.
+  // Attached once the SDK is configured (offerings loaded), not before.
+  const sdkReady = offeringsState === "ready" || offeringsState === "empty";
   useEffect(() => {
-    if (!useRevenueCat) return undefined;
+    if (!useRevenueCat || !sdkReady) return undefined;
     return addRevenueCatListener((customerInfo) => {
       if (hasProEntitlement(customerInfo) !== isActiveProUser(useAuthStore.getState().user)) {
         syncWithServer({ quiet: true });
       }
     });
-  }, [syncWithServer, useRevenueCat]);
+  }, [sdkReady, syncWithServer, useRevenueCat]);
 
   const selectedPackage = packages.find((p) => p.identifier === selectedId);
   // A trial is offered only if the store says so, the user is eligible, and
@@ -280,10 +314,10 @@ export default function SubscriptionScreen({ navigation }) {
           </Text>
           <Text style={[styles.muted, { color: colors.textSecondary }]}>
             {offeringsState === "error"
-              ? "Check your connection and try again."
+              ? offeringsError || "Check your connection and try again."
               : "Subscriptions are being set up for your region. Please check back soon."}
           </Text>
-          <TouchableOpacity onPress={loadOfferings} style={styles.inlineAction}>
+          <TouchableOpacity onPress={retryBilling} style={styles.inlineAction}>
             <Text style={{ color: colors.primary, fontWeight: "700" }}>Retry</Text>
           </TouchableOpacity>
         </NeonCard>
@@ -472,6 +506,11 @@ export default function SubscriptionScreen({ navigation }) {
               {getUnavailableReason() ||
                 "Pro will be available to purchase soon. Your free features keep working in the meantime."}
             </Text>
+            {config === null ? (
+              <TouchableOpacity onPress={retryBilling} style={styles.inlineAction}>
+                <Text style={{ color: colors.primary, fontWeight: "700" }}>Retry</Text>
+              </TouchableOpacity>
+            ) : null}
           </NeonCard>
         )}
 

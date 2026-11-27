@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { NativeModules, Platform } from "react-native";
 
 // RevenueCat is the primary subscription provider in the mobile app.
 //
@@ -16,17 +16,43 @@ try {
   Purchases = null;
 }
 
-const API_KEY =
+// Expo Go has no native store. The SDK then runs in "browser mode", which
+// only accepts a RevenueCat Test Store key (test_...); store keys (goog_/appl_)
+// make configure() throw. Same detection the SDK itself uses.
+export const isExpoGo = () =>
+  !NativeModules?.RNPurchases && Boolean(globalThis.expo?.modules?.ExpoGo);
+
+const STORE_API_KEY =
   Platform.OS === "ios"
     ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY
     : process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY;
+// Optional, development only: RevenueCat > API keys > Test Store key.
+const TEST_STORE_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_TEST_STORE_API_KEY;
+const API_KEY = isExpoGo()
+  ? TEST_STORE_API_KEY?.startsWith("test_")
+    ? TEST_STORE_API_KEY
+    : null
+  : STORE_API_KEY;
 export const ENTITLEMENT_ID =
   process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID || "pro";
 
+const SDK_TIMEOUT_MS = 15000;
+const withTimeout = (promise, message) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(message)), SDK_TIMEOUT_MS),
+    ),
+  ]);
+
 let configuredUserId = null;
 let configurePromise = null;
+let lastError = null;
 
 export const isRevenueCatAvailable = () => Boolean(Purchases && API_KEY);
+
+// Last setup/offerings error, as a user-facing sentence (or null).
+export const getRevenueCatError = () => lastError;
 
 export const getUnavailableReason = () => {
   if (Platform.OS === "web") {
@@ -34,6 +60,9 @@ export const getUnavailableReason = () => {
   }
   if (!Purchases) {
     return "This app build does not include in-app purchases yet. Update to the latest version.";
+  }
+  if (isExpoGo() && !API_KEY) {
+    return "Expo Go can't open Google Play or App Store billing. Use a development build, or set EXPO_PUBLIC_REVENUECAT_TEST_STORE_API_KEY (test_...) to try purchases with RevenueCat's Test Store.";
   }
   if (!API_KEY) {
     return "In-app subscriptions are not configured for this build yet.";
@@ -57,12 +86,16 @@ export const identifyRevenueCatUser = async (userId) => {
     }
     await configurePromise;
     if (configuredUserId !== appUserID) {
-      await Purchases.logIn(appUserID);
+      await withTimeout(Purchases.logIn(appUserID), "RevenueCat sign-in timed out.");
       configuredUserId = appUserID;
     }
+    lastError = null;
     return true;
   } catch (error) {
-    console.warn("RevenueCat identify failed:", error?.message);
+    // Don't cache a failed setup: the next attempt (e.g. Retry) starts fresh.
+    if (!configuredUserId) configurePromise = null;
+    lastError = error?.message || "In-app purchases could not be started.";
+    console.warn("RevenueCat identify failed:", lastError);
     return false;
   }
 };
@@ -82,10 +115,19 @@ export const resetRevenueCatUser = async () => {
 export const hasProEntitlement = (customerInfo) =>
   Boolean(customerInfo?.entitlements?.active?.[ENTITLEMENT_ID]);
 
-// Returns the current offering's packages, sorted monthly → annual.
+// Returns the current offering's packages, sorted monthly → annual. Falls back
+// to the first offering when none is marked "current" in the dashboard.
 export const getCurrentPackages = async () => {
-  const offerings = await Purchases.getOfferings();
-  const current = offerings?.current;
+  if (!isRevenueCatAvailable() || !configurePromise) {
+    throw new Error(lastError || getUnavailableReason() || "In-app purchases are not ready.");
+  }
+  await configurePromise;
+  const offerings = await withTimeout(
+    Purchases.getOfferings(),
+    "Loading plans timed out. Check your connection and try again.",
+  );
+  const current =
+    offerings?.current || Object.values(offerings?.all || {})[0] || null;
   const order = ["MONTHLY", "SIX_MONTH", "THREE_MONTH", "TWO_MONTH", "ANNUAL", "LIFETIME"];
   const packages = [...(current?.availablePackages || [])].sort(
     (a, b) => order.indexOf(a.packageType) - order.indexOf(b.packageType),
